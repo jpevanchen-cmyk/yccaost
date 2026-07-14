@@ -43,6 +43,7 @@ Desktop.ini
 # 仅本地保留、不提交 Git / 不推送 GitHub
 服务器启动命令以及网址等.txt
 规则模板-developer-profile.mdc
+.cursor/rules/developer-profile.mdc
 无为系统-核心规则速查手册.md
 新建文本文档.txt
 野草系统-正式上线前清查备忘录.md
@@ -52,6 +53,6 @@ _qr_fixed.pdf
 _恢复旧聊天窗口.bat
 _restore_cursor_chats.py
 _cursor_chat_recovery_backup_*/
-# 完整手册/方案仅存 E 盘；禁止把完整版副本推进公开仓
+# 完整手册/方案仅存拥有者私有目录；禁止把完整版副本推进公开仓
 **/野草系统-核心规则速查手册-完整版.md
 **/开发方案-完整版.md
