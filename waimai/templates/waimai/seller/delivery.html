@@ -1,0 +1,15 @@
+{% extends 'waimai/seller/base.html' %}
+{% block title %}配送费规则 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="seller-panel-box">
+    <h2>🚚 配送费规则</h2>
+    <p class="page-desc">买家下单时按此处规则自动计算配送费。</p>
+    <form method="POST" class="seller-panel-form auth-form" id="delivery-settings-form" data-unsaved-guard>
+        {% csrf_token %}
+        <input type="hidden" name="save_delivery_settings" value="1">
+        {{ settings_form.as_p }}
+        <button type="submit" class="btn btn-block" style="background:#607d8b;color:#fff;">保存配送费规则</button>
+    </form>
+</div>
+{% endblock %}

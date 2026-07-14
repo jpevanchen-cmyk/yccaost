@@ -1,0 +1,21 @@
+{% extends 'waimai/base.html' %}
+{% block title %}店铺名录 - 野草系统{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🌿 店铺名录</h1>
+<p class="page-desc">选择一家店铺进入下单（各店独立运营，本店骑手配送）。</p>
+
+{% if shops %}
+    {% for shop in shops %}
+    <div class="card">
+        <div class="card-title">{{ shop.shop_name }}</div>
+        <p class="card-meta">{{ shop.get_shop_type_display }} · {{ shop.address }}</p>
+        <div class="shop-card-actions">
+            <a class="btn btn-green btn-block" href="/shop/?seller_id={{ shop.seller_id }}">进入店铺</a>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+<p class="card-meta">暂无已注册店铺。店铺可通过「店铺开通」注册服务器。</p>
+{% endif %}
+{% endblock %}

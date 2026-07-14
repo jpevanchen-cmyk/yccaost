@@ -1,0 +1,68 @@
+{% extends 'waimai/seller/base.html' %}
+{% load yc_time %}
+
+{% block seller_content %}
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h2 style="margin:0 0 8px;font-size:18px;">📝 操作审计与技术日志</h2>
+    <p class="card-meta" style="margin:0 0 12px;">
+        用于查「谁做了什么」和排错。操作记录默认保留约半年；技术日志普通约 30 天、错误与支付约 90 天。
+        授权维护人员查看能力待后续安全授权功能落地后再开。
+    </p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <a class="btn {% if audit_scope == 'all' %}btn-orange{% else %}btn-outline{% endif %} btn-sm"
+           href="{% url 'seller_panel_section' 'audit' %}">本店全部操作</a>
+        <a class="btn {% if audit_scope == 'mine' %}btn-orange{% else %}btn-outline{% endif %} btn-sm"
+           href="{% url 'seller_panel_section' 'audit' %}?scope=mine">仅我本人</a>
+        <a class="btn {% if show_tech %}btn-orange{% else %}btn-outline{% endif %} btn-sm"
+           href="{% url 'seller_panel_section' 'audit' %}?tech=1{% if audit_scope == 'mine' %}&scope=mine{% endif %}">查看技术日志摘要</a>
+    </div>
+</div>
+
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h3 style="margin:0 0 10px;font-size:16px;">操作记录（最近 100 条）</h3>
+    {% if audit_logs %}
+        {% for log in audit_logs %}
+        <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
+            <div style="flex:1;min-width:220px;">
+                <strong>{{ log.action_label|default:log.get_action_code_display }}</strong>
+                {% if log.result == 'fail' %}<span class="badge badge-default">失败</span>{% endif %}
+                <div class="card-meta" style="margin-top:4px;">
+                    {{ log.created_at|beijing:"Y-m-d H:i:s" }}
+                    · {{ log.actor_username|default:"（系统/未知）" }}
+                    {% if log.actor_role %}（{{ log.actor_role }}）{% endif %}
+                </div>
+                {% if log.summary %}
+                <div style="margin-top:4px;">{{ log.summary }}</div>
+                {% endif %}
+                {% if log.ip_address %}
+                <div class="card-meta" style="margin-top:4px;">来源：{{ log.ip_address }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="card-meta">暂无操作记录。</p>
+    {% endif %}
+</div>
+
+{% if show_tech %}
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h3 style="margin:0 0 10px;font-size:16px;">技术日志 · 普通运行（末尾）</h3>
+    {% if runtime_log_lines %}
+    <pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;background:#f7f7f7;padding:10px;border-radius:8px;max-height:320px;overflow:auto;">{% for line in runtime_log_lines %}{{ line }}
+{% endfor %}</pre>
+    {% else %}
+    <p class="card-meta">暂无普通运行日志文件，或尚未产生记录。</p>
+    {% endif %}
+</div>
+<div class="card" style="padding:16px;">
+    <h3 style="margin:0 0 10px;font-size:16px;">技术日志 · 错误与支付（末尾）</h3>
+    {% if error_payment_log_lines %}
+    <pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;background:#f7f7f7;padding:10px;border-radius:8px;max-height:320px;overflow:auto;">{% for line in error_payment_log_lines %}{{ line }}
+{% endfor %}</pre>
+    {% else %}
+    <p class="card-meta">暂无错误/支付日志文件，或尚未产生记录。</p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

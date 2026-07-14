@@ -1,0 +1,13 @@
+{# 卖家后台：未保存修改确认弹窗（全站共用，由 seller_unsaved_guard.js 驱动） #}
+<div id="seller-unsaved-modal" class="seller-unsaved-modal" hidden>
+    <div class="seller-unsaved-backdrop"></div>
+    <div class="seller-unsaved-panel" role="dialog" aria-labelledby="seller-unsaved-title">
+        <h3 id="seller-unsaved-title" class="seller-unsaved-title">有未保存的修改</h3>
+        <p class="seller-unsaved-desc">您已修改过内容尚未保存，请确认如何处理。</p>
+        <div class="seller-unsaved-actions">
+            <button type="button" class="btn btn-green" data-unsaved-action="save">保存修改</button>
+            <button type="button" class="btn btn-danger" data-unsaved-action="discard">放弃修改</button>
+            <button type="button" class="btn" data-unsaved-action="cancel">取消</button>
+        </div>
+    </div>
+</div>

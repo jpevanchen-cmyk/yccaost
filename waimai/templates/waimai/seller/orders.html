@@ -1,0 +1,132 @@
+{% extends 'waimai/seller/base.html' %}
+{% load yc_time %}
+{% block title %}订单管理 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="seller-panel-box" id="order-list">
+    <h2>📋 订单管理</h2>
+    <p class="card-meta seller-order-search-hint" style="margin-bottom:12px;">
+        本页仅用于<strong>查询与核对历史订单</strong>。备货、派单、收款、结单等现场操作请到<strong>店铺工作台</strong>处理。
+    </p>
+    <form method="GET" class="seller-order-search-form" id="order-search-form">
+        <div class="seller-order-search-row">
+            <label class="seller-order-search-q">
+                <span class="seller-order-search-label">搜索</span>
+                <input type="search" name="q" value="{{ order_search.q }}" placeholder="订单号、买家、桌号、地址、菜名、备注…">
+            </label>
+            <button type="submit" class="btn btn-sm">搜索</button>
+        </div>
+        <div class="seller-order-search-filters">
+            <label>订单状态
+                <select name="order_status" onchange="document.getElementById('order-search-form').submit()">
+                    <option value="">全部</option>
+                    {% for val, label in order_status_choices %}
+                    <option value="{{ val }}" {% if order_search.order_status == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>支付状态
+                <select name="payment_status" onchange="document.getElementById('order-search-form').submit()">
+                    <option value="">全部</option>
+                    {% for val, label in payment_status_choices %}
+                    <option value="{{ val }}" {% if order_search.payment_status == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>取餐方式
+                <select name="fulfillment_type" onchange="document.getElementById('order-search-form').submit()">
+                    <option value="">全部</option>
+                    {% for val, label in fulfillment_type_choices %}
+                    <option value="{{ val }}" {% if order_search.fulfillment_type == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>时间范围
+                <select name="date_range" onchange="document.getElementById('order-search-form').submit()">
+                    {% for val, label in order_date_range_choices %}
+                    <option value="{{ val }}" {% if order_search.date_range == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+        <p class="card-meta seller-order-search-hint">默认显示近 1 个月内的订单，最多 100 条。关键词会匹配买家备注。</p>
+    </form>
+
+    {% if orders %}
+        <p class="card-meta">共 {{ orders|length }} 条{% if orders|length >= 100 %}（已达上限，请缩小范围）{% endif %}</p>
+        {% for order in orders %}
+        <div class="seller-order-row" id="order-{{ order.order_id.hex|slice:":8" }}">
+            <div class="seller-order-head">
+                <div>
+                    <strong>订单号：{{ order.get_display_order_no }}</strong>
+                    <div class="card-meta" style="margin-top:4px;">{{ order.created_at|beijing:"m-d H:i" }}</div>
+                </div>
+                <div class="seller-order-amount">¥{{ order.total_amount }}</div>
+            </div>
+            <div class="seller-order-badges">
+                <span class="badge badge-order-prep">{{ order.get_fulfillment_display_short }}</span>
+                {% if order.payment_status == 'paid' %}
+                <span class="badge badge-pay-paid">{{ order.get_payment_status_display }}</span>
+                {% elif order.payment_status == 'uncollected' %}
+                <span class="badge badge-pay-uncollected">{{ order.get_payment_status_display }}</span>
+                {% elif order.payment_status == 'pending_payment' %}
+                <span class="badge badge-pay-pending">{{ order.get_payment_status_display }}</span>
+                {% else %}
+                <span class="badge badge-default">{{ order.get_payment_status_display }}</span>
+                {% endif %}
+                <span class="badge badge-order-prep">{{ order.get_order_status_display }}</span>
+            </div>
+            <div class="seller-order-meta">
+                买家：<strong>{{ order.buyer_id }}</strong><br>
+                {% if order.table_label %}桌台：<strong>{{ order.table_label }}</strong>{% if order.order_kind != 'normal' %} · {{ order.get_order_kind_display }}{% endif %}<br>{% endif %}
+                {% if order.is_in_store %}
+                地点：{{ order.delivery_address }}<br>
+                {% else %}
+                地址：{{ order.delivery_address }}<br>
+                距离：{{ order.distance_km }} km<br>
+                {% endif %}
+                {% if order.payment_method %}支付：{{ order.get_payment_method_display }}{% endif %}
+            </div>
+            <p style="margin:8px 0 0;">
+                <a href="{% url 'order_detail' order.order_id %}">查看订单详情</a>
+            </p>
+            <div class="seller-order-actions">
+                {% if order.estimated_ready_at and order.order_status != 'completed' and order.order_status != 'cancelled' %}
+                <span class="seller-dispatch-info">{{ order.get_estimated_ready_label }}</span>
+                {% endif %}
+                {% if order.fulfillment_type == 'delivery' and order.delivery_order %}
+                <span class="seller-dispatch-info">配送骑手：{{ order.delivery_order.rider_id }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="card-meta">没有符合条件的订单，请调整搜索或时间范围。</p>
+    {% endif %}
+</div>
+<script>
+(function () {
+    var latestTs = Number("{{ seller_new_order_ts|default:0 }}") || 0;
+    if (!latestTs) return;
+    var key = "yc_seller_last_seen_new_order";
+    var lastSeen = Number(localStorage.getItem(key) || "0");
+    if (latestTs > lastSeen) {
+        try {
+            var ctx = new (window.AudioContext || window.webkitAudioContext)();
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.45);
+        } catch (e) {}
+        localStorage.setItem(key, String(latestTs));
+    }
+})();
+</script>
+{% endblock %}

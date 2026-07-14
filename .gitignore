@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# 虚拟环境（体积大，用 requirements.txt 即可恢复）
+.venv/
+venv/
+env/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+*.log
+logs/
+local_settings.py
+media/
+staticfiles/
+
+# 环境与密钥（切勿提交）
+.env
+.env.*
+!.env.example
+*.pem
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+*~
+
+# 操作系统
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 仅本地保留、不提交 Git / 不推送 GitHub
+服务器启动命令以及网址等.txt
+规则模板-developer-profile.mdc
+无为系统-核心规则速查手册.md
+新建文本文档.txt
+野草系统-正式上线前清查备忘录.md
+cursor聊天记录.md
+docs/正式上线部署指南.md
+_qr_fixed.pdf
+_恢复旧聊天窗口.bat
+_restore_cursor_chats.py
+_cursor_chat_recovery_backup_*/
+# 完整手册/方案仅存 E 盘；禁止把完整版副本推进公开仓
+**/野草系统-核心规则速查手册-完整版.md
+**/开发方案-完整版.md

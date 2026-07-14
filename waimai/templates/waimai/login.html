@@ -1,0 +1,49 @@
+{% extends 'waimai/base.html' %}
+{% load static %}
+{% block title %}登录 - 野草系统{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/directory/" back_label="返回名录" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">👤 登录</h1>
+<form method="POST" class="auth-form" id="eco-login-form" autocomplete="off">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <p>
+        <label for="id_username">用户名</label>
+        <input type="text" name="username" id="id_username" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="{{ form.username.value|default:'' }}">
+        {{ form.username.errors }}
+    </p>
+    <p>
+        <label for="id_password">密码</label>
+        <input type="password" name="password" id="id_password" required autocomplete="new-password">
+        {{ form.password.errors }}
+    </p>
+    <p class="card-meta" style="margin:8px 0;">
+        <label style="display:flex;align-items:flex-start;gap:8px;font-weight:normal;">
+            <input type="checkbox" name="remember_credentials" id="id_remember_credentials" value="1">
+            <span>记住用户名和密码（默认不勾选；公共电脑请勿勾选）</span>
+        </label>
+    </p>
+    <p class="card-meta" style="margin:0 0 12px;color:#666;">
+        说明：即使不勾选，部分浏览器仍可能自行弹出「是否保存密码」。野草系统<strong>无法 100% 禁止</strong>浏览器自己记密码，只能尽量不配合；是否让浏览器保存，最终由用户与浏览器设置决定。
+    </p>
+    <button type="submit" class="btn btn-green btn-block">登录</button>
+</form>
+<p class="card-meta">没有账户？<a href="/register/">买家注册</a> · <a href="/shop-register/">店铺开通</a></p>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+window.YC_LOGIN_REMEMBER = {
+    storageKey: 'yc_eco_login_remember',
+    formSelector: '#eco-login-form',
+    usernameSelector: '#id_username',
+    passwordSelector: '#id_password',
+    checkboxSelector: '#id_remember_credentials'
+};
+</script>
+<script src="{% static 'waimai/login_remember.js' %}?v=1"></script>
+{% endblock %}

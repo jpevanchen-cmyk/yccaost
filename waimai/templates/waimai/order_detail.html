@@ -1,0 +1,182 @@
+{% extends 'waimai/base.html' %}
+{% load yc_time %}
+{% block title %}订单详情 - 野草系统{% endblock %}
+
+{% block page_back %}
+{% if viewer_role == 'seller' %}
+{% include 'waimai/_page_back.html' with back_url="/seller-panel/orders/" back_label="返回订单管理" %}
+{% elif viewer_role == 'rider' %}
+{% include 'waimai/_page_back.html' with back_url="/my-deliveries/" back_label="返回我的配送" %}
+{% elif viewer_role == 'waiter' %}
+{% include 'waimai/_page_back.html' with back_url="/waiter-home/" back_label="返回服务员工作台" %}
+{% else %}
+{% include 'waimai/_page_back.html' with back_url="/order-history/" back_label="返回我的订单" %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if request.GET.cash_pending %}
+<div class="msg-ok">
+    {% if request.GET.dine_in or order.is_dine_in %}
+    已选择<strong>堂食 · 到店付现金</strong>。订单已提交，等待店家确认接单；接单后将告知预计出餐时间。
+    {% elif request.GET.takeaway or order.is_takeaway %}
+    已选择<strong>打包 · 到店付现金</strong>。订单已提交，等待店家确认接单；接单后将告知预计可取餐时间。
+    {% else %}
+    已选择<strong>外卖 · 货到付款</strong>。送达时请付现金，店家确认收款后将备货并派单。
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="detail-highlight">
+    <p class="status-hero">{{ order.get_order_status_display }}</p>
+    {% if order.estimated_ready_at and order.order_status != 'completed' %}
+    <p class="msg-ok" style="margin:10px 0 0;font-size:16px;">⏱ {{ order.get_estimated_ready_label }}</p>
+    {% endif %}
+    <p class="card-meta" style="margin:0;">
+        订单号：{{ order.get_display_order_no }}
+        · {{ order.get_fulfillment_display_short }}
+        · 合计 <strong style="color:var(--yc-orange);font-size:18px;">¥{{ order.total_amount }}</strong>
+    </p>
+    {% if order.payment_status == 'pending_payment' and viewer_role == 'buyer' %}
+        {% if order.is_in_store_cash_order %}
+    <p class="msg-ok" style="margin-top:14px;">{{ order.get_cash_payment_hint }}</p>
+        {% elif order.is_cash_awaiting_confirm %}
+    <p class="msg-ok" style="margin-top:14px;">{{ order.get_cash_payment_hint }}</p>
+        {% else %}
+    <a class="btn btn-wechat btn-block" style="margin-top:14px;" href="{% url 'pay_order' order.order_id %}">去支付</a>
+        {% endif %}
+    {% endif %}
+</div>
+
+{% if viewer_role == 'buyer' %}
+<details class="detail-collapse" open>
+    <summary>🏪 店铺信息</summary>
+    <div class="detail-collapse-body">
+        <div class="detail-row"><span>店铺名称</span><span>{% if shop_profile %}{{ shop_profile.shop_name }}{% else %}—{% endif %}</span></div>
+        <div class="detail-row"><span>店铺地址</span><span>{% if shop_profile %}{{ shop_profile.address }}{% else %}—{% endif %}</span></div>
+        <div class="detail-row"><span>进店</span><span><a href="/shop/?seller_id={{ order.seller_id }}">打开店铺</a></span></div>
+    </div>
+</details>
+<details class="detail-collapse" open>
+    <summary>{% if order.is_in_store %}🏪 到店信息{% else %}📍 配送信息{% endif %}</summary>
+    <div class="detail-collapse-body">
+        <div class="detail-row"><span>取餐方式</span><span>{{ order.get_fulfillment_display_short }}</span></div>
+        {% if order.is_in_store %}
+        <div class="detail-row"><span>{% if order.is_dine_in %}就餐地点{% else %}取餐地点{% endif %}</span><span style="text-align:right;max-width:60%;">{{ order.delivery_address }}</span></div>
+        <div class="detail-row"><span>配送费</span><span>¥0（{{ order.get_fulfillment_display_short }}）</span></div>
+        {% else %}
+        <div class="detail-row"><span>送达地址</span><span style="text-align:right;max-width:60%;">{{ order.delivery_address }}</span></div>
+        <div class="detail-row"><span>配送距离</span><span>约 {{ order.distance_km }} 公里</span></div>
+        {% endif %}
+    </div>
+</details>
+{% elif viewer_role == 'seller' %}
+<details class="detail-collapse" open>
+    <summary>👤 买家信息</summary>
+    <div class="detail-collapse-body">
+        <div class="detail-row"><span>买家账号</span><span>{{ order.buyer_id }}</span></div>
+        <div class="detail-row"><span>取餐方式</span><span>{{ order.get_fulfillment_display_short }}</span></div>
+        {% if order.is_in_store %}
+        <div class="detail-row"><span>{% if order.is_dine_in %}就餐地点{% else %}取餐地点{% endif %}</span><span style="text-align:right;max-width:60%;">{{ order.delivery_address }}</span></div>
+        {% else %}
+        <div class="detail-row"><span>送达地址</span><span style="text-align:right;max-width:60%;">{{ order.delivery_address }}</span></div>
+        <div class="detail-row"><span>配送距离</span><span>约 {{ order.distance_km }} 公里</span></div>
+        {% endif %}
+    </div>
+</details>
+{% else %}
+<details class="detail-collapse" open>
+    <summary>👤 买家 / 配送信息</summary>
+    <div class="detail-collapse-body">
+        <div class="detail-row"><span>买家账号</span><span>{{ order.buyer_id }}</span></div>
+        <div class="detail-row"><span>送达地址</span><span style="text-align:right;max-width:60%;">{{ order.delivery_address }}</span></div>
+        <div class="detail-row"><span>取餐店铺</span><span>{% if shop_profile %}{{ shop_profile.shop_name }}{% else %}{{ order.seller_id }}{% endif %}</span></div>
+    </div>
+</details>
+{% endif %}
+
+<details class="detail-collapse">
+    <summary>🍱 订单内容</summary>
+    <div class="detail-collapse-body">
+        {% for item in dish_lines %}
+        <div class="line-item">
+            <span>{{ item.name }} × {{ item.quantity }}</span>
+            <span>¥{{ item.line_total }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</details>
+
+<details class="detail-collapse">
+    <summary>🚚 配送费明细</summary>
+    <div class="detail-collapse-body">
+        {% if delivery_fee_detail.lines %}
+            {% for line in delivery_fee_detail.lines %}
+            <div class="fee-line">{{ line }}</div>
+            {% endfor %}
+        {% else %}
+            <p class="pending-text">暂无明细（旧订单）</p>
+        {% endif %}
+        <div class="detail-row" style="font-weight:bold;margin-top:8px;">
+            <span>买家应付配送费</span><span>¥{{ delivery_fee }}</span>
+        </div>
+    </div>
+</details>
+
+<details class="detail-collapse">
+    <summary>💰 费用合计</summary>
+    <div class="detail-collapse-body">
+        <div class="detail-row"><span>商品小计</span><span>¥{{ subtotal }}</span></div>
+        <div class="detail-row"><span>配送费</span><span>¥{{ delivery_fee }}</span></div>
+        <div class="detail-row" style="font-weight:bold;font-size:17px;">
+            <span>订单合计</span><span style="color:var(--yc-orange);">¥{{ order.total_amount }}</span>
+        </div>
+    </div>
+</details>
+
+<details class="detail-collapse">
+    <summary>💳 支付情况</summary>
+    <div class="detail-collapse-body">
+        <div class="detail-row"><span>支付状态</span><span>{{ order.get_payment_status_display }}</span></div>
+        {% if order.payment_status == 'uncollected' and order.cash_uncollected_reason %}
+        <div class="detail-row" style="align-items:flex-start;">
+            <span>未收款原因</span>
+            <span style="text-align:right;max-width:65%;">{{ order.cash_uncollected_reason }}</span>
+        </div>
+        {% endif %}
+        <div class="detail-row">
+            <span>支付渠道</span>
+            <span>{% if order.payment_method %}{{ order.get_payment_method_display }}{% else %}<span class="pending-text">尚未支付</span>{% endif %}</span>
+        </div>
+        <div class="detail-row">
+            <span>支付时间</span>
+            <span>{% if order.payment_time %}{{ order.payment_time|beijing:"Y-m-d H:i:s" }}{% else %}<span class="pending-text">—</span>{% endif %}</span>
+        </div>
+    </div>
+</details>
+
+<details class="detail-collapse">
+    <summary>📦 配送进度</summary>
+    <div class="detail-collapse-body">
+        <div class="detail-row"><span>订单进度</span><span>{{ order.get_order_status_display }}</span></div>
+        {% if order.delivery_order %}
+        <div class="detail-row"><span>配送骑手</span><span>{{ order.delivery_order.rider_id }}</span></div>
+        <div class="detail-row"><span>配送单状态</span><span>{{ order.delivery_order.get_delivery_status_display }}</span></div>
+        {% else %}
+        <div class="detail-row"><span>配送骑手</span><span class="pending-text">尚未派单</span></div>
+        {% endif %}
+    </div>
+</details>
+
+<details class="detail-collapse">
+    <summary>⏱ 订单时间线</summary>
+    <div class="detail-collapse-body">
+        {% for label, dt in timeline %}
+        <div class="detail-row">
+            <span>{{ label }}</span>
+            <span>{% if dt %}{{ dt|beijing:"m-d H:i" }}{% else %}<span class="pending-text">—</span>{% endif %}</span>
+        </div>
+        {% endfor %}
+    </div>
+</details>
+{% endblock %}

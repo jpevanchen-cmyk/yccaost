@@ -1,0 +1,10 @@
+{% extends 'waimai/base.html' %}
+{% block title %}欢迎 · 野草服务器{% endblock %}
+{% block content %}
+<h1 class="page-title">欢迎</h1>
+<p class="page-desc">本服务器尚未登记店铺。服务器拥有者可先开通店铺，再在后台配置入口展示主页。</p>
+<p style="margin-top:16px;">
+    <a class="btn btn-orange" href="{% url 'shop_register' %}">店铺开通</a>
+    <a class="btn btn-outline" href="{% url 'login' %}">登录</a>
+</p>
+{% endblock %}

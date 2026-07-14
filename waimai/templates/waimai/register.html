@@ -1,0 +1,23 @@
+{% extends 'waimai/base.html' %}
+{% block title %}注册 - 野草系统{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/directory/" back_label="返回名录" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🚀 买家注册</h1>
+{% if experience_site %}
+<div class="card" style="border-left: 4px solid #e6a23c; background: #fff8e6; margin-bottom: 16px; padding: 12px 16px;">
+    <p style="margin: 0; font-size: 1.05rem; line-height: 1.6;"><strong>体验注册说明</strong></p>
+    <p style="margin: 8px 0 0;">{{ experience_hint }}</p>
+</div>
+{% endif %}
+<p class="page-desc">注册后可浏览店铺、下单。骑手由店铺创建账号；开店请用 <a href="/shop-register/">店铺开通</a>。</p>
+<form method="POST" class="auth-form">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-green btn-block">注册</button>
+</form>
+<p class="card-meta">已有账户？<a href="/accounts/login/">登录</a></p>
+{% endblock %}

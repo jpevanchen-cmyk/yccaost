@@ -1,0 +1,155 @@
+{% extends 'waimai/base.html' %}
+{% load staff_account %}
+{% load yc_time %}
+{% block title %}店铺工作台{% endblock %}
+
+{% block page_back %}
+{% if work_user.role == 'seller' %}
+{% include 'waimai/_page_back.html' with back_url="/seller-panel/" back_label="返回店铺管理" %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🧭 店铺工作台</h1>
+{% if shop_profile %}
+<p class="page-desc">{{ shop_profile.shop_name }} · {{ work_user.get_role_display }} <strong>{{ work_user.username|staff_display }}</strong></p>
+{% endif %}
+{% if work_user.role == 'waiter' or work_user.role == 'kitchen' or work_user.role == 'rider' %}
+<div class="card" style="padding:12px;margin-bottom:12px;">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
+        <div>
+            <strong>当前状态：</strong>
+            {% if work_user.staff_work_status == 'on_duty' %}
+            <span class="badge badge-pay-paid">上班</span>
+            {% elif work_user.staff_work_status == 'break' %}
+            <span class="badge badge-default">休息</span>
+            {% else %}
+            <span class="badge badge-default">下班</span>
+            {% endif %}
+        </div>
+        <form method="post" action="{{ form_action }}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-green" name="staff_work_status_action" value="start">上班</button>
+            <button type="submit" class="btn btn-sm btn-outline" name="staff_work_status_action" value="break">休息</button>
+            <button type="submit" class="btn btn-sm btn-outline" name="staff_work_status_action" value="stop">下班</button>
+        </form>
+    </div>
+    {% if work_user.staff_work_status_updated_at %}
+    <p class="card-meta" style="margin:8px 0 0;">最近变更：{{ work_user.staff_work_status_updated_at|beijing:"Y-m-d H:i" }}</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="rider-quick-links" style="margin-bottom:12px;">
+    <a class="btn {% if current_view == 'waiter' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_waiter_url }}">服务员</a>
+    <a class="btn {% if current_view == 'kitchen' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_kitchen_url }}">后厨</a>
+    <a class="btn {% if current_view == 'rider' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_rider_url }}">骑手</a>
+    {% if my_audit_logs is not None %}
+    <a class="btn {% if show_my_audit %}btn-orange{% else %}btn-outline{% endif %}"
+       href="{{ form_action }}{% if '?' in form_action %}&{% else %}?{% endif %}my_audit=1">我的操作记录</a>
+    {% endif %}
+    <form method="post" action="{{ shop_work_logout_url }}" style="display:inline;margin-left:8px;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline btn-sm">退出工作台</button>
+    </form>
+</div>
+
+<div class="card" style="padding:14px;">
+    {% if current_view == 'waiter' %}
+    <h2 style="margin:0 0 10px;font-size:18px;">🍽 服务员视角</h2>
+    {% include 'waimai/_shop_work_waiter_panel.html' with can_operate=can_operate_waiter form_action=form_action %}
+    {% elif current_view == 'kitchen' %}
+    <h2 style="margin:0 0 10px;font-size:18px;">👨‍🍳 后厨视角</h2>
+    {% include 'waimai/_shop_work_kitchen_panel.html' with can_operate=can_operate_kitchen form_action=form_action %}
+    {% else %}
+    <h2 style="margin:0 0 10px;font-size:18px;">🛵 骑手视角</h2>
+    {% include 'waimai/_shop_work_rider_panel.html' with can_operate=can_operate_rider form_action=form_action show_rider_extras=show_rider_extras %}
+    {% endif %}
+</div>
+
+<div class="card" style="padding:14px;margin-top:12px;">
+    <h2 style="margin:0 0 10px;font-size:18px;">🕘 今日工作历史</h2>
+
+    <div style="margin-bottom:14px;">
+        <h3 style="margin:0 0 8px;font-size:16px;">今日订单</h3>
+        {% if today_order_rows %}
+            {% for row in today_order_rows %}
+            {% with order=row.order %}
+            <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
+                <div style="flex:1;min-width:220px;">
+                    <strong>订单 {{ order.get_display_order_no }}</strong>
+                    <div class="card-meta" style="margin-top:4px;">
+                        {{ order.created_at|beijing:"m-d H:i" }} · {{ order.get_fulfillment_display_short }} · ¥{{ order.total_amount }}
+                    </div>
+                    <div class="card-meta" style="margin-top:4px;">
+                        订单状态：{{ row.status_label }}
+                        {% if row.delivery_label %} · 配送状态：{{ row.delivery_label }}{% endif %}
+                        · 支付：{{ order.get_payment_status_display }}
+                    </div>
+                </div>
+                <a class="btn btn-outline btn-sm" href="{% url 'order_detail' order.order_id %}">查看详情</a>
+            </div>
+            {% endwith %}
+            {% endfor %}
+        {% else %}
+        <p class="card-meta">今天还没有订单记录。</p>
+        {% endif %}
+    </div>
+
+    <div>
+        <h3 style="margin:0 0 8px;font-size:16px;">
+            {% if today_activity_is_owner_view %}全店今日动作记录{% else %}我的今日动作记录{% endif %}
+        </h3>
+        <p class="card-meta" style="margin:0 0 8px;">
+            {% if today_activity_is_owner_view %}
+            老板可查看今天所有岗位、所有账号的操作。
+            {% else %}
+            只显示当前账号自己做过的事，方便快速核对前面做过什么。
+            {% endif %}
+        </p>
+        {% if today_activity_rows %}
+            {% for row in today_activity_rows %}
+            <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
+                <div style="min-width:74px;">
+                    <span class="badge badge-default">{{ row.kind }}</span>
+                </div>
+                <div style="flex:1;min-width:220px;">
+                    <strong>{{ row.at|beijing:"H:i" }}</strong>
+                    · 订单 {{ row.order.get_display_order_no }}
+                    <div class="card-meta" style="margin-top:4px;">{{ row.text }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <p class="card-meta">
+            {% if today_activity_is_owner_view %}
+            今天暂时还没有动作记录。
+            {% else %}
+            今天您还没有可核对的个人动作记录。
+            {% endif %}
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+{% if show_my_audit %}
+<div class="card" style="padding:14px;margin-top:12px;" id="my-audit">
+    <h2 style="margin:0 0 10px;font-size:18px;">📝 我的操作记录</h2>
+    <p class="card-meta" style="margin:0 0 10px;">只显示您本人在本店的操作留痕（约保留半年）。</p>
+    {% if my_audit_logs %}
+        {% for log in my_audit_logs %}
+        <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
+            <div style="flex:1;min-width:220px;">
+                <strong>{{ log.action_label|default:log.get_action_code_display }}</strong>
+                {% if log.result == 'fail' %}<span class="badge badge-default">失败</span>{% endif %}
+                <div class="card-meta" style="margin-top:4px;">{{ log.created_at|beijing:"Y-m-d H:i:s" }}</div>
+                {% if log.summary %}<div style="margin-top:4px;">{{ log.summary }}</div>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="card-meta">暂无本人操作记录。</p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

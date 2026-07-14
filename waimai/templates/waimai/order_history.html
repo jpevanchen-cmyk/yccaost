@@ -1,0 +1,58 @@
+{% extends 'waimai/base.html' %}
+{% load yc_time %}
+{% block title %}我的订单 - 野草系统{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/directory/" back_label="返回店铺名录" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">📜 我的订单</h1>
+
+{% if order_rows %}
+    {% for row in order_rows %}
+    {% with order=row.order %}
+    <div class="card">
+        <div class="order-card-top">
+            <div>
+                <div class="order-card-id">订单号：{{ order.get_display_order_no }}</div>
+                <div class="card-meta" style="margin:4px 0 0;">
+                    {{ row.shop_name }} · {{ order.created_at|beijing:"m-d H:i" }}
+                </div>
+            </div>
+            <div class="order-card-amount">¥{{ order.total_amount }}</div>
+        </div>
+        <div>
+            {% if order.payment_status == 'pending_payment' %}
+                <span class="badge badge-pay-pending">{{ order.get_payment_status_display }}</span>
+            {% elif order.payment_status == 'paid' %}
+                <span class="badge badge-pay-paid">{{ order.get_payment_status_display }}</span>
+            {% elif order.payment_status == 'uncollected' %}
+                <span class="badge badge-pay-uncollected">{{ order.get_payment_status_display }}</span>
+            {% else %}
+                <span class="badge badge-default">{{ order.get_payment_status_display }}</span>
+            {% endif %}
+            <span class="badge badge-order-prep" style="margin-left:6px;">{{ order.get_order_status_display }}</span>
+        </div>
+        <div class="order-card-actions">
+            <a class="btn btn-outline btn-sm" href="{% url 'order_detail' order.order_id %}">订单详情</a>
+            {% if order.payment_status == 'pending_payment' and not order.is_in_store_cash_order and not order.is_cash_awaiting_confirm %}
+            <a class="btn btn-wechat btn-sm" href="{% url 'pay_order' order.order_id %}">去支付</a>
+            {% elif order.is_awaiting_in_store_order_confirm %}
+            <span class="badge badge-pay-pending">待店家接单</span>
+            {% elif order.is_cash_receipt_pending %}
+            <span class="badge badge-pay-pending">到店付现金</span>
+            {% elif order.is_cash_awaiting_confirm %}
+            <span class="badge badge-pay-pending">待确认现金</span>
+            {% endif %}
+            {% if order.estimated_ready_at and order.order_status != 'completed' %}
+            <span class="badge badge-order-prep" style="margin-left:6px;">{{ order.get_estimated_ready_label }}</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endwith %}
+    {% endfor %}
+{% else %}
+<p class="card-meta">还没有下过订单，去 <a href="/directory/">店铺名录</a> 看看吧。</p>
+{% endif %}
+{% endblock %}

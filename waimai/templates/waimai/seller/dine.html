@@ -1,0 +1,202 @@
+{% extends 'waimai/seller/base.html' %}
+{% load static %}
+{% block title %}堂食营业 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<details class="seller-panel-fold dine-rules-box" id="dine-rules">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">⚠ 桌码主单硬规则（必读）</span></summary>
+    <div class="seller-panel-fold-body">
+        <div class="hard-rule-block">
+            <p><strong>硬规则 1 · 桌码主单</strong></p>
+            <ul>
+                <li>每桌有且仅有一份由客人扫实体桌码产生的主订单。</li>
+                <li>客人可在这一份主订单上多次加点。</li>
+                <li>须满足堂食接单条件方可新开主单或加点；非营业、堂食关、打烊或暂停时不能新开主单。</li>
+            </ul>
+        </div>
+        {% if operating.share_table_enabled and operating.share_table_mode == 'waiter' %}
+        <div class="hard-rule-block">
+            <p><strong>硬规则 2A · 服务员拼桌单</strong></p>
+            <ul>
+                <li>同一物理桌第二位及以后的客人，须由服务员创建「桌号-临时订单号」单。</li>
+                <li>不得扫码自助开拼桌单；拼桌单从开单到结账全程由服务员操作。</li>
+                <li>不得向扫码主单或他人拼桌单混入加点；模式 A 拼桌单不支持加点。</li>
+            </ul>
+        </div>
+        {% endif %}
+        {% if operating.share_table_enabled and operating.share_table_mode == 'virtual' %}
+        <div class="hard-rule-block">
+            <p><strong>硬规则 2B · 虚拟桌码自助拼桌</strong></p>
+            <ul>
+                <li>卖家配置虚拟桌码池；需要拼桌时将空闲虚拟码交给客人扫码。</li>
+                <li>每个虚拟码同时仅允许一单；结账后释放该码。</li>
+                <li>不得与实体桌扫码主单或模式 A 拼桌单混入加点。</li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</details>
+
+<details class="seller-panel-fold" id="operating-form">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">🕐 营业与接单</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="page-desc">新单须同时满足：全天营业时段、渠道时段、渠道开关开、未打烊、未暂停。</p>
+        <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+            {% csrf_token %}
+            <input type="hidden" name="save_operating" value="1">
+            {% for field in operating_form %}
+                {% if field.name != 'acknowledge_table_rules' and field.name != 'confirm_share_rules' %}
+                <p>{{ field.label_tag }} {{ field }}</p>
+                {% endif %}
+            {% endfor %}
+            {% if not operating.table_rules_acknowledged %}
+            <div class="hard-rule-block">
+                <label>{{ operating_form.acknowledge_table_rules }} {{ operating_form.acknowledge_table_rules.label }}</label>
+            </div>
+            {% endif %}
+            {% if not operating.share_rules_confirmed %}
+            <div class="hard-rule-block" id="share-rules-confirm" {% if not operating.share_table_enabled %}hidden{% endif %}>
+                <label>{{ operating_form.confirm_share_rules }} {{ operating_form.confirm_share_rules.label }}</label>
+            </div>
+            {% endif %}
+            <button type="submit" class="btn btn-block" style="background:#607d8b;color:#fff;">保存营业设置</button>
+        </form>
+        <script>
+        (function () {
+            var shareCb = document.getElementById('id_share_table_enabled');
+            var box = document.getElementById('share-rules-confirm');
+            if (!shareCb || !box) return;
+            function sync() { box.hidden = !shareCb.checked; }
+            shareCb.addEventListener('change', sync);
+            sync();
+        })();
+        </script>
+        <form method="POST" style="margin-top:12px;display:inline-block;">
+            {% csrf_token %}
+            <button type="submit" name="toggle_closed" value="1" class="btn">
+                {% if operating.closed_for_today %}取消本日打烊{% else %}本日打烊{% endif %}
+            </button>
+        </form>
+        <form method="POST" style="margin-top:12px;display:inline-block;margin-left:8px;">
+            {% csrf_token %}
+            <button type="submit" name="toggle_pause" value="1" class="btn">
+                {% if operating.pause_new_orders %}恢复接单{% else %}暂停接单{% endif %}
+            </button>
+        </form>
+    </div>
+</details>
+
+<details class="seller-panel-fold" id="table-list">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">🪑 实体桌台与桌码</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="page-desc">桌号只能是<strong>纯数字</strong>。填最小～最大桌号，可一次建好一整批（如 1 到 30）。点选桌号后，用下方按钮批量操作；<strong>导出桌贴 PDF</strong> 可打印贴桌（每页 12 张）。若已配置支付页的<strong>店铺公网网址</strong>，二维码将指向该网址；未配置则用当前浏览器访问的地址（本机测试可用）。</p>
+        <form method="POST" class="seller-panel-form seller-inline-form" data-unsaved-guard>
+            {% csrf_token %}
+            <input type="hidden" name="add_table" value="1">
+            <label>最小桌号 <input type="number" name="table_min" min="1" placeholder="1" required></label>
+            <label>最大桌号 <input type="number" name="table_max" min="1" placeholder="30" required></label>
+            <button type="submit" class="btn">批量添加桌台</button>
+        </form>
+
+        {% if tables %}
+        <div class="code-chip-grid" id="table-chip-grid">
+            {% for t in tables %}
+            <button type="button" class="code-chip {% if not t.is_active %}is-disabled{% endif %}"
+                data-id="{{ t.table_id }}" data-label="{{ t.table_number }}" data-scan="{{ t.scan_path }}">
+                <span class="code-chip-num">{{ t.table_number }}</span>
+                <span class="code-chip-state">{% if t.is_active %}启用{% else %}停用{% endif %}</span>
+            </button>
+            {% endfor %}
+        </div>
+
+        <form method="POST" id="table-batch-form" class="code-batch-form">
+            {% csrf_token %}
+            <input type="hidden" name="table_batch_action" value="1">
+            <input type="hidden" name="batch_action" id="table-batch-action" value="">
+            <p class="code-batch-hint" id="table-batch-hint">请先点选桌号，再点下方按钮（导出 PDF 可一次选多张，每页 12 张）</p>
+            <div class="code-batch-toolbar">
+                <button type="button" class="btn btn-green" data-batch="enable">启用</button>
+                <button type="button" class="btn" data-batch="disable">停用</button>
+                <button type="button" class="btn btn-outline" data-batch="export_pdf">导出桌贴 PDF</button>
+                <button type="button" class="btn btn-danger" data-batch="delete">删除</button>
+            </div>
+        </form>
+
+        <details class="scan-paths-fold" id="table-scan-fold">
+            <summary>展开扫码路径（一般不需查看）</summary>
+            <div class="scan-paths-list" id="table-scan-paths"></div>
+        </details>
+        {% else %}
+        <p>尚未添加桌台。</p>
+        {% endif %}
+    </div>
+</details>
+
+{% if operating.share_table_enabled and operating.share_table_mode == 'waiter' %}
+<details class="seller-panel-fold" id="share-waiter">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">👔 服务员拼桌单（模式 A）</span></summary>
+    <div class="seller-panel-fold-body">
+        <form method="POST" class="seller-panel-form">
+            {% csrf_token %}
+            <input type="hidden" name="open_share_order" value="1">
+            <label>桌号 <input type="number" name="table_number" min="1" placeholder="实体桌号" required></label>
+            <button type="submit" class="btn">开拼桌单</button>
+        </form>
+        {% if share_sessions %}
+        <ul>{% for s in share_sessions %}<li>{{ s.share_label }} · {{ s.get_status_display }}</li>{% endfor %}</ul>
+        {% endif %}
+    </div>
+</details>
+{% endif %}
+
+{% if operating.share_table_enabled and operating.share_table_mode == 'virtual' %}
+<details class="seller-panel-fold" id="virtual-list">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">🔢 虚拟桌码池（模式 B）</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="page-desc">虚拟码以 <strong>V</strong> 开头（如 V01、V12），不能与实体桌号重复。点选后批量操作。</p>
+        <form method="POST" class="seller-panel-form seller-inline-form" data-unsaved-guard>
+            {% csrf_token %}
+            <input type="hidden" name="add_virtual_code" value="1">
+            <label>最小编号 <input type="number" name="virtual_min" min="1" placeholder="1" required></label>
+            <label>最大编号 <input type="number" name="virtual_max" min="1" placeholder="20" required></label>
+            <button type="submit" class="btn">批量添加虚拟码</button>
+        </form>
+
+        {% if virtual_codes %}
+        <div class="code-chip-grid" id="virtual-chip-grid">
+            {% for v in virtual_codes %}
+            <button type="button" class="code-chip {% if not v.is_active %}is-disabled{% endif %}{% if v.is_busy %} is-busy{% endif %}"
+                data-id="{{ v.code_id }}" data-label="{{ v.code_label }}" data-scan="{{ v.scan_path }}">
+                <span class="code-chip-num">{{ v.code_label }}</span>
+                <span class="code-chip-state">
+                    {% if v.is_busy %}使用中
+                    {% elif v.is_active %}空闲
+                    {% else %}停用{% endif %}
+                </span>
+            </button>
+            {% endfor %}
+        </div>
+
+        <form method="POST" id="virtual-batch-form" class="code-batch-form">
+            {% csrf_token %}
+            <input type="hidden" name="virtual_batch_action" value="1">
+            <input type="hidden" name="batch_action" id="virtual-batch-action" value="">
+            <p class="code-batch-hint" id="virtual-batch-hint">请先点选虚拟码，再点下方「启用 / 停用 / 删除」</p>
+            <div class="code-batch-toolbar">
+                <button type="button" class="btn btn-green" data-batch="enable">启用</button>
+                <button type="button" class="btn" data-batch="disable">停用</button>
+                <button type="button" class="btn btn-danger" data-batch="delete">删除</button>
+            </div>
+        </form>
+
+        <details class="scan-paths-fold" id="virtual-scan-fold">
+            <summary>展开扫码路径（一般不需查看）</summary>
+            <div class="scan-paths-list" id="virtual-scan-paths"></div>
+        </details>
+        {% endif %}
+    </div>
+</details>
+{% endif %}
+
+<script src="{% static 'waimai/seller_dine_grid.js' %}?v=2"></script>
+{% endblock %}

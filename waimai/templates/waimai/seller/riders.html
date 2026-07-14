@@ -1,0 +1,51 @@
+{% extends 'waimai/seller/base.html' %}
+{% load staff_account %}
+{% block title %}本店骑手 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="seller-panel-box">
+    <h2>🛵 本店专属骑手</h2>
+    <p class="page-desc">骑手不能自助注册，由店铺在此创建账号。</p>
+
+    {% if riders %}
+    <ul class="seller-rider-list">
+        {% for r in riders %}
+        <li class="seller-rider-item">
+            🛵 {{ r.username|staff_display }}
+            {% if r.is_active %}
+            <span class="badge badge-pay-paid">启用</span>
+            {% else %}
+            <span class="badge badge-default">已停用</span>
+            {% endif %}
+            {% if r.staff_work_status == 'on_duty' %}
+            <span class="badge badge-order-prep">上班</span>
+            {% elif r.staff_work_status == 'break' %}
+            <span class="badge badge-default">休息</span>
+            {% else %}
+            <span class="badge badge-default">下班</span>
+            {% endif %}
+            <form method="POST" class="seller-inline-form" style="display:inline;margin-left:8px;">
+                {% csrf_token %}
+                <input type="hidden" name="toggle_rider" value="1">
+                <input type="hidden" name="rider_username" value="{{ r.username }}">
+                <button type="submit" class="btn btn-sm btn-outline">
+                    {% if r.is_active %}停用{% else %}重新启用{% endif %}
+                </button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="card-meta">还没有骑手，请在下方创建。</p>
+    {% endif %}
+
+    <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+    <h3 id="rider-create-form">创建新骑手</h3>
+    <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+        {% csrf_token %}
+        <input type="hidden" name="create_rider" value="1">
+        {{ rider_form.as_p }}
+        <button type="submit" class="btn btn-green btn-block">创建骑手账号</button>
+    </form>
+</div>
+{% endblock %}

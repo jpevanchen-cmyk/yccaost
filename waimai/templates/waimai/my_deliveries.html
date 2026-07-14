@@ -1,0 +1,68 @@
+{% extends 'waimai/base.html' %}
+{% block title %}我的配送{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/rider-home/" back_label="返回骑手之家" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🛵 我的配送</h1>
+<p class="page-desc">骑手 <strong>{{ rider_id }}</strong> · 进行中的任务</p>
+
+{% if error %}
+<div class="msg-err">{{ error }}</div>
+{% endif %}
+
+{% if active_orders %}
+    {% for order in active_orders %}
+    <div class="card delivery-card" id="delivery-{{ order.delivery_id.hex|slice:":8" }}">
+        <div class="delivery-card-head">
+            配送 #{{ order.delivery_id.hex|slice:":8" }}
+            · <a href="{% url 'order_detail' order.buy_order.order_id %}">订单详情</a>
+        </div>
+        <p class="delivery-card-meta">
+            <strong>取餐</strong>：{{ order.pickup_address }}<br>
+            <strong>送达</strong>：{{ order.delivery_address }}<br>
+            配送费：<strong style="color:var(--yc-orange);">¥{{ order.delivery_fee }}</strong>
+            · 约 {{ order.distance_km }} 公里
+        </p>
+        <span class="delivery-status-badge
+            {% if order.delivery_status == 'accepted' %}delivery-status-accepted
+            {% elif order.delivery_status == 'picked_up' %}delivery-status-picked_up
+            {% else %}delivery-status-other{% endif %}">
+            {{ order.get_delivery_status_display }}
+        </span>
+        <div class="delivery-action-stack">
+            {% if not order.handoff_ready %}
+            <p class="card-meta">餐品尚未完成交接，请等店内先交给骑手。</p>
+            {% endif %}
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
+                <input type="hidden" name="action" value="pickup">
+                <button type="submit" class="btn btn-pickup"
+                    {% if order.delivery_status != 'accepted' or not order.handoff_ready %}disabled{% endif %}>
+                    我已取餐
+                </button>
+            </form>
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
+                <input type="hidden" name="action" value="complete">
+                <button type="submit" class="btn btn-complete"
+                    {% if order.delivery_status != 'picked_up' %}disabled{% endif %}>
+                    我已送达
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+<p class="card-meta">暂无进行中的配送任务。</p>
+{% endif %}
+
+<div class="rider-quick-links">
+    <a class="btn btn-outline btn-sm" href="{% url 'rider_delivery_history' %}">📋 配送记录</a>
+    <a class="btn btn-outline btn-sm" href="{% url 'rider_home' %}">🏠 骑手之家</a>
+</div>
+{% endblock %}

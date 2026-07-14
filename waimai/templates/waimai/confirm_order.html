@@ -1,0 +1,164 @@
+{% extends 'waimai/base.html' %}
+{% block title %}确认订单{% endblock %}
+{% block body_class %}page-with-sticky-foot{% endblock %}
+
+{% block page_back %}
+<a href="{% url 'shop' %}?seller_id={{ seller_id }}" class="page-back-btn">← 返回店铺修改</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 class="page-title" style="font-size:20px;margin-bottom:16px;">📋 确认订单</h2>
+
+    <div class="fulfillment-block">
+        <strong style="font-size:14px;">取餐方式</strong>
+        <div class="fulfillment-choices">
+            <label class="fulfillment-choice">
+                <input type="radio" name="fulfillment_preview" value="delivery" checked data-fulfillment-radio>
+                <span>外卖</span>
+            </label>
+            <label class="fulfillment-choice">
+                <input type="radio" name="fulfillment_preview" value="dine_in" data-fulfillment-radio>
+                <span>堂食</span>
+            </label>
+            <label class="fulfillment-choice">
+                <input type="radio" name="fulfillment_preview" value="takeaway" data-fulfillment-radio>
+                <span>打包</span>
+            </label>
+        </div>
+        <p class="fulfillment-hint" id="fulfillment-hint-delivery">外卖配送上门，配送费按店铺规则计算。</p>
+        <p class="fulfillment-hint" id="fulfillment-hint-dine-in" hidden>在店内用餐，<strong>不收配送费</strong>。</p>
+        <p class="fulfillment-hint" id="fulfillment-hint-takeaway" hidden>打包自取带走，<strong>不收配送费</strong>。</p>
+    </div>
+
+    {% for item in cart_items %}
+    <div class="line-item">
+        <span>{{ item.dish.name }} × {{ item.quantity }}</span>
+        <span>¥{{ item.item_total }}</span>
+    </div>
+    {% endfor %}
+
+    <div class="line-item">
+        <span>商品小计</span>
+        <span>¥{{ subtotal }}</span>
+    </div>
+
+    <div id="delivery-fee-block">
+        <div class="card" style="margin:12px 0;padding:12px;background:#f9f9f9;">
+            <strong style="font-size:14px;">🚚 配送费说明</strong>
+            {% for line in delivery_fee_detail.lines %}
+            <div class="fee-line">{{ line }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="line-item">
+            <span>配送费</span>
+            <span id="delivery-fee-display">
+                {% if free_delivery %}
+                    <span class="badge badge-pay-paid">¥0 已减免</span>
+                {% else %}
+                    ¥{{ delivery_fee }}
+                {% endif %}
+            </span>
+        </div>
+        <div class="line-item">
+            <span>配送距离（估算）</span>
+            <span>约 {{ distance_km }} 公里</span>
+        </div>
+        <div class="line-item" style="align-items:flex-start;">
+            <span>送达地址</span>
+            <span style="text-align:right;max-width:65%;">{{ delivery_address }}</span>
+        </div>
+    </div>
+
+    <div id="in-store-info-block" hidden>
+        <div class="card" style="margin:12px 0;padding:12px;background:#f0faf0;">
+            <strong style="font-size:14px;" id="in-store-info-title">🏪 到店说明</strong>
+            <div class="fee-line" id="in-store-fee-line">不收配送费</div>
+            {% if shop_profile %}
+            <div class="fee-line">店铺地址：{{ shop_profile.address }}</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="sticky-foot">
+    <div class="sticky-foot-total">
+        合计 <strong id="confirm-total-display">¥{{ total_amount }}</strong>
+    </div>
+    <form method="POST" action="/place-order/" id="place-order-form" style="margin:0;">
+        {% csrf_token %}
+        <input type="hidden" name="seller_id" value="{{ seller_id }}">
+        <input type="hidden" name="fulfillment_type" id="fulfillment_type_input" value="delivery">
+        <input type="hidden" name="distance_km" value="{{ distance_km }}">
+        <input type="hidden" name="delivery_address" value="{{ delivery_address }}">
+        <div id="dine-in-check-block" class="fulfillment-block" hidden style="margin:0 0 12px;">
+            <label class="fulfillment-choice" style="width:100%;">
+                <input type="checkbox" name="dine_in_at_shop" id="dine_in_at_shop" value="1">
+                <span>我已在店内 / 即将到店（堂食必选）</span>
+            </label>
+            <p class="fulfillment-hint" style="margin-top:8px;">堂食需人在店内或马上到店。后续可接入地图定位，当前请如实勾选。</p>
+        </div>
+        <button type="submit" class="btn btn-orange">确认下单</button>
+    </form>
+</div>
+
+<script>
+(function () {
+    var subtotal = parseFloat("{{ subtotal }}") || 0;
+    var deliveryFee = parseFloat("{{ delivery_fee }}") || 0;
+    var radios = document.querySelectorAll("[data-fulfillment-radio]");
+    var typeInput = document.getElementById("fulfillment_type_input");
+    var totalEl = document.getElementById("confirm-total-display");
+    var deliveryBlock = document.getElementById("delivery-fee-block");
+    var inStoreBlock = document.getElementById("in-store-info-block");
+    var hintDelivery = document.getElementById("fulfillment-hint-delivery");
+    var hintDineIn = document.getElementById("fulfillment-hint-dine-in");
+    var hintTakeaway = document.getElementById("fulfillment-hint-takeaway");
+    var inStoreTitle = document.getElementById("in-store-info-title");
+    var dineInCheckBlock = document.getElementById("dine-in-check-block");
+    var dineInCheckbox = document.getElementById("dine_in_at_shop");
+    var placeForm = document.getElementById("place-order-form");
+
+    function selectedType() {
+        return document.querySelector("[data-fulfillment-radio]:checked").value;
+    }
+
+    function updateView() {
+        var t = selectedType();
+        typeInput.value = t;
+        var inStore = t === "dine_in" || t === "takeaway";
+        deliveryBlock.hidden = inStore;
+        inStoreBlock.hidden = !inStore;
+        hintDelivery.hidden = t !== "delivery";
+        hintDineIn.hidden = t !== "dine_in";
+        hintTakeaway.hidden = t !== "takeaway";
+        if (dineInCheckBlock) {
+            dineInCheckBlock.hidden = t !== "dine_in";
+        }
+        if (t !== "dine_in" && dineInCheckbox) {
+            dineInCheckbox.checked = false;
+        }
+        if (t === "dine_in") {
+            inStoreTitle.textContent = "🍽 堂食说明";
+        } else if (t === "takeaway") {
+            inStoreTitle.textContent = "🥡 打包说明";
+        }
+        var total = inStore ? subtotal : (subtotal + deliveryFee);
+        totalEl.textContent = "¥" + total.toFixed(2);
+    }
+
+    radios.forEach(function (r) { r.addEventListener("change", updateView); });
+    updateView();
+
+    if (placeForm) {
+        placeForm.addEventListener("submit", function (e) {
+            if (selectedType() === "dine_in" && dineInCheckbox && !dineInCheckbox.checked) {
+                e.preventDefault();
+                window.alert("堂食下单须勾选「我已在店内 / 即将到店」。");
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

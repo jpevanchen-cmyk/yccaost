@@ -1,0 +1,113 @@
+{% extends 'waimai/base.html' %}
+{% load yc_time %}
+{% block title %}服务员工作台{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/directory/" back_label="返回名录" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🍽 服务员工作台</h1>
+{% if shop_profile %}
+<p class="page-desc">{{ shop_profile.shop_name }} · 堂食 / 打包 / 外卖订单跟进（按份标记 · 协助收款）</p>
+{% else %}
+<p class="page-desc">本店订单跟进（按份标记 · 协助收款）</p>
+{% endif %}
+
+{% if error %}
+<div class="msg-err">{{ error }}</div>
+{% endif %}
+
+{% if messages %}
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}msg-err{% else %}msg-ok{% endif %}" style="margin-bottom:12px;">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+{% if orders %}
+    {% for row in orders %}
+    {% with order=row.order %}
+    <div class="card delivery-card" id="waiter-order-{{ order.order_id.hex|slice:":8" }}">
+        <div class="delivery-card-head">
+            订单 {{ order.get_display_order_no }}
+            · {{ order.get_fulfillment_display_short }}
+        </div>
+        <p class="delivery-card-meta">
+            {% if order.table_label %}桌台：<strong>{{ order.table_label }}</strong><br>{% endif %}
+            {% if row.rider_id %}骑手：<strong>{{ row.rider_id }}</strong>{% if row.delivery_status %} · {{ row.delivery_status }}{% endif %}<br>{% endif %}
+            金额：<strong style="color:var(--yc-orange);">¥{{ order.total_amount }}</strong>
+            · {{ order.get_payment_status_display }}
+            · {{ order.created_at|beijing:"m-d H:i" }}
+        </p>
+        <span class="delivery-status-badge delivery-status-accepted">{{ row.phase_label }}</span>
+
+        {% if order.buyer_note %}
+        <p class="msg-ok" style="margin:8px 0;font-size:14px;font-weight:bold;">备注：{{ order.buyer_note }}</p>
+        {% endif %}
+
+        <div class="detail-collapse-body" style="margin:10px 0;">
+            <p class="card-meta" style="margin-bottom:8px;"><strong>🍱 菜品（按份{{ row.serve_label }}）</strong></p>
+            {% for dish in row.dish_groups %}
+            <div class="line-item" style="flex-wrap:wrap;gap:8px;padding:10px 0;border-bottom:1px solid #eee;">
+                <div style="flex:1;min-width:140px;">
+                    <strong>{{ dish.name }}</strong>
+                    <div class="card-meta">已{{ row.serve_label }} {{ dish.served_qty }}/{{ dish.total_qty }}</div>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    {% if dish.served_qty < dish.total_qty %}
+                    <form method="POST" class="seller-inline-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="mark_dish_unit" value="1">
+                        <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                        <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                        <button type="submit" class="btn btn-sm btn-orange">+1 份{{ row.serve_label }}</button>
+                    </form>
+                    {% endif %}
+                    {% if dish.served_qty > 0 %}
+                    <form method="POST" class="seller-inline-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="undo_dish_unit" value="1">
+                        <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                        <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                        <button type="submit" class="btn btn-sm btn-outline">撤回 1 份</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="delivery-action-stack" style="margin-top:12px;">
+            {% if row.can_collect %}
+            <a class="btn btn-green btn-block" href="{% url 'waiter_pay_order' order.order_id %}">💳 协助收款 / 选支付方式</a>
+            {% elif row.can_confirm_cash %}
+            <form method="POST" class="seller-inline-form">
+                {% csrf_token %}
+                <input type="hidden" name="confirm_cash" value="1">
+                <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                <button type="submit" class="btn btn-green btn-block">确认已收现金</button>
+            </form>
+            {% elif order.payment_status == 'paid' %}
+            <p class="card-meta">已收款（{{ order.get_payment_method_display|default:"—" }}）</p>
+            {% endif %}
+        </div>
+
+        {% if row.log_lines %}
+        <details class="detail-collapse" style="margin-top:10px;">
+            <summary>📝 服务记录</summary>
+            <div class="detail-collapse-body">
+                {% for line in row.log_lines %}
+                <div class="card-meta" style="margin-bottom:6px;">{{ line }}</div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+    </div>
+    {% endwith %}
+    {% endfor %}
+{% else %}
+{% if not error %}
+<p class="card-meta">暂无进行中的订单。客人下单后会出现在这里。</p>
+{% endif %}
+{% endif %}
+{% endblock %}

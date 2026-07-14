@@ -1,0 +1,23 @@
+{% extends 'waimai/base.html' %}
+{% block title %}店铺开通 - 野草系统{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/directory/" back_label="返回名录" %}
+{% endblock %}
+
+{% block content %}
+<h1>🏪 店铺注册服务器</h1>
+{% if experience_site %}
+<div class="card" style="border-left: 4px solid #e6a23c; background: #fff8e6; margin-bottom: 16px; padding: 12px 16px;">
+    <p style="margin: 0; font-size: 1.05rem; line-height: 1.6;"><strong>体验开店说明</strong></p>
+    <p style="margin: 8px 0 0;">{{ experience_hint }}</p>
+</div>
+{% endif %}
+<p>开通店铺账号后，您的店铺将自动出现在<a href="/directory/">公共名录</a>中。</p>
+
+<form method="POST" style="max-width: 480px;">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" style="background: #4caf50; color: white; padding: 10px 24px; border: none; border-radius: 4px; cursor: pointer; margin-top: 12px;">注册并开通</button>
+</form>
+{% endblock %}

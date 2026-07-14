@@ -1,0 +1,288 @@
+{% extends 'waimai/seller/base.html' %}
+{% load staff_account %}
+{% load yc_time %}
+{% block title %}员工工作台管理 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<p class="page-desc" style="margin-bottom:14px;">本店员工登录、岗位账号与协作设置均在此维护。员工请扫下方二维码，<strong>不要</strong>使用野草生态登录页。</p>
+
+{% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-qr' fold_title='📱 工作台登录二维码' fold_open=True %}
+        <p class="card-meta">贴在前台、后厨或骑手取餐处；扫码后输入名字和密码开始上班（可用手机浏览器记住密码）。</p>
+        {% if work_login_url %}
+        <p><strong>链接：</strong><a href="{{ work_login_url }}" target="_blank" rel="noopener">{{ work_login_url }}</a></p>
+        {% if work_qr_data_url %}
+        <p style="margin:12px 0;"><img src="{{ work_qr_data_url }}" alt="工作台登录二维码" style="max-width:220px;border:1px solid #eee;padding:8px;background:#fff;"></p>
+        {% endif %}
+        {% if work_mobile_url %}
+        <p class="card-meta">手机测试请先用 0.0.0.0:8000 方式启动服务器，再扫下面这个局域网二维码。</p>
+        <p><strong>手机链接：</strong><a href="{{ work_mobile_url }}" target="_blank" rel="noopener">{{ work_mobile_url }}</a></p>
+        {% if work_mobile_qr_data_url %}
+        <p style="margin:12px 0;"><img src="{{ work_mobile_qr_data_url }}" alt="工作台手机二维码" style="max-width:220px;border:1px solid #eee;padding:8px;background:#fff;"></p>
+        {% endif %}
+        {% else %}
+        <p class="card-meta">当前未识别到可供手机访问的局域网 IP；请按「服务器启动命令以及网址等.txt」里的方法先查本机 IP。</p>
+        {% endif %}
+        {% else %}
+        <p class="msg-err">尚未生成店码，请联系管理员补全店铺资料。</p>
+        {% endif %}
+{% include 'waimai/seller/_panel_fold_end.html' %}
+
+{% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-settings-form' fold_title='⚙️ 工作台协作设置' %}
+        <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+            {% csrf_token %}
+            <input type="hidden" name="save_workbench_settings" value="1">
+            {{ workbench_settings_form.as_p }}
+            <button type="submit" class="btn btn-green">保存协作设置</button>
+        </form>
+{% include 'waimai/seller/_panel_fold_end.html' %}
+
+{% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-attendance' fold_title='🗂 员工状态与考勤' %}
+        <p class="card-meta">这里可看当前状态、今日上班情况与最近考勤流水；老板也可在此兜底补改。</p>
+        <form method="GET" class="seller-panel-form auth-form" style="margin:10px 0 14px;">
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;">
+                <label>开始日期<br>{{ attendance_filter_form.date_from }}</label>
+                <label>结束日期<br>{{ attendance_filter_form.date_to }}</label>
+                <label>岗位<br>{{ attendance_filter_form.role }}</label>
+                <label>名字<br>{{ attendance_filter_form.name }}</label>
+                <button type="submit" class="btn btn-sm">筛选</button>
+                <a href="/seller-panel/workbench/" class="btn btn-sm btn-outline">重置</a>
+            </div>
+            {% if attendance_filter_form.errors %}
+            <p class="msg-err" style="margin-top:8px;">筛选条件有误，请检查日期范围。</p>
+            {% endif %}
+        </form>
+        <form method="POST" style="margin:10px 0 14px;">
+            {% csrf_token %}
+            <input type="hidden" name="export_attendance_csv" value="1">
+            <input type="hidden" name="date_from" value="{{ attendance_filter_form.date_from.value|default:'' }}">
+            <input type="hidden" name="date_to" value="{{ attendance_filter_form.date_to.value|default:'' }}">
+            <input type="hidden" name="role" value="{{ attendance_filter_form.role.value|default:'' }}">
+            <input type="hidden" name="name" value="{{ attendance_filter_form.name.value|default:'' }}">
+            <button type="submit" class="btn btn-outline">导出考勤 CSV</button>
+        </form>
+        <div style="overflow-x:auto;">
+            <table class="simple-table" style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">岗位</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">员工名</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">账号状态</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">当前状态</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">最近变更</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">今日首次上班</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">今日最后状态</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">老板补改</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in staff_status_rows %}
+                    <tr>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ row.role_label }}</td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ row.display_name }}</td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">
+                            {% if row.user.is_active %}
+                            <span class="badge badge-pay-paid">启用</span>
+                            {% else %}
+                            <span class="badge badge-default">已停用</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">
+                            {% if row.user.staff_work_status == 'on_duty' %}
+                            <span class="badge badge-order-prep">上班</span>
+                            {% elif row.user.staff_work_status == 'break' %}
+                            <span class="badge badge-default">休息</span>
+                            {% else %}
+                            <span class="badge badge-default">下班</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{% if row.status_updated_at %}{{ row.status_updated_at|beijing:"m-d H:i" }}{% else %}—{% endif %}</td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{% if row.first_on_duty_today %}{{ row.first_on_duty_today|beijing:"H:i" }}{% else %}—{% endif %}</td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">
+                            {% if row.last_today %}
+                            {{ row.last_today.get_action_display }} · {{ row.last_today.changed_at|beijing:"H:i" }}
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;min-width:260px;">
+                            <form method="POST" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                                {% csrf_token %}
+                                <input type="hidden" name="manager_set_staff_status" value="1">
+                                <input type="hidden" name="attendance_username" value="{{ row.user.username }}">
+                                <select name="attendance_status">
+                                    {% for value, label in attendance_status_choices %}
+                                    <option value="{{ value }}" {% if row.user.staff_work_status == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <input type="text" name="attendance_note" placeholder="补改备注（可留空）" style="min-width:110px;">
+                                <button type="submit" class="btn btn-sm btn-outline">保存</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" style="padding:10px;">还没有员工账号。</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <h4 style="margin-top:16px;">最近考勤流水</h4>
+        <div style="overflow-x:auto;">
+            <table class="simple-table" style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">时间</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">员工名</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">岗位</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">动作</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">来源</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">操作人</th>
+                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">备注</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in attendance_logs %}
+                    <tr>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.changed_at|beijing:"m-d H:i" }}</td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.display_name_snapshot }}</td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.role_snapshot|staff_role }}</td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.get_action_display }}</td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.get_source_display }}</td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.operator_username|default:"—" }}</td>
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.note|default:"—" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" style="padding:10px;">还没有考勤流水。</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+{% include 'waimai/seller/_panel_fold_end.html' %}
+
+{% include 'waimai/seller/_panel_fold.html' with fold_id='waiter-create-form' fold_title='🍽 本店服务员' %}
+        <p class="card-meta">由店铺创建子账号；员工只能登录本店工作台。</p>
+        {% if waiters %}
+        <ul class="seller-rider-list">
+            {% for w in waiters %}
+            <li class="seller-rider-item">
+                🍽 {{ w.username|staff_display }}
+                {% if w.is_active %}
+                <span class="badge badge-pay-paid">启用</span>
+                {% else %}
+                <span class="badge badge-default">已停用</span>
+                {% endif %}
+                {% if w.staff_work_status == 'on_duty' %}
+                <span class="badge badge-order-prep">上班</span>
+                {% elif w.staff_work_status == 'break' %}
+                <span class="badge badge-default">休息</span>
+                {% else %}
+                <span class="badge badge-default">下班</span>
+                {% endif %}
+                <form method="POST" class="seller-inline-form" style="display:inline;margin-left:8px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="toggle_waiter" value="1">
+                    <input type="hidden" name="waiter_username" value="{{ w.username }}">
+                    <button type="submit" class="btn btn-sm btn-outline">
+                        {% if w.is_active %}停用{% else %}重新启用{% endif %}
+                    </button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="card-meta">还没有服务员。</p>
+        {% endif %}
+        <h4 style="margin-top:16px;">创建服务员</h4>
+        <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+            {% csrf_token %}
+            <input type="hidden" name="create_waiter" value="1">
+            {{ waiter_form.as_p }}
+            <button type="submit" class="btn btn-green btn-block">创建服务员账号</button>
+        </form>
+{% include 'waimai/seller/_panel_fold_end.html' %}
+
+{% include 'waimai/seller/_panel_fold.html' with fold_id='kitchen-create-form' fold_title='👨‍🍳 本店后厨' %}
+        {% if kitchens %}
+        <ul class="seller-rider-list">
+            {% for k in kitchens %}
+            <li class="seller-rider-item">
+                👨‍🍳 {{ k.username|staff_display }}
+                {% if k.is_active %}
+                <span class="badge badge-pay-paid">启用</span>
+                {% else %}
+                <span class="badge badge-default">已停用</span>
+                {% endif %}
+                {% if k.staff_work_status == 'on_duty' %}
+                <span class="badge badge-order-prep">上班</span>
+                {% elif k.staff_work_status == 'break' %}
+                <span class="badge badge-default">休息</span>
+                {% else %}
+                <span class="badge badge-default">下班</span>
+                {% endif %}
+                <form method="POST" class="seller-inline-form" style="display:inline;margin-left:8px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="toggle_kitchen" value="1">
+                    <input type="hidden" name="kitchen_username" value="{{ k.username }}">
+                    <button type="submit" class="btn btn-sm btn-outline">
+                        {% if k.is_active %}停用{% else %}重新启用{% endif %}
+                    </button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="card-meta">还没有后厨账号。</p>
+        {% endif %}
+        <h4 style="margin-top:16px;">创建后厨账号</h4>
+        <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+            {% csrf_token %}
+            <input type="hidden" name="create_kitchen" value="1">
+            {{ kitchen_form.as_p }}
+            <button type="submit" class="btn btn-green btn-block">创建后厨账号</button>
+        </form>
+{% include 'waimai/seller/_panel_fold_end.html' %}
+
+{% include 'waimai/seller/_panel_fold.html' with fold_id='rider-create-form' fold_title='🛵 本店专属骑手' %}
+        {% if riders %}
+        <ul class="seller-rider-list">
+            {% for r in riders %}
+            <li class="seller-rider-item">
+                🛵 {{ r.username|staff_display }}
+                {% if r.is_active %}
+                <span class="badge badge-pay-paid">启用</span>
+                {% else %}
+                <span class="badge badge-default">已停用</span>
+                {% endif %}
+                {% if r.staff_work_status == 'on_duty' %}
+                <span class="badge badge-order-prep">上班</span>
+                {% elif r.staff_work_status == 'break' %}
+                <span class="badge badge-default">休息</span>
+                {% else %}
+                <span class="badge badge-default">下班</span>
+                {% endif %}
+                <form method="POST" class="seller-inline-form" style="display:inline;margin-left:8px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="toggle_rider" value="1">
+                    <input type="hidden" name="rider_username" value="{{ r.username }}">
+                    <button type="submit" class="btn btn-sm btn-outline">
+                        {% if r.is_active %}停用{% else %}重新启用{% endif %}
+                    </button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="card-meta">还没有骑手。</p>
+        {% endif %}
+        <h4 style="margin-top:16px;">创建骑手</h4>
+        <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+            {% csrf_token %}
+            <input type="hidden" name="create_rider" value="1">
+            {{ rider_form.as_p }}
+            <button type="submit" class="btn btn-green btn-block">创建骑手账号</button>
+        </form>
+{% include 'waimai/seller/_panel_fold_end.html' %}
+{% endblock %}

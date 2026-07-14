@@ -1,0 +1,71 @@
+{# 店铺购物车内容（电脑侧边栏与手机抽屉共用） #}
+{% if cart %}
+    {% for item in cart %}
+    <div class="cart-item{% if item.quantity == 0 %} cart-item-zero{% endif %}" id="cart-row-{{ item.dish.dish_id.hex|slice:":8" }}-{{ item.price_tier }}">
+        <div class="cart-item-name">{{ item.dish.name }}
+            {% if item.tier_label %}<span class="cart-tier-tag">{{ item.tier_label }}</span>{% endif %}
+            · ¥{{ item.subtotal }}</div>
+        {% if item.quantity == 0 %}
+        <div class="cart-zero-hint">当前 0 份，点 + 可加回，或点删除移出购物车</div>
+        {% endif %}
+        <div class="cart-item-controls">
+            <form method="POST" style="display:inline;margin:0;" data-scroll-anchor="cart">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="decrease_from_cart">
+                <input type="hidden" name="line_key" value="{{ item.line_key }}">
+                <input type="hidden" name="stay_in_cart" value="1">
+                <button type="submit" class="cart-qty-btn" title="减少" aria-label="减少">-</button>
+            </form>
+            <span style="min-width:28px;text-align:center;font-weight:600;">{{ item.quantity }}</span>
+            <form method="POST" style="display:inline;margin:0;" data-scroll-anchor="cart">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_to_cart">
+                <input type="hidden" name="dish_id" value="{{ item.dish.dish_id }}">
+                <input type="hidden" name="price_tier" value="{{ item.price_tier }}">
+                <input type="hidden" name="stay_in_cart" value="1">
+                <button type="submit" class="cart-qty-btn" title="增加" aria-label="增加">+</button>
+            </form>
+            <form method="POST" style="display:inline;margin:0;" data-scroll-anchor="cart">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="remove_from_cart">
+                <input type="hidden" name="line_key" value="{{ item.line_key }}">
+                <input type="hidden" name="stay_in_cart" value="1">
+                <button type="submit" class="cart-remove-btn">删除</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+
+    <p class="cart-total-line">有效 {{ cart_count }} 件 · 应付商品 ¥{{ cart_total }}</p>
+
+    <form method="POST" class="cart-form" data-scroll-anchor="cart">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="checkout">
+        <label for="delivery_address_{{ panel_id }}">送达地址</label>
+        <textarea id="delivery_address_{{ panel_id }}" name="delivery_address" placeholder="请填写详细地址" required>默认地址</textarea>
+
+        <label>大概配送距离（不接地图，请按实际情况选）</label>
+        <div class="distance-chips">
+            <label class="distance-chip">
+                <input type="radio" name="distance_km" value="1">
+                <span>约 1 公里</span>
+            </label>
+            <label class="distance-chip">
+                <input type="radio" name="distance_km" value="2.5" checked>
+                <span>约 2～3 公里</span>
+            </label>
+            <label class="distance-chip">
+                <input type="radio" name="distance_km" value="4">
+                <span>约 4 公里</span>
+            </label>
+            <label class="distance-chip">
+                <input type="radio" name="distance_km" value="5">
+                <span>约 5 公里</span>
+            </label>
+        </div>
+
+        <button type="submit" class="btn btn-orange btn-block" style="margin-top:16px;">去结算</button>
+    </form>
+{% else %}
+    <p class="card-meta">购物车是空的，请先点「加入购物车」</p>
+{% endif %}

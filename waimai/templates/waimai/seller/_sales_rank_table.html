@@ -1,0 +1,18 @@
+{% if rows %}
+<table class="seller-table sales-rank-table">
+    <thead>
+        <tr><th>名次</th><th>菜品</th><th>销量（份）</th></tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+            <td class="sales-rank-num">{% if row.rank <= 3 %}🏅{% endif %} {{ row.rank }}</td>
+            <td>{{ row.name }}</td>
+            <td><strong>{{ row.quantity }}</strong></td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="card-meta">该时段暂无已完成订单销量数据。</p>
+{% endif %}

@@ -1,0 +1,83 @@
+{% extends 'waimai/base.html' %}
+{% load static %}
+{% block title %}{% if shop_profile %}{{ shop_profile.shop_name }}{% else %}入口主页{% endif %}{% endblock %}
+{% block body_class %}showcase-home-page{% endblock %}
+
+{% block page_back %}{% endblock %}
+
+{% block content %}
+<nav class="showcase-sticky-nav" aria-label="主页导航">
+    <div class="showcase-sticky-inner">
+        <a class="showcase-brand" href="#top">{% if shop_profile %}{{ shop_profile.shop_name }}{% else %}入口主页{% endif %}</a>
+        <div class="showcase-nav-links">
+            {% for item in home_nav_items %}
+            <a href="#{{ item.anchor }}">{{ item.label }}</a>
+            {% endfor %}
+            <a class="showcase-nav-order" href="{{ order_nav_href }}">点餐</a>
+        </div>
+    </div>
+</nav>
+
+<div id="top" class="showcase-stack">
+{% for block in home_blocks %}
+<section class="showcase-block card" id="block-{{ block.block_type }}">
+    {% if block.block_type == 'hero' %}
+        <h1 class="page-title" style="margin-bottom:8px;">{{ block.title }}</h1>
+        {% if block.image_url %}
+        <div class="showcase-hero-media" style="margin:12px 0;">
+            <img src="{{ block.image_url }}" alt="" style="width:100%;max-height:280px;object-fit:cover;border-radius:8px;">
+        </div>
+        {% endif %}
+        {% if block.body %}<p class="page-desc">{{ block.body }}</p>{% endif %}
+    {% elif block.block_type == 'order_cta' %}
+        <h2 style="margin:0 0 10px;font-size:18px;">{{ block.title|default:"开始点餐" }}</h2>
+        {% if block.body %}<p class="card-meta" style="margin-bottom:12px;">{{ block.body }}</p>{% endif %}
+        <a class="btn btn-orange btn-block" href="{{ order_url }}">{{ block.title|default:"开始点餐" }}</a>
+    {% elif block.block_type == 'directory' %}
+        <h2 style="margin:0 0 10px;font-size:18px;">{{ block.title|default:"店铺名录" }}</h2>
+        {% if block.body %}<p class="card-meta" style="margin-bottom:12px;">{{ block.body }}</p>{% endif %}
+        {% if directory_shops %}
+            {% for shop in directory_shops %}
+            <div class="line-item" style="flex-wrap:wrap;gap:8px;border-bottom:1px solid #eee;padding:10px 0;">
+                <div style="flex:1;min-width:160px;">
+                    <strong>{{ shop.shop_name }}</strong>
+                    <div class="card-meta">{{ shop.address }}</div>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    {% if shop.shop_code %}
+                    <a class="btn btn-sm btn-outline" href="{% url 'shop_showcase' shop.shop_code %}">介绍</a>
+                    {% endif %}
+                    <a class="btn btn-sm btn-green" href="/shop/?seller_id={{ shop.seller_id }}">点餐</a>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="card-meta">暂无可展示的店铺。</p>
+        {% endif %}
+    {% else %}
+        <h2 style="margin:0 0 10px;font-size:18px;">{{ block.title }}</h2>
+        {% if block.image_url %}
+        <img src="{{ block.image_url }}" alt="" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-bottom:10px;">
+        {% endif %}
+        {% if block.body %}
+        <div class="showcase-body" style="white-space:pre-wrap;line-height:1.6;">{{ block.body }}</div>
+        {% endif %}
+        {% if block.link_url %}
+        <p style="margin-top:10px;"><a class="btn btn-sm btn-outline" href="{{ block.link_url }}" rel="noopener">了解更多</a></p>
+        {% endif %}
+    {% endif %}
+</section>
+{% empty %}
+<div class="card">
+    <p class="card-meta">主页尚未启用任何积木块。服务器拥有者可在店铺管理「展示主页」中开启。</p>
+    <a class="btn btn-orange" href="{{ order_url }}">直接点餐</a>
+</div>
+{% endfor %}
+</div>
+
+<button type="button" class="showcase-back-top" id="showcase-back-top" aria-label="回到顶部" hidden>顶部</button>
+{% endblock %}
+
+{% block pre_mobile_js %}
+<script src="{% static 'waimai/showcase_home.js' %}?v=1"></script>
+{% endblock %}

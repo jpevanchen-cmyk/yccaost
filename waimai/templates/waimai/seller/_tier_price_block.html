@@ -1,0 +1,49 @@
+{# 会员价 / 特价 表单块；prefix=member 或 special；须勾选「启用」才生效 #}
+{% load product_labels %}
+<fieldset class="tier-price-block" data-tier-block="{{ prefix }}">
+    <label class="tier-enable-row">
+        <input type="checkbox" class="tier-enable-cb" name="{{ prefix }}_price_enabled" value="1"
+            data-tier-prefix="{{ prefix }}"
+            {% if dish %}
+                {% if prefix == 'member' and dish.member_price_enabled %}checked{% endif %}
+                {% if prefix == 'special' and dish.special_price_enabled %}checked{% endif %}
+            {% endif %}>
+        <strong>启用{{ title }}</strong>
+        <span class="card-meta">（不勾选则客人看不到这一档价格）</span>
+    </label>
+
+    <div class="tier-price-body" data-tier-body="{{ prefix }}"
+        {% if dish %}
+            {% if prefix == 'member' and not dish.member_price_enabled %}hidden{% endif %}
+            {% if prefix == 'special' and not dish.special_price_enabled %}hidden{% endif %}
+        {% else %}hidden{% endif %}>
+        <p class="card-meta">{{ hint }}</p>
+        <div class="tier-mode-row">
+            <label><input type="radio" class="tier-mode-radio" name="{{ prefix }}_price_mode" value="percent"
+                data-tier-prefix="{{ prefix }}"
+                {% if not dish %}checked{% elif prefix == 'member' and dish.member_price_mode != 'fixed' %}checked{% elif prefix == 'special' and dish.special_price_mode != 'fixed' %}checked{% endif %}>
+                按通用价百分比（默认）</label>
+            <label><input type="radio" class="tier-mode-radio" name="{{ prefix }}_price_mode" value="fixed"
+                data-tier-prefix="{{ prefix }}"
+                {% if dish %}{% if prefix == 'member' and dish.member_price_mode == 'fixed' %}checked{% elif prefix == 'special' and dish.special_price_mode == 'fixed' %}checked{% endif %}{% endif %}>
+                直接填价格</label>
+        </div>
+        <label class="tier-field-percent">百分比（如 90 = 九折）
+            <input type="number" name="{{ prefix }}_price_percent" step="0.01" min="1" max="200" placeholder="90"
+                value="{% if dish %}{% if prefix == 'member' %}{{ dish.member_price_percent|default:'90' }}{% else %}{{ dish.special_price_percent|default:'80' }}{% endif %}{% else %}{% if prefix == 'member' %}90{% else %}80{% endif %}{% endif %}">
+        </label>
+        <label class="tier-field-fixed">直接价格（元）
+            <input type="number" name="{{ prefix }}_price_fixed" step="0.01" min="0.01" placeholder="留空则不用"
+                value="{% if dish %}{% if prefix == 'member' %}{{ dish.member_price_fixed|default:'' }}{% else %}{{ dish.special_price_fixed|default:'' }}{% endif %}{% endif %}">
+        </label>
+        {% if prefix == 'member' %}
+        <label>{% dish_limit_label 'member_daily_limit' %} <input type="number" name="member_daily_limit" min="1" placeholder="不限"
+            value="{% if dish %}{{ dish.member_daily_limit|default:'' }}{% endif %}"></label>
+        <label>{% dish_limit_label 'member_total_limit' %} <input type="number" name="member_total_limit" min="1" placeholder="不限"
+            value="{% if dish %}{{ dish.member_total_limit|default:'' }}{% endif %}"></label>
+        {% else %}
+        <label>{% dish_limit_label 'special_per_dish_limit' %} <input type="number" name="special_per_dish_limit" min="1" placeholder="{% if dish %}不限{% else %}默认 1{% endif %}"
+            value="{% if dish %}{{ dish.special_per_dish_limit|default:'' }}{% else %}1{% endif %}"></label>
+        {% endif %}
+    </div>
+</fieldset>

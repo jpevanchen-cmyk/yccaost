@@ -1,0 +1,369 @@
+{% extends 'waimai/seller/base.html' %}
+{% block title %}商品上架管理 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<details class="seller-panel-fold" id="sales-ranking">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📊 菜品销量排行</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="page-desc">只统计<strong>已完成</strong>的订单。</p>
+        <div class="sales-rank-tabs" role="tablist">
+            <button type="button" class="sales-rank-tab active" data-panel="sales-day">日排行</button>
+            <button type="button" class="sales-rank-tab" data-panel="sales-week">周排行</button>
+            <button type="button" class="sales-rank-tab" data-panel="sales-month">月排行</button>
+        </div>
+        {% with rankings=sales_rankings %}
+        <div class="sales-rank-panel active" id="sales-day">
+            <h3 class="sales-rank-subtitle">{{ rankings.day_label }}</h3>
+            {% include 'waimai/seller/_sales_rank_table.html' with rows=rankings.day %}
+        </div>
+        <div class="sales-rank-panel" id="sales-week" hidden>
+            <h3 class="sales-rank-subtitle">{{ rankings.week_label }}</h3>
+            {% include 'waimai/seller/_sales_rank_table.html' with rows=rankings.week %}
+        </div>
+        <div class="sales-rank-panel" id="sales-month" hidden>
+            <h3 class="sales-rank-subtitle">{{ rankings.month_label }}</h3>
+            {% include 'waimai/seller/_sales_rank_table.html' with rows=rankings.month %}
+        </div>
+        {% endwith %}
+    </div>
+</details>
+
+<details class="seller-panel-fold" id="menu-panel">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📋 今日菜单清单</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="page-desc">
+            切换清单前须无未结束订单。客人店铺页以<strong>使用中</strong>的清单为准。
+            当前使用中：{% if active_profile %}<strong>{{ active_profile.name }}</strong>{% else %}未选（客人见全部上架商品）{% endif %}
+        </p>
+        {% if selected_profile and active_profile and selected_profile.profile_id != active_profile.profile_id %}
+        <p class="msg-warn">当前查看的是「{{ selected_profile.name }}」，客人店铺页仍以「{{ active_profile.name }}」为准；改完后请点「切换使用」。</p>
+        {% elif not active_profile %}
+        <p class="msg-warn">尚未有使用中的清单，客人店铺页不会按下方「展示」设置过滤会员价/特价；请先点「切换使用」。</p>
+        {% endif %}
+        <p class="card-meta">说明：<strong>商品管理</strong>里设定是否<strong>允许</strong>会员价、特价；<strong>本清单</strong>里设定是否<strong>对客人展示</strong>。两项都满足且本清单已「切换使用」后，店铺页才会出现对应价格按钮。</p>
+        <form method="POST" class="seller-inline-form menu-profile-create-form" data-unsaved-guard>
+            {% csrf_token %}
+            <input type="hidden" name="create_menu_profile" value="1">
+            <label>新建清单 <input type="text" name="profile_name" placeholder="如今日午市" required></label>
+            {% if menu_profiles %}
+            <label>复制自（可不选）
+                <select name="copy_from_profile_id">
+                    <option value="">全新（纳入全部商品）</option>
+                    {% for p in menu_profiles %}
+                    <option value="{{ p.profile_id }}">{{ p.name }}{% if active_profile and active_profile.profile_id == p.profile_id %}（使用中）{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% endif %}
+            <button type="submit" class="btn">创建</button>
+        </form>
+        {% if menu_profiles %}
+        <form method="GET" class="seller-inline-form menu-profile-picker-form" style="margin-top:12px;">
+            <label>选择清单
+                <select name="profile" id="menu-profile-select">
+                    {% for p in menu_profiles %}
+                    <option value="{{ p.profile_id }}" {% if selected_profile and selected_profile.profile_id == p.profile_id %}selected{% endif %}>
+                        {{ p.name }}{% if active_profile and active_profile.profile_id == p.profile_id %}（使用中）{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <span class="card-meta">切换后下方显示该清单详情；默认打开「使用中」的清单。</span>
+        </form>
+        {% if selected_profile %}
+        <div class="menu-profile-detail" id="menu-profile-detail">
+            <div class="menu-profile-detail-head">
+                <strong>{{ selected_profile.name }}</strong>
+                <form method="POST" style="display:inline;margin-left:8px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                    <button type="submit" name="activate_menu_profile" value="1" class="btn btn-sm"
+                        {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}disabled{% endif %}>
+                        {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}使用中{% else %}切换使用{% endif %}
+                    </button>
+                </form>
+                <form method="POST" class="menu-profile-delete-form" style="display:inline;margin-left:4px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="delete_menu_profile" value="1">
+                    <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                    <button type="submit" class="btn btn-sm btn-danger" data-profile-name="{{ selected_profile.name }}"
+                        {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}disabled title="使用中的清单不能删除"{% endif %}>
+                        删除
+                    </button>
+                </form>
+            </div>
+            {% if selected_profile.items.all %}
+            <table class="seller-table menu-item-table">
+                <thead>
+                    <tr>
+                        <th>菜品</th>
+                        <th>本清单上架</th>
+                        <th>展示会员价</th>
+                        <th>展示特价</th>
+                        <th>可售上限</th>
+                        <th>已售</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for item in selected_profile.items.all %}
+                <tr>
+                    <td>{{ item.dish.name }}</td>
+                    <td>
+                        <form method="POST" class="menu-item-toggle-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="toggle_menu_item_listed" value="1">
+                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <button type="submit" class="btn btn-sm {% if item.is_listed %}btn-green{% else %}btn-outline{% endif %}">
+                                {% if item.is_listed %}上架中{% else %}已下架{% endif %}
+                            </button>
+                        </form>
+                    </td>
+                    <td>
+                        {% if item.dish.member_price_enabled %}
+                        <form method="POST" class="menu-item-toggle-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="toggle_menu_item_member" value="1">
+                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <button type="submit" class="btn btn-sm {% if item.member_price_listed %}btn-green{% else %}btn-outline{% endif %}">
+                                {% if item.member_price_listed %}展示{% else %}不展示{% endif %}
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="card-meta">未允许</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.dish.special_price_enabled %}
+                        <form method="POST" class="menu-item-toggle-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="toggle_menu_item_special" value="1">
+                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <button type="submit" class="btn btn-sm {% if item.special_price_listed %}btn-green{% else %}btn-outline{% endif %}">
+                                {% if item.special_price_listed %}展示{% else %}不展示{% endif %}
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="card-meta">未允许</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" class="menu-item-cap-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="save_menu_item_cap" value="1">
+                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <input type="number" name="sales_cap" min="1" placeholder="不限"
+                                value="{% if item.sales_cap %}{{ item.sales_cap }}{% endif %}" style="width:72px;">
+                            <button type="submit" class="btn btn-sm">保存</button>
+                        </form>
+                    </td>
+                    <td>{{ item.sold_count }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="card-meta">本清单尚无商品，请先在「添加新商品」中创建。</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+</details>
+
+<details class="seller-panel-fold" id="special-pool">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">🏷 全店特价活动规则</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="page-desc">每位登录买家在本店买<strong>特价合计</strong>不超过上限后，所有特价变灰不可选。单日会员限购按北京时间 0 点重置。</p>
+        <form method="POST" class="seller-panel-form seller-inline-form" data-unsaved-guard>
+            {% csrf_token %}
+            {% load product_labels %}
+            <input type="hidden" name="save_special_pool" value="1">
+            <label>{% shop_special_label 'special_pool_code' %} <input type="text" name="special_pool_code" placeholder="如 午市特价"
+                value="{{ operating.special_pool_code }}"></label>
+            <label>{% shop_special_label 'special_max_per_user' %} <input type="number" name="special_max_per_user" min="1" placeholder="不限"
+                value="{{ operating.special_max_per_user|default:'' }}"></label>
+            <button type="submit" class="btn">保存特价规则</button>
+        </form>
+    </div>
+</details>
+
+<details class="seller-panel-fold" id="product-add">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">➕ 添加新商品</span></summary>
+    <div class="seller-panel-fold-body">
+        <form method="POST" class="seller-form-stack" id="product-add-form" data-unsaved-guard>
+            {% csrf_token %}
+            <input type="hidden" name="add_dish" value="1">
+            <label>商品名称 <input type="text" name="name" required placeholder="如：回锅肉"></label>
+            <label>通用价格（元）<input type="number" name="price" step="0.01" min="0.01" required></label>
+            <label>排序（0为不排序，越小越靠前，是客人看到菜单的排序）<input type="number" name="sort_order" value="0"></label>
+            <label>描述 <textarea name="description" rows="2"></textarea></label>
+            {% include 'waimai/seller/_tier_price_block.html' with prefix='member' title='会员价' hint='须登录买家可购；可设单日/累计限购。' dish=None only %}
+            {% include 'waimai/seller/_tier_price_block.html' with prefix='special' title='特价' hint='须登录买家可购；受全店特价合计上限约束。' dish=None only %}
+            <label class="product-add-list-row">
+                <input type="checkbox" name="list_on_all_menus" value="1" id="list-on-all-menus-cb">
+                添加后在本店<strong>所有菜单清单</strong>中设为「已上架」
+            </label>
+            <p class="card-meta product-add-list-hint">不勾选时：新商品会进入各份清单，但默认「已下架」，须您在清单里手动上架。勾选并确认后：客人将立刻在店铺页看到。</p>
+            <button type="submit" class="btn btn-green btn-block">添加商品</button>
+        </form>
+    </div>
+</details>
+
+<details class="seller-panel-fold" id="product-list"{% if edit_dish_id %} open{% endif %}>
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📋 商品管理</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="card-meta">在此设定商品名称、通用价，以及<strong>是否允许</strong>会员价、特价（价格与限购规则）。是否在客人菜单里展示，由下方「今日菜单清单」控制。</p>
+        {% for dish in dishes %}
+        <div class="seller-dish-row" id="dish-{{ dish.dish_id.hex|slice:":8" }}">
+            <div class="seller-dish-summary">
+                <strong>{{ dish.name }}</strong>
+                <span class="badge badge-pay-paid">通用 ¥{{ dish.price }}</span>
+                {% if dish.member_price_enabled %}<span class="badge badge-order-prep">会员价</span>{% endif %}
+                {% if dish.special_price_enabled %}<span class="badge badge-default">特价</span>{% endif %}
+                {% if dish.is_active %}<span class="badge badge-pay-paid">上架</span>{% else %}<span class="badge badge-default">下架</span>{% endif %}
+                <div class="card-meta">排序 {{ dish.sort_order }}</div>
+            </div>
+            <div class="seller-dish-actions">
+                <a href="?edit={{ dish.dish_id.hex|slice:':8' }}#edit-{{ dish.dish_id.hex|slice:':8' }}" class="btn btn-sm">编辑</a>
+                <form method="POST" class="dish-delete-form" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="delete_dish" value="1">
+                    <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                    <button type="submit" class="btn btn-sm btn-danger" data-dish-name="{{ dish.name }}">删除</button>
+                </form>
+            </div>
+            {% if edit_dish_id == dish.dish_id.hex|slice:":8" %}
+            <form method="POST" class="seller-form-stack product-edit-form" id="edit-{{ dish.dish_id.hex|slice:':8' }}" data-unsaved-guard>
+                {% csrf_token %}
+                <input type="hidden" name="edit_dish" value="1">
+                <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                <label>名称 <input type="text" name="name" value="{{ dish.name }}" required></label>
+                <label>通用价格 <input type="number" name="price" step="0.01" min="0.01" value="{{ dish.price }}" required></label>
+                <label>排序（0为不排序，越小越靠前，是客人看到菜单的排序）<input type="number" name="sort_order" value="{{ dish.sort_order }}"></label>
+                <label>描述 <textarea name="description" rows="2">{{ dish.description }}</textarea></label>
+                {% include 'waimai/seller/_tier_price_block.html' with prefix='member' title='会员价' hint='须登录买家可购。' dish=dish only %}
+                {% include 'waimai/seller/_tier_price_block.html' with prefix='special' title='特价' hint='须登录；受全店特价上限约束。' dish=dish only %}
+                <button type="submit" class="btn btn-block">保存修改</button>
+            </form>
+            {% endif %}
+        </div>
+        {% empty %}
+        <p class="card-meta">尚无商品，请在上方上架。</p>
+        {% endfor %}
+    </div>
+</details>
+
+<script>
+(function () {
+    var tabs = document.querySelectorAll('.sales-rank-tab');
+    var panels = document.querySelectorAll('.sales-rank-panel');
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            var id = tab.getAttribute('data-panel');
+            tabs.forEach(function (t) { t.classList.remove('active'); });
+            panels.forEach(function (p) {
+                var on = p.id === id;
+                p.hidden = !on;
+                p.classList.toggle('active', on);
+            });
+            tab.classList.add('active');
+        });
+    });
+})();
+(function () {
+    function syncTierBlock(cb) {
+        var block = cb.closest('.tier-price-block');
+        if (!block) return;
+        var body = block.querySelector('.tier-price-body');
+        if (!body) return;
+        body.hidden = !cb.checked;
+        if (cb.checked) {
+            syncTierMode(block);
+        }
+    }
+    function syncTierMode(block) {
+        var prefix = block.getAttribute('data-tier-block');
+        if (!prefix) return;
+        var enableCb = block.querySelector('.tier-enable-cb');
+        if (enableCb && !enableCb.checked) return;
+        var checked = block.querySelector('input[name="' + prefix + '_price_mode"]:checked');
+        var isFixed = checked && checked.value === 'fixed';
+        var percentInput = block.querySelector('input[name="' + prefix + '_price_percent"]');
+        var fixedInput = block.querySelector('input[name="' + prefix + '_price_fixed"]');
+        var percentLabel = block.querySelector('.tier-field-percent');
+        var fixedLabel = block.querySelector('.tier-field-fixed');
+        if (percentInput) percentInput.disabled = !!isFixed;
+        if (fixedInput) fixedInput.disabled = !isFixed;
+        if (percentLabel) percentLabel.classList.toggle('tier-field-disabled', !!isFixed);
+        if (fixedLabel) fixedLabel.classList.toggle('tier-field-disabled', !isFixed);
+    }
+    document.querySelectorAll('.tier-enable-cb').forEach(function (cb) {
+        syncTierBlock(cb);
+        cb.addEventListener('change', function () { syncTierBlock(cb); });
+    });
+    document.querySelectorAll('.tier-price-block').forEach(function (block) {
+        var enableCb = block.querySelector('.tier-enable-cb');
+        if (enableCb && enableCb.checked) {
+            syncTierMode(block);
+        }
+        block.querySelectorAll('.tier-mode-radio').forEach(function (radio) {
+            radio.addEventListener('change', function () { syncTierMode(block); });
+        });
+    });
+})();
+(function () {
+    /* 添加商品：勾选「全部上架」时二次确认 */
+    var addForm = document.getElementById('product-add-form');
+    if (addForm) {
+        addForm.addEventListener('submit', function (e) {
+            var cb = document.getElementById('list-on-all-menus-cb');
+            if (cb && cb.checked) {
+                if (!window.confirm('这个商品会直接在当前店铺中上架，是否确认添加？')) {
+                    e.preventDefault();
+                }
+            }
+        });
+    }
+})();
+(function () {
+    /* 删除菜单清单：两次确认 */
+    document.querySelectorAll('.menu-profile-delete-form').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            var btn = form.querySelector('[data-profile-name]');
+            if (btn && btn.disabled) {
+                e.preventDefault();
+                return;
+            }
+            var name = btn ? btn.getAttribute('data-profile-name') : '该清单';
+            if (!window.confirm('确定要删除菜单清单「' + name + '」吗？')) {
+                e.preventDefault();
+                return;
+            }
+            if (!window.confirm('删除后不可恢复，请再次确认删除。')) {
+                e.preventDefault();
+            }
+        });
+    });
+})();
+(function () {
+    /* 删除商品：两次确认，与堂食批量删除一致 */
+    document.querySelectorAll('.dish-delete-form').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            var btn = form.querySelector('[data-dish-name]');
+            var name = btn ? btn.getAttribute('data-dish-name') : '该商品';
+            if (!window.confirm('确定要删除商品「' + name + '」吗？')) {
+                e.preventDefault();
+                return;
+            }
+            if (!window.confirm('删除后不可恢复，请再次确认删除。')) {
+                e.preventDefault();
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

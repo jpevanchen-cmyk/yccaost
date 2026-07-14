@@ -1,0 +1,73 @@
+{% extends 'waimai/base.html' %}
+{% load static %}
+
+{% block body_class %}seller-page{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/" back_label="返回主页" %}
+{% endblock %}
+
+{% block content %}
+<div class="seller-header">
+    <h1 class="page-title">📦 店铺管理</h1>
+    <p class="page-desc">店铺ID：<strong>{{ seller_id }}</strong>{% if shop_profile %} · {{ shop_profile.shop_name }}{% endif %}</p>
+</div>
+
+{# 电脑：顶部 Tab #}
+<nav class="seller-tabs-desktop" aria-label="店铺管理">
+    <a href="{% url 'seller_panel_section' 'homepage' %}" class="{% if section == 'homepage' %}active{% endif %}">🏠 展示主页</a>
+    <a href="{% url 'seller_panel_section' 'orders' %}" class="{% if section == 'orders' %}active{% endif %}">📋 订单管理</a>
+    <a href="{% url 'seller_panel_section' 'products' %}" class="{% if section == 'products' %}active{% endif %}">🛍 商品上架</a>
+    <a href="{% url 'seller_panel_section' 'dine' %}" class="{% if section == 'dine' %}active{% endif %}">🪑 堂食营业</a>
+    <a href="{% url 'seller_panel_section' 'workbench' %}" class="{% if section == 'workbench' %}active{% endif %}">👥 员工工作台</a>
+    <a href="{% url 'seller_panel_section' 'delivery' %}" class="{% if section == 'delivery' %}active{% endif %}">🚚 配送费规则</a>
+    <a href="{% url 'seller_panel_section' 'payment' %}" class="{% if section == 'payment' %}active{% endif %}">💳 支付设置</a>
+    <a href="{% url 'seller_panel_section' 'audit' %}" class="{% if section == 'audit' %}active{% endif %}">📝 操作留痕</a>
+</nav>
+
+{% include 'waimai/seller/_flash_modal.html' %}
+{% include 'waimai/seller/_unsaved_modal.html' %}
+
+{% block seller_content %}{% endblock %}
+
+{# 手机：底部 Tab #}
+<nav class="seller-tabs-mobile" aria-label="店铺管理">
+    <a href="{% url 'seller_panel_section' 'homepage' %}" class="seller-tab {% if section == 'homepage' %}active{% endif %}">
+        <span class="seller-tab-icon">🏠</span>
+        <span class="seller-tab-label">主页</span>
+    </a>
+    <a href="{% url 'seller_panel_section' 'orders' %}" class="seller-tab {% if section == 'orders' %}active{% endif %}">
+        <span class="seller-tab-icon">📋</span>
+        <span class="seller-tab-label">订单</span>
+    </a>
+    <a href="{% url 'seller_panel_section' 'products' %}" class="seller-tab {% if section == 'products' %}active{% endif %}">
+        <span class="seller-tab-icon">🛍</span>
+        <span class="seller-tab-label">商品</span>
+    </a>
+    <a href="{% url 'seller_panel_section' 'dine' %}" class="seller-tab {% if section == 'dine' %}active{% endif %}">
+        <span class="seller-tab-icon">🪑</span>
+        <span class="seller-tab-label">堂食</span>
+    </a>
+    <a href="{% url 'seller_panel_section' 'workbench' %}" class="seller-tab {% if section == 'workbench' %}active{% endif %}">
+        <span class="seller-tab-icon">👥</span>
+        <span class="seller-tab-label">工作台</span>
+    </a>
+    <a href="{% url 'seller_panel_section' 'delivery' %}" class="seller-tab {% if section == 'delivery' %}active{% endif %}">
+        <span class="seller-tab-icon">🚚</span>
+        <span class="seller-tab-label">配送费</span>
+    </a>
+    <a href="{% url 'seller_panel_section' 'payment' %}" class="seller-tab {% if section == 'payment' %}active{% endif %}">
+        <span class="seller-tab-icon">💳</span>
+        <span class="seller-tab-label">支付</span>
+    </a>
+    <a href="{% url 'seller_panel_section' 'audit' %}" class="seller-tab {% if section == 'audit' %}active{% endif %}">
+        <span class="seller-tab-icon">📝</span>
+        <span class="seller-tab-label">留痕</span>
+    </a>
+</nav>
+{% endblock %}
+
+{% block pre_mobile_js %}
+<script src="{% static 'waimai/seller_panel_fold.js' %}?v=2"></script>
+<script src="{% static 'waimai/seller_unsaved_guard.js' %}?v=1"></script>
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends 'waimai/seller/base.html' %}
+{% block title %}菜品管理 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="seller-panel-box" id="sales-ranking">
+    <h2>📊 菜品销量排行</h2>
+    <p class="page-desc">只统计<strong>已完成</strong>的订单，方便查看哪些菜卖得好。</p>
+    <div class="sales-rank-tabs" role="tablist">
+        <button type="button" class="sales-rank-tab active" data-panel="sales-day">日排行</button>
+        <button type="button" class="sales-rank-tab" data-panel="sales-week">周排行</button>
+        <button type="button" class="sales-rank-tab" data-panel="sales-month">月排行</button>
+    </div>
+    {% with rankings=sales_rankings %}
+    <div class="sales-rank-panel active" id="sales-day">
+        <h3 class="sales-rank-subtitle">{{ rankings.day_label }}</h3>
+        {% include 'waimai/seller/_sales_rank_table.html' with rows=rankings.day %}
+    </div>
+    <div class="sales-rank-panel" id="sales-week" hidden>
+        <h3 class="sales-rank-subtitle">{{ rankings.week_label }}</h3>
+        {% include 'waimai/seller/_sales_rank_table.html' with rows=rankings.week %}
+    </div>
+    <div class="sales-rank-panel" id="sales-month" hidden>
+        <h3 class="sales-rank-subtitle">{{ rankings.month_label }}</h3>
+        {% include 'waimai/seller/_sales_rank_table.html' with rows=rankings.month %}
+    </div>
+    {% endwith %}
+</div>
+
+<div class="seller-panel-box" id="dish-add-form">
+    <h2>➕ 上架新菜品</h2>
+    <form method="POST" class="seller-form-stack">
+        {% csrf_token %}
+        <input type="hidden" name="add_dish" value="1">
+        <label>菜品名称</label>
+        <input type="text" name="name" placeholder="例如：回锅肉" required>
+        <label>价格（元）</label>
+        <input type="number" name="price" step="0.01" min="0.01" placeholder="0.00" required>
+        <label>描述（可选）</label>
+        <textarea name="description" placeholder="口味、份量等" rows="2"></textarea>
+        <button type="submit" class="btn btn-green btn-block">添加菜品</button>
+    </form>
+</div>
+
+<div class="seller-panel-box" id="dish-list">
+    <h2>📋 我的菜品 ({{ dishes|length }})</h2>
+    {% for dish in dishes %}
+    <div class="seller-dish-row" id="dish-{{ dish.dish_id.hex|slice:":8" }}">
+        <div>
+            <div style="font-size:17px;font-weight:700;">{{ dish.name }}</div>
+            <div style="color:var(--yc-orange);font-weight:700;margin:4px 0;">¥{{ dish.price }}</div>
+            {% if dish.description %}<div class="card-meta">{{ dish.description }}</div>{% endif %}
+            {% if dish.is_active %}
+            <span class="badge badge-pay-paid">上架中</span>
+            {% else %}
+            <span class="badge badge-default">已下架</span>
+            {% endif %}
+        </div>
+        <form method="POST" class="dish-toggle-form">
+            {% csrf_token %}
+            <input type="hidden" name="toggle_dish" value="1">
+            <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+            <button type="submit" class="btn btn-outline btn-block">
+                {% if dish.is_active %}下架此菜品{% else %}重新上架{% endif %}
+            </button>
+        </form>
+    </div>
+    {% empty %}
+    <p class="card-meta">还没有菜品，请在上方添加。</p>
+    {% endfor %}
+</div>
+
+<script>
+(function () {
+    var tabs = document.querySelectorAll('.sales-rank-tab');
+    var panels = document.querySelectorAll('.sales-rank-panel');
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            var id = tab.getAttribute('data-panel');
+            tabs.forEach(function (t) { t.classList.remove('active'); });
+            panels.forEach(function (p) {
+                var on = p.id === id;
+                p.hidden = !on;
+                p.classList.toggle('active', on);
+            });
+            tab.classList.add('active');
+        });
+    });
+})();
+</script>
+{% endblock %}

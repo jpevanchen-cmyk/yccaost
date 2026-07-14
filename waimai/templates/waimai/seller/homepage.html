@@ -1,0 +1,65 @@
+{% extends 'waimai/seller/base.html' %}
+
+{% block seller_content %}
+<div class="card" style="padding:16px;margin-bottom:14px;" id="home-page-settings">
+    <h2 style="margin:0 0 8px;font-size:18px;">🏠 展示主页（积木）</h2>
+    <p class="card-meta" style="margin:0 0 12px;">
+        本页属于<strong>本服务器拥有者</strong>的入口配置。野草只提供通用积木能力；
+        「野草介绍」「名录」等是<strong>可选预设块</strong>，默认不必开启。
+        个性化怎么摆，由拥有者自己决定，不要写进通用代码。
+    </p>
+    <p style="margin-bottom:12px;">
+        <a class="btn btn-sm btn-outline" href="{{ showcase_preview_url }}" target="_blank" rel="noopener">预览主页</a>
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="save_home_page_settings" value="1">
+        <label class="form-label">顶栏「点餐」点击后</label>
+        <select name="order_nav_mode" class="form-input">
+            <option value="to_shop" {% if home_page.order_nav_mode == 'to_shop' %}selected{% endif %}>直接进入点菜页</option>
+            <option value="to_cta_block" {% if home_page.order_nav_mode == 'to_cta_block' %}selected{% endif %}>滚到页内「开始点餐」块</option>
+        </select>
+        <label class="form-check" style="display:block;margin:12px 0;">
+            <input type="checkbox" name="set_as_server_entry" value="1" {% if home_page.is_server_entry %}checked{% endif %}>
+            设为<strong>本服务器默认入口</strong>（打开网站根地址时显示此主页）
+        </label>
+        <button type="submit" class="btn btn-primary">保存主页设置</button>
+    </form>
+</div>
+
+{% for block in home_blocks %}
+<div class="card" style="padding:16px;margin-bottom:14px;" id="block-{{ block.block_type }}">
+    <h3 style="margin:0 0 6px;font-size:16px;">
+        {% if block.spec %}{{ block.spec.label }}{% else %}{{ block.block_type }}{% endif %}
+        <span class="card-meta">（{{ block.block_type }}）</span>
+    </h3>
+    {% if block.spec %}
+    <p class="card-meta" style="margin:0 0 10px;">{{ block.spec.description }}</p>
+    {% endif %}
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="save_home_block" value="1">
+        <input type="hidden" name="block_id" value="{{ block.block_id }}">
+        <label class="form-check" style="display:inline-block;margin-right:16px;">
+            <input type="checkbox" name="is_enabled" value="1" {% if block.is_enabled %}checked{% endif %}> 启用本块
+        </label>
+        <label class="form-check" style="display:inline-block;margin-right:16px;">
+            <input type="checkbox" name="show_in_nav" value="1" {% if block.show_in_nav %}checked{% endif %}> 进吸顶导航
+        </label>
+        <label class="form-label" style="margin-top:10px;">排序（数字越小越靠前）</label>
+        <input class="form-input" type="number" name="sort_order" value="{{ block.sort_order }}">
+        <label class="form-label">导航短名</label>
+        <input class="form-input" type="text" name="nav_label" value="{{ block.nav_label }}" maxlength="32">
+        <label class="form-label">标题</label>
+        <input class="form-input" type="text" name="title" value="{{ block.title }}" maxlength="120">
+        <label class="form-label">正文</label>
+        <textarea class="form-input" name="body" rows="4">{{ block.body }}</textarea>
+        <label class="form-label">图片链接（可选）</label>
+        <input class="form-input" type="text" name="image_url" value="{{ block.image_url }}" maxlength="500">
+        <label class="form-label">附加链接（可选）</label>
+        <input class="form-input" type="text" name="link_url" value="{{ block.link_url }}" maxlength="500">
+        <button type="submit" class="btn btn-primary" style="margin-top:10px;">保存本块</button>
+    </form>
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'waimai/base.html' %}
+{% load yc_time %}
+{% block title %}配送记录 - 野草系统{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/my-deliveries/" back_label="返回我的配送" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">📋 配送记录</h1>
+<p class="page-desc">骑手 <strong>{{ rider_id }}</strong> 已送达的订单 · 共 <strong>{{ total_count }}</strong> 单</p>
+
+{% if history_rows %}
+    {% for row in history_rows %}
+    {% with d=row.delivery %}
+    <div class="card" id="delivery-{{ d.delivery_id.hex|slice:":8" }}">
+        <div class="order-card-top">
+            <div>
+                <div class="order-card-id">配送 #{{ d.delivery_id.hex|slice:":8" }}</div>
+                <div class="card-meta" style="margin:4px 0 0;">
+                    {{ row.shop_name }}
+                    {% if d.completed_at %}
+                    · 送达 {{ d.completed_at|beijing:"Y-m-d H:i" }}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="order-card-amount">¥{{ d.delivery_fee }}</div>
+        </div>
+        <p class="card-meta" style="margin:0 0 8px;">
+            取餐：{{ d.pickup_address }}<br>
+            送达：{{ d.delivery_address }}<br>
+            距离：约 {{ d.distance_km }} 公里
+        </p>
+        <div>
+            <span class="badge badge-pay-paid">已送达</span>
+            {% if d.picked_up_at %}
+            <span class="card-meta" style="margin-left:8px;">取餐 {{ d.picked_up_at|beijing:"m-d H:i" }}</span>
+            {% endif %}
+        </div>
+        <div class="order-card-actions">
+            <a class="btn btn-outline btn-sm" href="{% url 'order_detail' d.buy_order.order_id %}">订单详情</a>
+        </div>
+    </div>
+    {% endwith %}
+    {% endfor %}
+{% else %}
+<p class="card-meta">还没有完成过的配送。在 <a href="{% url 'my_deliveries' %}">我的配送</a> 里取餐、送达后，记录会出现在这里。</p>
+{% endif %}
+{% endblock %}

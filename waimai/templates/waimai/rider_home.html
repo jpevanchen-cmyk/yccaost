@@ -1,0 +1,42 @@
+{% extends 'waimai/base.html' %}
+{% block title %}骑手之家{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/directory/" back_label="返回名录" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🏠 骑手之家</h1>
+<p class="page-desc">指派给您的<strong>待取餐</strong>订单（本店专属，无公共抢单）。</p>
+
+{% if error %}
+<div class="msg-err">{{ error }}</div>
+{% endif %}
+
+{% if tasks %}
+    {% for order in tasks %}
+    <div class="card delivery-card" id="delivery-{{ order.delivery_id.hex|slice:":8" }}">
+        <div class="delivery-card-head">配送 #{{ order.delivery_id.hex|slice:":8" }}</div>
+        <p class="delivery-card-meta">
+            <strong>取餐</strong>：{{ order.pickup_address }}<br>
+            <strong>送达</strong>：{{ order.delivery_address }}<br>
+            配送费：<strong style="color:var(--yc-orange);">¥{{ order.delivery_fee }}</strong>
+            · 约 {{ order.distance_km }} 公里
+        </p>
+        <span class="delivery-status-badge delivery-status-accepted">待取餐</span>
+        <div class="delivery-action-stack" style="margin-top:14px;">
+            <a class="btn btn-orange btn-block" href="{% url 'my_deliveries' %}">去我的配送 · 取餐</a>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+{% if not error %}
+<p class="card-meta">暂无待取餐任务。店铺派单后会出现在这里。</p>
+{% endif %}
+{% endif %}
+
+<div class="rider-quick-links">
+    <a class="btn btn-outline btn-sm" href="{% url 'my_deliveries' %}">🛵 我的配送</a>
+    <a class="btn btn-outline btn-sm" href="{% url 'rider_delivery_history' %}">📋 配送记录</a>
+</div>
+{% endblock %}

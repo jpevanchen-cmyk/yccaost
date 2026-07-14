@@ -1,0 +1,48 @@
+{% extends 'waimai/seller/base.html' %}
+{% block title %}本店后厨 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="seller-panel-box">
+    <h2>👨‍🍳 本店后厨</h2>
+    <p class="page-desc">后厨账号不能自助注册，由店铺在此创建。后厨只进入「后厨看板」，负责新单提醒、开始备货、标记已出餐/已备好。</p>
+
+    <p style="margin-bottom:14px;">
+        <a class="btn btn-outline" href="{% url 'kitchen_home' %}">打开后厨看板预览</a>
+    </p>
+
+    {% if kitchens %}
+    <ul class="seller-rider-list">
+        {% for k in kitchens %}
+        <li class="seller-rider-item">
+            👨‍🍳 {{ k.username }}
+            {% if k.is_active %}
+            <span class="badge badge-pay-paid">启用</span>
+            {% else %}
+            <span class="badge badge-default">已停用</span>
+            {% endif %}
+            <form method="POST" class="seller-inline-form" style="display:inline;margin-left:8px;">
+                {% csrf_token %}
+                <input type="hidden" name="toggle_kitchen" value="1">
+                <input type="hidden" name="kitchen_username" value="{{ k.username }}">
+                <button type="submit" class="btn btn-sm btn-outline">
+                    {% if k.is_active %}停用{% else %}重新启用{% endif %}
+                </button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="card-meta">还没有后厨账号，请在下方创建。</p>
+    {% endif %}
+
+    <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+    <h3 id="kitchen-create-form">创建新后厨账号</h3>
+    <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+        {% csrf_token %}
+        <input type="hidden" name="create_kitchen" value="1">
+        {{ kitchen_form.as_p }}
+        <button type="submit" class="btn btn-green btn-block">创建后厨账号</button>
+    </form>
+    <p class="card-meta" style="margin-top:12px;">创建后请把账号密码交给后厨，登录地址与店铺相同：<strong>/accounts/login/</strong></p>
+</div>
+{% endblock %}

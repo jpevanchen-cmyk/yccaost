@@ -1,0 +1,107 @@
+{% extends 'waimai/seller/base.html' %}
+{% block title %}菜单清单 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="seller-panel-box" id="menu-create">
+    <h2>📋 菜单清单</h2>
+    <p class="page-desc">可创建多份命名清单，一键切换；切换前须无未结束订单。当前使用：
+        {% if active_profile %}<strong>{{ active_profile.name }}</strong>{% else %}未选择（客人看到全部上架菜品）{% endif %}
+    </p>
+    <form method="POST" class="seller-panel-form seller-inline-form">
+        {% csrf_token %}
+        <input type="hidden" name="create_menu_profile" value="1">
+        <label>新清单名称 <input type="text" name="profile_name" placeholder="如今日午市" required></label>
+        <button type="submit" class="btn">创建清单</button>
+    </form>
+</div>
+
+{% if menu_profiles %}
+<div class="seller-panel-box" id="menu-select">
+    <h3>选择要编辑的清单</h3>
+    <form method="GET" class="seller-inline-form" id="menu-profile-picker">
+        <label>菜单清单
+            <select name="profile" onchange="this.form.submit()">
+                {% for p in menu_profiles %}
+                <option value="{{ p.profile_id }}" {% if selected_profile and selected_profile.profile_id == p.profile_id %}selected{% endif %}>
+                    {{ p.name }}{% if active_profile and active_profile.profile_id == p.profile_id %}（使用中）{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+    </form>
+</div>
+
+{% if selected_profile %}
+<div class="seller-panel-box" id="menu-panel">
+    <h3>{{ selected_profile.name }}</h3>
+    <form method="POST" style="display:inline;">
+        {% csrf_token %}
+        <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+        <button type="submit" name="activate_menu_profile" value="1" class="btn"
+            {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}disabled{% endif %}>
+            {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}当前使用中{% else %}切换为此清单{% endif %}
+        </button>
+    </form>
+    <form method="POST" class="seller-panel-form seller-inline-form" style="margin-top:12px;">
+        {% csrf_token %}
+        <input type="hidden" name="copy_menu_profile" value="1">
+        <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+        <label>复制为 <input type="text" name="new_name" placeholder="{{ selected_profile.name }} 副本"></label>
+        <button type="submit" class="btn btn-sm">复制清单</button>
+    </form>
+    <form method="POST" class="seller-panel-form seller-inline-form" style="margin-top:16px;">
+        {% csrf_token %}
+        <input type="hidden" name="add_dish_to_profile" value="1">
+        <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+        <label>加入菜品
+            <select name="dish_id" required>
+                <option value="">选择菜品</option>
+                {% for d in all_dishes %}<option value="{{ d.dish_id }}">{{ d.name }} ¥{{ d.price }}</option>{% endfor %}
+            </select>
+        </label>
+        <label>本清单可售上限（空=不限） <input type="number" name="sales_cap" min="1" placeholder="如 50"></label>
+        <button type="submit" class="btn">加入清单</button>
+    </form>
+    {% if selected_profile.items.all %}
+    <table class="seller-table" style="margin-top:12px;">
+        <thead><tr><th>菜品</th><th>上限</th><th>已售</th></tr></thead>
+        <tbody>
+        {% for item in selected_profile.items.all %}
+        <tr>
+            <td>{{ item.dish.name }}</td>
+            <td>{% if item.sales_cap %}{{ item.sales_cap }}{% else %}不限{% endif %}</td>
+            <td>{{ item.sold_count }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="card-meta" style="margin-top:12px;">此清单尚无菜品，请在上方添加。</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<p>尚无菜单清单，请先创建第一份。</p>
+{% endif %}
+
+<div class="seller-panel-box" id="dish-limits">
+    <h2>🛒 菜品限购与排序</h2>
+    <p class="page-desc">可设仅注册用户、仅新会员、每人限购份数。<strong>排序</strong>数字越小，客人在点菜页越靠前看到该菜。</p>
+    {% for dish in all_dishes %}
+    <form method="POST" class="seller-panel-form dish-limit-row">
+        {% csrf_token %}
+        <input type="hidden" name="update_dish_limits" value="1">
+        <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+        <strong>{{ dish.name }}</strong>
+        <label>排序 <input type="number" name="sort_order" value="{{ dish.sort_order }}" style="width:60px;"></label>
+        <label><input type="checkbox" name="require_registered" {% if dish.require_registered %}checked{% endif %}> 须登录</label>
+        <label><input type="checkbox" name="new_member_only" {% if dish.new_member_only %}checked{% endif %}> 仅新会员</label>
+        <label>每人上限 <input type="number" name="max_per_user" value="{{ dish.max_per_user|default:'' }}" min="1" placeholder="不限" style="width:70px;"></label>
+        <button type="submit" class="btn btn-sm">保存</button>
+    </form>
+    {% empty %}
+    <p>请先在「菜品管理」中添加菜品。</p>
+    {% endfor %}
+</div>
+{% endblock %}

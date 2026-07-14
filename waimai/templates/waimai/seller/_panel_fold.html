@@ -1,0 +1,4 @@
+{# 卖家后台可折叠区块：与商品上架、堂食营业共用样式与 seller_panel_fold.js #}
+<details class="seller-panel-fold{% if fold_extra_class %} {{ fold_extra_class }}{% endif %}" id="{{ fold_id }}"{% if fold_open %} open{% endif %}>
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">{{ fold_title }}</span></summary>
+    <div class="seller-panel-fold-body">

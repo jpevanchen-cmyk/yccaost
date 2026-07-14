@@ -1,0 +1,105 @@
+{% extends 'waimai/base.html' %}
+{% block title %}{% if shop_profile %}{{ shop_profile.shop_name }}{% else %}店铺{% endif %} - 野草系统{% endblock %}
+{% block body_class %}shop-page{% if cart_has_lines %} has-cart-bar{% endif %}{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/directory/" back_label="返回店铺名录" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🍱 {% if shop_profile %}{{ shop_profile.shop_name }}{% else %}卖家 {{ seller_id }} 的店铺{% endif %}</h1>
+{% if shop_profile %}<p class="page-desc">{{ shop_profile.address }}</p>{% endif %}
+
+{% if success %}
+<div class="msg-ok">✅ 支付成功！
+    {% if success_fulfillment == 'dine_in' %}请入座用餐，店铺将为您备餐。
+    {% elif success_fulfillment == 'takeaway' %}请按约定到店取餐。
+    {% else %}店铺将备货并派给本店骑手配送。
+    {% endif %}
+</div>
+{% endif %}
+{% if error %}
+<div class="msg-err">⚠️ {{ error }}</div>
+{% endif %}
+{% if table_label %}
+<div class="msg-ok">🪑 当前桌台：<strong>{{ table_label }}</strong>（扫桌码模式，加点将计入本桌主单）</div>
+{% endif %}
+{% if using_menu %}
+<p class="page-desc">本店当前按「今日菜单清单」展示菜品与价格档位（会员价/特价以清单设置为准）。</p>
+{% endif %}
+{% if user.is_authenticated and user.role == 'seller' and user.username == seller_id %}
+<p class="msg-warn">卖家预览：会员价/特价须用<strong>买家账号登录</strong>后才可购买；展示与否以使用中清单为准。</p>
+{% endif %}
+
+<div class="shop-layout">
+    <div class="dish-list">
+        {% for row in dish_rows %}
+        {% with dish=row.dish %}
+        {% for opt in row.tier_options %}
+        <div class="dish-offer-card" id="dish-{{ dish.dish_id.hex|slice:":8" }}-{{ opt.tier }}">
+            <div class="dish-offer-row">
+                <div class="dish-offer-name">{{ opt.display_name }}</div>
+                <div class="dish-offer-price">¥{{ opt.price }}</div>
+                <form method="POST" class="dish-offer-cart-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_to_cart">
+                    <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                    <input type="hidden" name="price_tier" value="{{ opt.tier }}">
+                    <button type="submit" class="btn btn-green btn-sm dish-offer-cart-btn"
+                        {% if opt.disabled %}disabled title="{{ opt.reason }}"{% endif %}>
+                        {% if opt.disabled %}不可购买{% else %}加入购物车{% endif %}
+                    </button>
+                </form>
+            </div>
+            {% if dish.description %}
+            <div class="dish-desc">{{ dish.description }}</div>
+            {% endif %}
+            {% if opt.purchase_hints %}
+            <div class="dish-tier-hints">
+                {% for hint in opt.purchase_hints %}<span class="dish-tier-hint">{{ hint }}</span>{% endfor %}
+            </div>
+            {% endif %}
+            {% if opt.disabled and opt.reason %}
+            <div class="dish-tier-unavail">{{ opt.reason }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% endwith %}
+        {% empty %}
+        <p class="card-meta">该店铺暂无菜品</p>
+        {% endfor %}
+    </div>
+
+    {# 电脑端：右侧固定购物车 #}
+    <aside class="cart-sidebar">
+        {% include 'waimai/_shop_cart_panel.html' with panel_id='desktop' %}
+    </aside>
+</div>
+
+{% if cart_has_lines %}
+{# 手机端：底部购物车条 #}
+<div class="cart-bar is-visible" id="cart-bar">
+    <button type="button" class="cart-bar-info" id="cart-open-btn" data-cart-open>
+        🛒 共 <strong>{{ cart_count }}</strong> 件 · <strong>¥{{ cart_total }}</strong>
+        <span style="font-size:12px;color:#ccc;margin-left:6px;">点击查看</span>
+    </button>
+    <button type="button" class="btn btn-orange btn-sm" data-cart-open>去结算</button>
+</div>
+
+{# 手机端：购物车抽屉 #}
+<div class="cart-drawer" id="cart-drawer">
+    <div class="cart-drawer-backdrop" data-cart-close></div>
+    <div class="cart-drawer-panel">
+        <div class="cart-drawer-head">
+            <h3>🛒 购物车</h3>
+            <div class="cart-drawer-head-actions">
+                <button type="button" class="btn btn-outline btn-sm cart-done-btn" data-cart-close>完成</button>
+                <button type="button" class="cart-close-btn" data-cart-close aria-label="关闭购物车">×</button>
+            </div>
+        </div>
+        <p class="cart-drawer-hint">在下方滑动改数量；点「完成」或灰色背景关闭</p>
+        {% include 'waimai/_shop_cart_panel.html' with panel_id='mobile' %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

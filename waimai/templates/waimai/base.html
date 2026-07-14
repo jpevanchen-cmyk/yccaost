@@ -1,0 +1,93 @@
+{% load static %}
+{% load staff_account %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>{% block title %}野草系统{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=21">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    <div class="site-top">
+        <header class="site-header">
+            <button type="button" class="nav-toggle" id="nav-toggle" aria-label="打开菜单">☰</button>
+            <a class="site-brand" href="/directory/">🌿 野草系统</a>
+            {% if on_shop_work_site and shop_work_user %}
+            <div class="site-user" title="{{ shop_work_user.username }}">工作台 · {{ shop_work_user.get_role_display }}</div>
+            {% elif user.is_authenticated and user.role == 'buyer' %}
+            <div class="site-user" title="{{ user.username }}">{{ user.get_role_display }}</div>
+            {% elif user.is_authenticated and user.role == 'seller' %}
+            <div class="site-user" title="{{ user.username }}">{{ user.get_role_display }}</div>
+            {% elif on_shop_work_site %}
+            <div class="site-user">店铺工作台</div>
+            {% endif %}
+        </header>
+
+        {# 手机菜单：与顶栏并列，遮罩只暗化下方内容，不挡住菜单 #}
+        <div class="nav-overlay" id="nav-overlay"></div>
+        <nav class="site-nav" id="site-nav">
+            <div class="nav-section-title">导航</div>
+            <a href="/directory/">🌿 店铺名录</a>
+            {% if user.is_authenticated and user.role == 'buyer' %}
+                <a href="/order-history/">📜 我的订单</a>
+            {% endif %}
+            {% if user.is_authenticated and user.role == 'seller' %}
+                <a href="/seller-panel/">📦 管理店铺</a>
+                <a href="/shop/?seller_id={{ user.username }}">👀 预览店铺</a>
+            {% endif %}
+
+            <div class="nav-section-title">账户</div>
+            {% if on_shop_work_site and shop_work_user %}
+                <span class="nav-user-line">👋 {{ shop_work_user.username|staff_display }}</span>
+                <form method="post" action="{% if shop_work_logout_url %}{{ shop_work_logout_url }}{% else %}/{% endif %}" class="nav-logout-form">
+                    {% csrf_token %}
+                    <button type="submit" class="nav-logout-btn">退出工作台</button>
+                </form>
+            {% elif user.is_authenticated and user.role == 'buyer' %}
+                <span class="nav-user-line">👋 {{ user.username }}</span>
+                <form method="post" action="/accounts/logout/" class="nav-logout-form">
+                    {% csrf_token %}
+                    <button type="submit" class="nav-logout-btn">退出登录</button>
+                </form>
+            {% elif user.is_authenticated and user.role == 'seller' %}
+                <span class="nav-user-line">👋 {{ user.username }}</span>
+                <form method="post" action="/accounts/logout/" class="nav-logout-form">
+                    {% csrf_token %}
+                    <button type="submit" class="nav-logout-btn">退出登录</button>
+                </form>
+            {% elif not on_shop_work_site %}
+                <a href="/accounts/login/">登录</a>
+                <a href="/register/">买家注册</a>
+                <a href="/shop-register/">店铺开通</a>
+            {% else %}
+                <span class="nav-user-line">请在本页登录本店账号</span>
+            {% endif %}
+        </nav>
+    </div>
+
+    <main class="content">
+        {% block page_back %}{% endblock %}
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block pre_mobile_js %}{% endblock %}
+    <script src="{% static 'waimai/mobile.js' %}?v=7"></script>
+    {% if session_guard_enabled %}
+    <script>
+    window.YC_SESSION_GUARD = {
+        enabled: true,
+        channel: "{{ session_guard_channel|default:'all' }}",
+        heartbeatUrl: "{{ session_heartbeat_url }}",
+        beaconUrl: "{{ session_beacon_url }}",
+        csrfToken: "{{ csrf_token }}",
+        heartbeatSeconds: {{ session_heartbeat_seconds|default:60 }},
+        idleSeconds: {{ session_idle_seconds|default:900 }}
+    };
+    </script>
+    <script src="{% static 'waimai/session_guard.js' %}?v=1"></script>
+    {% endif %}
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

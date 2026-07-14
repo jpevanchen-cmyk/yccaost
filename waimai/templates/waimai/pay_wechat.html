@@ -1,0 +1,56 @@
+{% extends 'waimai/base.html' %}
+{% block title %}微信扫码支付 - 野草系统{% endblock %}
+
+{% block page_back %}
+<a href="{% url 'pay_order' order.order_id %}" class="page-back-btn">← 换支付方式</a>
+{% endblock %}
+
+{% block content %}
+<div class="card pay-box">
+    <h2 class="page-title" style="font-size:20px;">微信支付</h2>
+    <p class="card-meta">订单号：{{ order.get_display_order_no }}</p>
+    <p class="pay-amount">¥{{ order.total_amount }}</p>
+    <p class="pay-hint">请用微信扫描下方二维码完成付款（真实扣款）。</p>
+
+    <div id="wechat-qrcode" class="pay-qrcode-wrap"></div>
+
+    {% if not use_notify %}
+    <p class="pay-hint">店主尚未配置公网网址，本页将自动查询支付结果；也可稍后在「我的订单」查看。</p>
+    {% endif %}
+
+    <p id="pay-wait-hint" class="pay-hint">等待支付中…</p>
+
+    <p style="margin-top:16px;">
+        <a href="{% url 'order_history' %}">返回我的订单</a>
+    </p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+(function () {
+    var codeUrl = "{{ code_url|escapejs }}";
+    if (codeUrl && document.getElementById("wechat-qrcode")) {
+        new QRCode(document.getElementById("wechat-qrcode"), {
+            text: codeUrl,
+            width: 200,
+            height: 200
+        });
+    }
+    var statusUrl = "{% url 'pay_order_status' order.order_id %}";
+    var successUrl = "/shop/?seller_id={{ order.seller_id }}&success=1&fulfillment={{ order.fulfillment_type }}";
+    function poll() {
+        fetch(statusUrl, { credentials: "same-origin", headers: { "Accept": "application/json" } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.paid) {
+                    document.getElementById("pay-wait-hint").textContent = "支付成功，正在跳转…";
+                    window.location.href = successUrl;
+                }
+            })
+            .catch(function () {});
+    }
+    setInterval(poll, 3000);
+    poll();
+})();
+</script>
+{% endblock %}

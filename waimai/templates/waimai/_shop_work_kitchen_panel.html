@@ -1,0 +1,172 @@
+{% load yc_time %}
+{# 后厨看板内容块 #}
+{% if error %}
+<div class="msg-err">{{ error }}</div>
+{% endif %}
+
+{% if messages %}
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}msg-err{% else %}msg-ok{% endif %}" style="margin-bottom:12px;">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+{% if not can_operate %}
+<p class="card-meta" style="margin-bottom:12px;padding:10px;background:#fff8e1;border-radius:8px;">
+    👀 当前为<strong>只读预览</strong>：您可查看后厨待备概况，操作请使用后厨账号登录。
+</p>
+{% endif %}
+
+<div class="card" style="margin-bottom:14px;">
+    <div class="delivery-card-head">📦 待备菜品汇总</div>
+    {% if summary_rows %}
+        {% for row in summary_rows %}
+        <div class="line-item">
+            <span>{{ row.name }}</span>
+            <strong>× {{ row.quantity }}</strong>
+        </div>
+        {% endfor %}
+    {% else %}
+    <p class="card-meta">当前没有待备菜品。</p>
+    {% endif %}
+</div>
+
+{% if orders %}
+    {% for row in orders %}
+    {% with order=row.order %}
+    <div class="card delivery-card" id="kitchen-order-{{ order.order_id.hex|slice:":8" }}">
+        <div class="delivery-card-head">
+            订单 {{ order.get_display_order_no }} · {{ order.get_fulfillment_display_short }}
+        </div>
+        <p class="delivery-card-meta">
+            {% if order.table_label %}桌台：<strong>{{ order.table_label }}</strong><br>{% endif %}
+            下单：{{ order.created_at|beijing:"m-d H:i" }}
+            {% if row.rider_id %}<br>骑手：<strong>{{ row.rider_id }}</strong>{% endif %}
+        </p>
+        <span class="delivery-status-badge delivery-status-accepted">{{ row.phase_label }}</span>
+
+        {% if order.buyer_note %}
+        <div class="msg-err" style="margin-top:10px;font-weight:bold;">
+            备注：{{ order.buyer_note }}
+        </div>
+        {% endif %}
+
+        <div class="detail-collapse-body" style="margin-top:10px;">
+            {% for dish in row.dish_rows %}
+            <div class="line-item" style="align-items:flex-start;gap:8px;flex-wrap:wrap;">
+                <span style="flex:1;min-width:140px;">
+                    <strong>{{ dish.name }}</strong>
+                    <div class="card-meta">已备好 {{ dish.prepared_qty }}/{{ dish.quantity }}</div>
+                    {% if dish.note %}
+                    <div style="color:#c62828;font-weight:bold;margin-top:4px;">备注：{{ dish.note }}</div>
+                    {% endif %}
+                </span>
+                {% if can_operate %}
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    {% if dish.prepared_qty < dish.quantity %}
+                    <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                        {% csrf_token %}
+                        <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                        <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                        <button type="submit" name="mark_prepared_unit" value="1" class="btn btn-sm btn-orange">+1 份备好</button>
+                    </form>
+                    {% endif %}
+                    {% if dish.prepared_qty > 0 %}
+                    <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                        {% csrf_token %}
+                        <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                        <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                        <button type="submit" name="undo_prepared_unit" value="1" class="btn btn-sm btn-outline">撤回 1 份</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if can_operate %}
+        <div class="delivery-action-stack" style="margin-top:12px;">
+            {% if order.order_status == 'awaiting_prep' %}
+            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                {% csrf_token %}
+                <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                <button type="submit" name="start_preparing" value="1" class="btn btn-orange btn-block">开始备货</button>
+            </form>
+            {% endif %}
+            {% if row.can_dispatch %}
+            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                {% csrf_token %}
+                <input type="hidden" name="dispatch_order" value="1">
+                <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                <select name="rider_id" class="seller-select">
+                    <option value="">自动派单（按当前上班骑手分配）</option>
+                    {% for r in dispatch_riders %}
+                    <option value="{{ r.username }}">{{ r.username }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm btn-green">手动派单</button>
+            </form>
+            {% elif row.can_reassign %}
+            <p class="card-meta">当前骑手：{{ row.rider_id }}</p>
+            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                {% csrf_token %}
+                <input type="hidden" name="reassign_rider" value="1">
+                <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                <select name="rider_id" class="seller-select">
+                    {% for r in dispatch_riders %}
+                    <option value="{{ r.username }}" {% if r.username == row.rider_id %}selected{% endif %}>{{ r.username }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm btn-outline">改派骑手</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if row.log_lines %}
+        <details class="detail-collapse" style="margin-top:10px;">
+            <summary>📝 后厨记录</summary>
+            <div class="detail-collapse-body">
+                {% for line in row.log_lines %}
+                <div class="card-meta" style="margin-bottom:6px;">{{ line }}</div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+    </div>
+    {% endwith %}
+    {% endfor %}
+{% else %}
+<p class="card-meta">当前没有需要后厨处理的订单。</p>
+{% endif %}
+
+{% if can_operate and new_order_ts %}
+<script>
+(function () {
+    var latestTs = Number("{{ new_order_ts|default:0 }}") || 0;
+    if (!latestTs) return;
+    var key = "yc_kitchen_last_seen_new_order";
+    var lastSeen = Number(localStorage.getItem(key) || "0");
+    if (latestTs > lastSeen) {
+        try {
+            var ctx = new (window.AudioContext || window.webkitAudioContext)();
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.45);
+        } catch (e) {}
+        localStorage.setItem(key, String(latestTs));
+    }
+    setTimeout(function () {
+        window.location.reload();
+    }, 15000);
+})();
+</script>
+{% endif %}

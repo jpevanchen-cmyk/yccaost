@@ -1,0 +1,41 @@
+{% extends 'waimai/seller/base.html' %}
+{% block title %}支付设置 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="seller-panel-box" id="payment-settings-form">
+    <h2>💳 支付设置</h2>
+    {% if experience_block_wechat %}
+    <p class="msg-err" style="margin-bottom:12px;">
+        当前为体验店铺：无法开通真实微信支付。请用「演示支付」走完整流程；真付请到官方小店。
+    </p>
+    {% endif %}
+    <p class="card-meta" style="margin-bottom:16px;">
+        各支付方式可单独开关。演示店可同时开启「模拟」与「真微信」；正式营业请关闭模拟支付。
+    </p>
+
+    <form method="POST" id="payment-settings-form-el" data-unsaved-guard>
+        {% csrf_token %}
+        <div class="seller-form-grid">
+            {% for field in payment_form %}
+            <div class="seller-field {% if field.field.widget.input_type == 'checkbox' %}seller-field-check{% endif %}">
+                {% if field.field.widget.input_type == 'checkbox' %}
+                <label class="seller-check-label">
+                    {{ field }} {{ field.label }}
+                </label>
+                {% else %}
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% endif %}
+                {% if field.help_text %}<p class="field-hint">{{ field.help_text }}</p>{% endif %}
+                {% for err in field.errors %}<p class="msg-err">{{ err }}</p>{% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        <p class="card-meta" style="margin:12px 0;">
+            微信异步通知地址（配置公网网址后自动使用）：<br>
+            <code>{% if payment_form.instance.public_site_url %}{{ payment_form.instance.public_site_url|cut:"/" }}/pay/wechat/notify/{% else %}（填写公网网址后显示）{% endif %}</code>
+        </p>
+        <button type="submit" name="save_payment_settings" value="1" class="btn btn-primary btn-block">保存支付设置</button>
+    </form>
+</div>
+{% endblock %}

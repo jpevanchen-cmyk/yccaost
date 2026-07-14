@@ -1,0 +1,38 @@
+# 野草主程序 · 插件附加许可（GNU AGPL-3.0 第 7 条）
+
+> **中文说明（白话）**：野草**主程序（底座）**使用 AGPL-3.0。  
+> 只要插件**只通过项目公布的正式插件接口**与主程序通信，且**没有把主程序源码拷进插件里改协议**，则该插件**可以**由作者自行选择许可（包括闭源、销售）。  
+> 本附加许可**不**减轻你对**主程序本身**应承担的 AGPL 义务。
+
+---
+
+## Additional permission under GNU AGPL version 3 section 7
+
+If you modify this Program (YecaoST / 野草系统 main program), or any covered
+work, by linking, combining, or dynamically loading it with one or more
+**plugins** that communicate with the Program **solely** through the
+**published plugin API / interfaces** designated by the YecaoST project
+maintainers, the copyright holders of this Program grant you permission to
+convey those plugins under terms of your choice (including proprietary /
+commercial terms), provided that:
+
+1. such plugins are **not** derived from the Program's source code other than
+   by using the published API / interfaces; and
+2. you do **not** copy substantial portions of the Program's source into the
+   plugin in order to circumvent the Program's license; and
+3. the Program itself (including your modifications to the Program) remains
+   under the GNU Affero General Public License as applicable.
+
+This additional permission is an "additional permission" as defined in
+section 7 of the GNU Affero General Public License version 3. If you convey
+a covered work that is combined with plugins as described above, you may
+remove this additional permission from that copy for the Program itself
+only insofar as AGPL allows; the intent of this file is to keep the plugin
+ecosystem separable from the AGPL-covered main program.
+
+---
+
+## 上架与接口规则（非本文件强制范围）
+
+插件若进入野草官方上架/市场，还须遵守届时公布的**接口规范与上架规则**；  
+那些规则是**社区/产品规则**，与本附加许可分开。

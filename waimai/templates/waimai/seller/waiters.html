@@ -1,0 +1,44 @@
+{% extends 'waimai/seller/base.html' %}
+{% block title %}本店服务员 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="seller-panel-box">
+    <h2>🍽 本店服务员</h2>
+    <p class="page-desc">服务员不能自助注册，由店铺在此创建子账号。服务员只能登录「服务员工作台」，改前台服务状态，不能进卖家后台。</p>
+
+    {% if waiters %}
+    <ul class="seller-rider-list">
+        {% for w in waiters %}
+        <li class="seller-rider-item">
+            🍽 {{ w.username }}
+            {% if w.is_active %}
+            <span class="badge badge-pay-paid">启用</span>
+            {% else %}
+            <span class="badge badge-default">已停用</span>
+            {% endif %}
+            <form method="POST" class="seller-inline-form" style="display:inline;margin-left:8px;">
+                {% csrf_token %}
+                <input type="hidden" name="toggle_waiter" value="1">
+                <input type="hidden" name="waiter_username" value="{{ w.username }}">
+                <button type="submit" class="btn btn-sm btn-outline">
+                    {% if w.is_active %}停用{% else %}重新启用{% endif %}
+                </button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="card-meta">还没有服务员，请在下方创建。</p>
+    {% endif %}
+
+    <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+    <h3 id="waiter-create-form">创建新服务员</h3>
+    <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+        {% csrf_token %}
+        <input type="hidden" name="create_waiter" value="1">
+        {{ waiter_form.as_p }}
+        <button type="submit" class="btn btn-green btn-block">创建服务员账号</button>
+    </form>
+    <p class="card-meta" style="margin-top:12px;">创建后请把账号密码交给服务员，登录地址与店铺相同：<strong>/accounts/login/</strong></p>
+</div>
+{% endblock %}
