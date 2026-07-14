@@ -1,0 +1,4 @@
+# Optional: install when system SQLite < 3.31 (Django 5.2)
+#   pip install -r requirements-sqlite-compat.txt
+# See docs/环境与依赖清单.md SQLite section
+pysqlite3-binary==0.5.4

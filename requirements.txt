@@ -5,3 +5,7 @@ qrcode[pil]==8.2
 sqlparse==0.5.5
 tzdata==2026.2
 Pillow>=10.0.0
+
+# If system SQLite < 3.31 (common on some cloud Linux):
+#   pip install -r requirements-sqlite-compat.txt
+# App detects version first; see docs for SQLite section.

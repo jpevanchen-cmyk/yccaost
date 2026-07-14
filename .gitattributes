@@ -1,2 +1,3 @@
-# 依赖清单须为 UTF-8 文本，避免 Windows 存成 UTF-16 导致 Linux pip 无法安装
+# requirements must be UTF-8 (avoid UTF-16 breaking Linux pip)
 requirements.txt text eol=lf working-tree-encoding=UTF-8
+requirements-sqlite-compat.txt text eol=lf working-tree-encoding=UTF-8

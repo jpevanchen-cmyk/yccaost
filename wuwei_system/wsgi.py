@@ -9,6 +9,11 @@ https://docs.djangoproject.com/en/5.2/howto/deployment/wsgi/
 
 import os
 
+# 生产 gunicorn 入口：先保证 SQLite 版本满足 Django 5.2
+from wuwei_system.sqlite_compat import ensure_sqlite_compatible
+
+ensure_sqlite_compatible()
+
 from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'wuwei_system.settings')

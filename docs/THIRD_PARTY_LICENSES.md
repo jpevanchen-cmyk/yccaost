@@ -1,6 +1,6 @@
 # 野草系统 · 第三方依赖许可表
 
-> **最后更新**：2026-07-13  
+> **最后更新**：2026-07-14  
 > **主程序许可**：AGPL-3.0（见仓库根目录 `LICENSE`）  
 > **关系原则**：第三方包**只通过包管理安装并调用**，不混进主程序源码冒充自有代码。  
 > **版本以** `requirements.txt` **为准**；本表记许可与来源。新增依赖须同步本表与 `docs/环境与依赖清单.md`。
@@ -18,6 +18,7 @@
 | qrcode | 二维码 | BSD | https://pypi.org/project/qrcode/ | 含 `[pil]` 额外时拉 Pillow |
 | Pillow | 图像 | MIT-CMU | https://pypi.org/project/Pillow/ | |
 | fpdf2 | 桌贴 PDF | **LGPL-3.0** | https://pypi.org/project/fpdf2/ | **慎用档**：仅作库调用；保留对方许可义务；长期可评估替换为更宽松许可方案 |
+| pysqlite3-binary（可选） | 旧系统 SQLite 过低时的兼容 | zlib / 见 PyPI | https://pypi.org/project/pysqlite3-binary/ | **仅当检测不足时安装**：`pip install -r requirements-sqlite-compat.txt`；见环境清单「SQLite 版本」 |
 
 间接依赖（随上述包装入）未逐条展开；升级大版本前应再核许可。
 

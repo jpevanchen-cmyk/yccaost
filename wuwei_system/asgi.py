@@ -9,6 +9,10 @@ https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
 
 import os
 
+from wuwei_system.sqlite_compat import ensure_sqlite_compatible
+
+ensure_sqlite_compatible()
+
 from django.core.asgi import get_asgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'wuwei_system.settings')
