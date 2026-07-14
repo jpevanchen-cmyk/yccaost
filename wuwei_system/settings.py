@@ -181,6 +181,8 @@ USE_TZ = True  # 库内用 UTC 存，页面展示经 localtime / |beijing 转北
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# 生产收集静态文件的目录（collectstatic）；本地可不跑该命令。目录已在 .gitignore
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
