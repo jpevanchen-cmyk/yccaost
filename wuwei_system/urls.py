@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.conf import settings
+from django.conf.urls.static import static
 from django.urls import path
 
 from waimai import views
@@ -37,3 +39,7 @@ urlpatterns = [
     path('order-history/', views.order_history, name='order_history'),
     path('order/<uuid:order_id>/', views.order_detail, name='order_detail'),
 ]
+
+# 本地开发时由 Django 提供上传图片；正式服务器由 Nginx 提供 /media/。
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -36,10 +36,12 @@ class SiteComplianceSettingsAdmin(admin.ModelAdmin):
         'icp_record_number',
         'icp_link_preview',
         'police_record_number',
+        'police_record_icon',
+        'police_icon_preview',
         'police_link_preview',
         'updated_at',
     ]
-    readonly_fields = ['icp_link_preview', 'police_link_preview', 'updated_at']
+    readonly_fields = ['icp_link_preview', 'police_icon_preview', 'police_link_preview', 'updated_at']
 
     @admin.display(description='工信部查询链接（系统自动）')
     def icp_link_preview(self, obj):
@@ -57,6 +59,15 @@ class SiteComplianceSettingsAdmin(admin.ModelAdmin):
             '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>',
             obj.police_query_url,
             '打开公安联网备案查询',
+        )
+
+    @admin.display(description='公安备案图标预览')
+    def police_icon_preview(self, obj):
+        if not obj or not obj.police_record_icon:
+            return '请上传公安备案审核平台为本网站提供的图标。'
+        return format_html(
+            '<img src="{}" alt="公安备案图标" style="max-width:40px;max-height:40px;">',
+            obj.police_record_icon.url,
         )
 
     def has_add_permission(self, request):

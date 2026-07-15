@@ -6,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}野草系统{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=21">
+    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=22">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -82,8 +82,9 @@
             {{ site_compliance.icp_record_number }}
         </a>
         {% endif %}
-        {% if site_compliance.police_record_number and site_compliance.police_query_url %}
+        {% if site_compliance.police_record_number and site_compliance.police_record_icon and site_compliance.police_query_url %}
         <a href="{{ site_compliance.police_query_url }}" target="_blank" rel="noopener noreferrer">
+            <img class="site-compliance-police-icon" src="{{ site_compliance.police_record_icon.url }}" alt="公安备案图标">
             {{ site_compliance.police_record_number }}
         </a>
         {% endif %}

@@ -184,6 +184,9 @@ USE_TZ = True  # 库内用 UTC 存，页面展示经 localtime / |beijing 转北
 STATIC_URL = 'static/'
 # 生产收集静态文件的目录（collectstatic）；本地可不跑该命令。目录已在 .gitignore
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# 服务器拥有者上传的备案图标等文件；目录不进 Git，生产环境由 Nginx 提供访问。
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

@@ -197,8 +197,17 @@ body.nav-open {
 }
 
 .site-compliance-footer a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     color: inherit;
     text-decoration: none;
+}
+
+.site-compliance-police-icon {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
 }
 
 .site-compliance-footer a:hover {

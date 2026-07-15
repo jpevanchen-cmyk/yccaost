@@ -3,11 +3,17 @@ import uuid
 
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models
 
 from .time_helpers import format_beijing_time
 from .time_helpers import to_beijing
+
+
+def validate_compliance_icon_size(uploaded_file):
+    """公安备案图标应是小图片，避免误传过大的文件。"""
+    if uploaded_file.size > 1024 * 1024:
+        raise ValidationError('公安备案图标不能超过 1 MB。')
 
 
 # ============================================
@@ -75,6 +81,16 @@ class SiteComplianceSettings(models.Model):
         verbose_name='公安联网备案号',
         help_text='审核通过后填写完整号码，例如：闽公网安备 XXXXXXXXXXXXXX号；未取得时留空。',
     )
+    police_record_icon = models.ImageField(
+        upload_to='site_compliance/police/',
+        blank=True,
+        verbose_name='公安备案图标',
+        help_text='请上传公安备案审核平台为本网站提供的图标；支持 PNG、JPG、JPEG，最大 1 MB。',
+        validators=[
+            FileExtensionValidator(allowed_extensions=['png', 'jpg', 'jpeg']),
+            validate_compliance_icon_size,
+        ],
+    )
     updated_at = models.DateTimeField(auto_now=True, verbose_name='最后更新时间')
 
     class Meta:
@@ -89,6 +105,10 @@ class SiteComplianceSettings(models.Model):
             raise ValidationError({'icp_record_number': '请填写完整的 ICP 备案号（号码中应包含“ICP”）。'})
         if self.police_record_number and not self.police_record_code:
             raise ValidationError({'police_record_number': '公安备案号中应包含平台下发的数字编号。'})
+        if self.police_record_number and not self.police_record_icon:
+            raise ValidationError({'police_record_icon': '填写公安备案号时，必须上传审核平台提供的备案图标。'})
+        if self.police_record_icon and not self.police_record_number:
+            raise ValidationError({'police_record_number': '上传公安备案图标时，也必须填写对应的公安备案号。'})
 
     def save(self, *args, **kwargs):
         # 整台服务器只保留一份；防止后台误建多份造成页脚显示不确定。
