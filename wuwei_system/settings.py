@@ -127,6 +127,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'waimai.context_processors.nav_shop_work',
                 'waimai.context_processors.experience_site',
+                'waimai.context_processors.site_compliance',
             ],
         },
     },

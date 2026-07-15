@@ -37,6 +37,9 @@
                 <a href="/seller-panel/">📦 管理店铺</a>
                 <a href="/shop/?seller_id={{ user.username }}">👀 预览店铺</a>
             {% endif %}
+            {% if user.is_superuser %}
+                <a href="/admin/waimai/sitecompliancesettings/">⚙️ 服务器合规设置</a>
+            {% endif %}
 
             <div class="nav-section-title">账户</div>
             {% if on_shop_work_site and shop_work_user %}
@@ -71,6 +74,21 @@
         {% block page_back %}{% endblock %}
         {% block content %}{% endblock %}
     </main>
+
+    {% if site_compliance.icp_record_number or site_compliance.police_record_number %}
+    <footer class="site-compliance-footer" aria-label="网站备案信息">
+        {% if site_compliance.icp_record_number %}
+        <a href="{{ site_compliance.icp_query_url }}" target="_blank" rel="noopener noreferrer">
+            {{ site_compliance.icp_record_number }}
+        </a>
+        {% endif %}
+        {% if site_compliance.police_record_number and site_compliance.police_query_url %}
+        <a href="{{ site_compliance.police_query_url }}" target="_blank" rel="noopener noreferrer">
+            {{ site_compliance.police_record_number }}
+        </a>
+        {% endif %}
+    </footer>
+    {% endif %}
 
     {% block pre_mobile_js %}{% endblock %}
     <script src="{% static 'waimai/mobile.js' %}?v=7"></script>

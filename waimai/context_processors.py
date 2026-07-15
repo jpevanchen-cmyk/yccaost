@@ -55,3 +55,16 @@ def experience_site(request):
         return {'experience_site': False, 'experience_hint': ''}
     return experience_hint_context()
 
+
+def site_compliance(request):
+    """向全站公共页脚提供备案信息；迁移尚未执行时保持页面可打开。"""
+    from django.db.utils import OperationalError, ProgrammingError
+
+    from .models import SiteComplianceSettings
+
+    try:
+        compliance = SiteComplianceSettings.objects.first()
+    except (OperationalError, ProgrammingError):
+        compliance = None
+    return {'site_compliance': compliance}
+

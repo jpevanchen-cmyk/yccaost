@@ -1,8 +1,20 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
 from django.contrib.auth.models import Group
+from django.utils.html import format_html
 
-from .models import BuyOrder, DeliveryOrder, Dish, OperationAuditLog, PaymentRecord, ShopDeliverySettings, ShopPaymentSettings, ShopProfile, User
+from .models import (
+    BuyOrder,
+    DeliveryOrder,
+    Dish,
+    OperationAuditLog,
+    PaymentRecord,
+    ShopDeliverySettings,
+    ShopPaymentSettings,
+    ShopProfile,
+    SiteComplianceSettings,
+    User,
+)
 
 admin.site.unregister(Group)
 
@@ -14,6 +26,54 @@ class CustomUserAdmin(DefaultUserAdmin):
     fieldsets = DefaultUserAdmin.fieldsets + (
         ('用户身份', {'fields': ('role', 'employer_seller_id', 'is_experience', 'is_permanent')}),
     )
+
+
+@admin.register(SiteComplianceSettings)
+class SiteComplianceSettingsAdmin(admin.ModelAdmin):
+    """服务器级备案设置：只给 Django 超级管理员维护，普通店主无权进入。"""
+
+    fields = [
+        'icp_record_number',
+        'icp_link_preview',
+        'police_record_number',
+        'police_link_preview',
+        'updated_at',
+    ]
+    readonly_fields = ['icp_link_preview', 'police_link_preview', 'updated_at']
+
+    @admin.display(description='工信部查询链接（系统自动）')
+    def icp_link_preview(self, obj):
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>',
+            'https://beian.miit.gov.cn/',
+            '打开工信部备案管理系统',
+        )
+
+    @admin.display(description='公安备案查询链接（系统自动）')
+    def police_link_preview(self, obj):
+        if not obj or not obj.police_query_url:
+            return '填写公安联网备案号后，系统会从数字编号生成官方查询链接。'
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>',
+            obj.police_query_url,
+            '打开公安联网备案查询',
+        )
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser and not SiteComplianceSettings.objects.exists()
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        # 清空输入框即可停止展示，禁止删除唯一设置行。
+        return False
 
 
 @admin.register(ShopProfile)

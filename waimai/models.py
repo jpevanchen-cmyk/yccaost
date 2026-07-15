@@ -1,6 +1,8 @@
+import re
 import uuid
 
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 
@@ -51,6 +53,67 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
+
+
+class SiteComplianceSettings(models.Model):
+    """整台服务器共用的备案展示设置；只允许服务器拥有者在管理后台维护。"""
+
+    singleton_id = models.PositiveSmallIntegerField(
+        primary_key=True, default=1, editable=False, verbose_name='固定编号'
+    )
+    icp_record_number = models.CharField(
+        max_length=80,
+        blank=True,
+        default='',
+        verbose_name='ICP备案号',
+        help_text='请照工信部/备案服务商下发的完整号码填写，例如：闽ICP备XXXXXXXX号。',
+    )
+    police_record_number = models.CharField(
+        max_length=80,
+        blank=True,
+        default='',
+        verbose_name='公安联网备案号',
+        help_text='审核通过后填写完整号码，例如：闽公网安备 XXXXXXXXXXXXXX号；未取得时留空。',
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='最后更新时间')
+
+    class Meta:
+        db_table = 'site_compliance_settings'
+        verbose_name = '网站合规信息'
+        verbose_name_plural = '网站合规信息'
+
+    def clean(self):
+        self.icp_record_number = (self.icp_record_number or '').strip()
+        self.police_record_number = (self.police_record_number or '').strip()
+        if self.icp_record_number and 'ICP' not in self.icp_record_number.upper():
+            raise ValidationError({'icp_record_number': '请填写完整的 ICP 备案号（号码中应包含“ICP”）。'})
+        if self.police_record_number and not self.police_record_code:
+            raise ValidationError({'police_record_number': '公安备案号中应包含平台下发的数字编号。'})
+
+    def save(self, *args, **kwargs):
+        # 整台服务器只保留一份；防止后台误建多份造成页脚显示不确定。
+        self.singleton_id = 1
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def icp_query_url(self):
+        return 'https://beian.miit.gov.cn/'
+
+    @property
+    def police_record_code(self):
+        groups = re.findall(r'\d{6,20}', self.police_record_number or '')
+        return max(groups, key=len) if groups else ''
+
+    @property
+    def police_query_url(self):
+        code = self.police_record_code
+        if not code:
+            return ''
+        return f'https://beian.mps.gov.cn/#/query/webSearch?code={code}'
+
+    def __str__(self):
+        return '本服务器网站合规信息'
 
 
 class StaffAttendanceLog(models.Model):
