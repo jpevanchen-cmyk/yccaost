@@ -353,6 +353,52 @@ body.nav-open {
 .badge-order-done { background: #757575; }
 .badge-default { background: #999; }
 
+/* 订单沟通未读红点 */
+.msg-unread-dot {
+    display: inline-block;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 4px;
+    border-radius: 999px;
+    background: #e53935;
+    color: #fff;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.order-chat-bubble {
+    padding: 10px 12px;
+    margin: 0 0 10px;
+    border-radius: 10px;
+    background: #f5f5f5;
+}
+.order-chat-buyer { background: #fff3e0; }
+.order-chat-shop { background: #e8f5e9; }
+.order-chat-meta {
+    font-size: 12px;
+    color: #757575;
+    margin-bottom: 4px;
+}
+.order-chat-body {
+    font-size: 15px;
+    line-height: 1.45;
+    word-break: break-word;
+}
+.order-chat-input {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 6px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 15px;
+    resize: vertical;
+    min-height: 72px;
+}
+
 /* ---------- 名录店铺卡片 ---------- */
 .shop-card-actions {
     margin-top: 12px;
@@ -2202,4 +2248,118 @@ body.seller-page .content {
     font-size: 13px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     cursor: pointer;
+}
+
+/* —— 主页积木后台：上下两块编辑 —— */
+.home-block-editor {
+    margin: 0;
+}
+.home-block-settings {
+    border: 1px solid var(--yc-border, #e5e5e5);
+    border-radius: 8px;
+    padding: 12px;
+    background: #f7faf7;
+    margin-bottom: 14px;
+}
+.home-block-settings-label,
+.home-block-content-label {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+}
+.home-block-settings-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: center;
+}
+.home-block-inline-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+}
+.home-block-inline-field .form-input {
+    width: auto;
+    min-width: 72px;
+    max-width: 140px;
+    margin: 0;
+}
+.home-block-content {
+    margin-top: 4px;
+}
+.home-block-content-preview {
+    border: 1px solid var(--yc-border, #e5e5e5);
+    border-radius: 8px;
+    padding: 14px;
+    background: #fff;
+}
+.home-block-title-input {
+    font-size: 18px;
+    font-weight: 600;
+}
+.home-block-media-box,
+.home-block-link-box {
+    margin: 12px 0;
+    padding: 10px;
+    background: #fafafa;
+    border-radius: 8px;
+}
+.home-block-img-preview {
+    margin: 8px 0;
+}
+.home-block-img-preview img {
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+.home-block-path-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.home-block-path-label {
+    flex: 0 0 auto;
+    min-width: 4.5em;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+}
+.home-block-file-btn {
+    flex: 0 0 auto;
+    cursor: pointer;
+    margin: 0;
+}
+.home-block-path-display,
+.home-block-path-input {
+    flex: 1 1 180px;
+    min-width: 140px;
+    margin: 0 !important;
+}
+.home-block-path-display {
+    background: #fff;
+    color: #333;
+}
+.home-block-path-display::placeholder,
+.home-block-path-input::placeholder {
+    color: #a0a0a0;
+    font-size: 12px;
+}
+.home-block-path-display:placeholder-shown,
+.home-block-path-input:placeholder-shown {
+    font-size: 12px;
+}
+.home-block-body-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 160px;
+    max-height: 70vh;
+    resize: vertical;
+    overflow-y: auto;
+    line-height: 1.55;
+    field-sizing: content;
 }

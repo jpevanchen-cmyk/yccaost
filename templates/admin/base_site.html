@@ -1,0 +1,23 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | 野草 · 技术总后台{% endblock %}
+
+{% block branding %}
+<div id="site-name">
+  <a href="{% url 'admin:index' %}">野草系统 · 技术总后台（高风险）</a>
+</div>
+{% endblock %}
+
+{% block messages %}
+<div style="margin:12px 16px;padding:14px 16px;border:2px solid #b91c1c;background:#fef2f2;border-radius:8px;color:#7f1d1d;line-height:1.6;">
+  <strong style="font-size:1.05rem;">高风险区域 · 仅限有技术、有经验的维护人员</strong>
+  <p style="margin:8px 0 0;">
+    这里是超级管理员总后台，几乎能改动本站全部数据（用户身份、订单、店铺等）。
+    <strong>无技术、无经验的人请勿把本后台当日常入口</strong>；日常请使用网站菜单里的「服务器设置」。
+  </p>
+  <p style="margin:8px 0 0;">
+    完整说明见：<code>docs/服务器部署手册.md</code>。用户操作手册里不会写本后台步骤。
+  </p>
+</div>
+{{ block.super }}
+{% endblock %}

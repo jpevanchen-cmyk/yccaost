@@ -5,6 +5,7 @@ from django.shortcuts import redirect
 
 from .forms import ShopWorkbenchSettingsForm
 from .kitchen_handlers import handle_seller_kitchen_post
+from .manager_handlers import handle_seller_manager_post
 from .operating_helpers import get_operating_settings
 from .rider_handlers import handle_seller_rider_post
 from .waiter_handlers import handle_seller_waiter_post
@@ -16,6 +17,7 @@ def handle_seller_workbench_post(request, seller_id: str):
         AttendanceFilterForm,
         export_attendance_csv,
         handle_manager_staff_status_post,
+        handle_staff_cancel_perm_post,
         purge_old_attendance_logs,
         query_attendance_logs,
     )
@@ -35,12 +37,20 @@ def handle_seller_workbench_post(request, seller_id: str):
     if response:
         return response
 
+    response = handle_staff_cancel_perm_post(request, seller_id, section='workbench')
+    if response:
+        return response
+
     if 'export_attendance_csv' in request.POST:
         operating = get_operating_settings(seller_id)
         filter_form = AttendanceFilterForm(request.POST)
         filters = filter_form.cleaned_data if filter_form.is_valid() else {}
         logs = query_attendance_logs(seller_id, operating.attendance_retention_days, filters=filters)
         return export_attendance_csv(logs, seller_id=seller_id)
+
+    response = handle_seller_manager_post(request, seller_id, section='workbench')
+    if response:
+        return response
 
     response = handle_seller_waiter_post(request, seller_id, section='workbench')
     if response:

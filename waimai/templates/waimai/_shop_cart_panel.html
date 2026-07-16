@@ -1,4 +1,4 @@
-{# 店铺购物车内容（电脑侧边栏与手机抽屉共用） #}
+{# 店铺购物车内容（电脑侧边栏与手机抽屉共用；按通道显示所需字段） #}
 {% if cart %}
     {% for item in cart %}
     <div class="cart-item{% if item.quantity == 0 %} cart-item-zero{% endif %}" id="cart-row-{{ item.dish.dish_id.hex|slice:":8" }}-{{ item.price_tier }}">
@@ -41,6 +41,7 @@
     <form method="POST" class="cart-form" data-scroll-anchor="cart">
         {% csrf_token %}
         <input type="hidden" name="action" value="checkout">
+        {% if needs_delivery_fields %}
         <label for="delivery_address_{{ panel_id }}">送达地址</label>
         <textarea id="delivery_address_{{ panel_id }}" name="delivery_address" placeholder="请填写详细地址" required>默认地址</textarea>
 
@@ -63,6 +64,14 @@
                 <span>约 5 公里</span>
             </label>
         </div>
+        {% else %}
+        <p class="card-meta" style="margin:0 0 10px;">
+            {% if shop_channel == 'dine_in' %}堂食：不收配送费，请在店内用餐。
+            {% else %}打包自取：不收配送费，请到店取餐。
+            {% endif %}
+            {% if shop_profile %}<br>店铺地址：{{ shop_profile.address }}{% endif %}
+        </p>
+        {% endif %}
 
         <button type="submit" class="btn btn-orange btn-block" style="margin-top:16px;">去结算</button>
     </form>

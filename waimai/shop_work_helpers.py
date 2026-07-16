@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from .models import ShopProfile
 
-SHOP_STAFF_ROLES = ('waiter', 'kitchen', 'rider')
+SHOP_STAFF_ROLES = ('waiter', 'kitchen', 'rider', 'manager')
 WORK_VIEWS = ('waiter', 'kitchen', 'rider')
 SESSION_SHOP_WORK_CODE = 'shop_work_code'
 
@@ -48,9 +48,11 @@ def user_belongs_to_shop(user, seller_id: str) -> bool:
 
 
 def work_permissions(user) -> dict[str, bool]:
-    """各岗位是否可操作（店主三岗全开）"""
+    """各岗位是否可操作（店主三岗全开；店长可操作服务员视角以便处理订单）"""
     if user.role == 'seller':
         return {'waiter': True, 'kitchen': True, 'rider': True}
+    if user.role == 'manager':
+        return {'waiter': True, 'kitchen': False, 'rider': False}
     return {
         'waiter': user.role == 'waiter',
         'kitchen': user.role == 'kitchen',
@@ -64,6 +66,7 @@ def default_work_view(user) -> str:
         'waiter': 'waiter',
         'kitchen': 'kitchen',
         'rider': 'rider',
+        'manager': 'waiter',
         'seller': 'waiter',
     }
     return mapping.get(user.role, 'waiter')
@@ -76,6 +79,11 @@ def build_shop_work_path(shop_code: str, *, view: str = '') -> str:
     if view in WORK_VIEWS:
         return f'{base}?view={view}'
     return base
+
+
+def build_shop_work_order_path(shop_code: str, order_id) -> str:
+    """工作台订单中转页（员工联系/沟通/取消，不进卖家后台）"""
+    return reverse('shop_work_order', kwargs={'shop_code': shop_code, 'order_id': order_id})
 
 
 def build_shop_work_redirect(shop_code: str, view: str, *, anchor: str = '') -> str:
@@ -150,7 +158,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
 
     activity_items: list[dict] = []
     show_kitchen = is_owner or role == 'kitchen'
-    show_waiter = is_owner or role == 'waiter'
+    show_waiter = is_owner or role in ('waiter', 'manager')
     show_rider = is_owner or role == 'rider'
     show_shop_events = is_owner  # 收款/备齐等无操作人字段的事件，仅老板看全店汇总
 
@@ -325,6 +333,9 @@ def build_waiter_board_context(seller_id: str, *, allow_dispatch: bool = False) 
 
     raw_orders = list(query_waiter_active_orders(seller_id))
     dispatch_riders = list(get_shop_riders(seller_id))
+    from .order_message_helpers import unread_map_for_orders
+
+    unread_map = unread_map_for_orders(raw_orders, side='shop')
     orders = []
     for order in raw_orders:
         persist_dish_items_if_needed(order)
@@ -340,6 +351,7 @@ def build_waiter_board_context(seller_id: str, *, allow_dispatch: bool = False) 
             'can_confirm_in_store_order': waiter_can_confirm_in_store_order(order),
             'can_complete_in_store': waiter_can_complete_in_store(order),
             'can_close_uncollected': waiter_can_close_uncollected(order),
+            'unread_msg_count': unread_map.get(order.order_id, 0),
             'can_dispatch': bool(
                 allow_dispatch
                 and order.fulfillment_type == 'delivery'

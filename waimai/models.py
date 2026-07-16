@@ -16,6 +16,25 @@ def validate_compliance_icon_size(uploaded_file):
         raise ValidationError('公安备案图标不能超过 1 MB。')
 
 
+# 主页积木配图：单张上限与每账号张数（第一阶段）
+MAX_HOME_BLOCK_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_USER_UPLOADED_PHOTOS = 100
+
+
+def validate_home_block_image_size(uploaded_file):
+    """积木配图单张不超过 5 MB。"""
+    if uploaded_file.size > MAX_HOME_BLOCK_IMAGE_BYTES:
+        raise ValidationError('图片不能超过 5 MB，请压缩后再上传。')
+
+
+def home_block_image_upload_to(instance, filename):
+    """按积木 ID 存图，同块再次上传会覆盖旧文件名。"""
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'jpg'
+    if ext not in ('png', 'jpg', 'jpeg', 'webp', 'gif'):
+        ext = 'jpg'
+    return f'home_blocks/{instance.block_id}.{ext}'
+
+
 # ============================================
 # 自定义用户模型（方向C：注册登录与权限）
 # ============================================
@@ -26,6 +45,7 @@ class User(AbstractUser):
         ('rider', '骑手'),
         ('waiter', '服务员'),
         ('kitchen', '后厨'),
+        ('manager', '店长'),
     ]
     STAFF_WORK_STATUS_CHOICES = [
         ('on_duty', '上班'),
@@ -48,9 +68,16 @@ class User(AbstractUser):
     staff_work_status_updated_at = models.DateTimeField(
         blank=True, null=True, verbose_name='员工在岗状态更新时间'
     )
+    # 店长权限勾选项（第一版仅「允许取消订单」；店主账号无需此字段）
+    perm_cancel_order = models.BooleanField(
+        default=False, verbose_name='允许取消订单',
+        help_text='店主授权后，该员工可在满足沟通门槛时取消订单',
+    )
     # 体验机：体验账号每日清空；正式/官方相关账号保留
     is_experience = models.BooleanField(default=False, db_index=True, verbose_name='体验账号')
     is_permanent = models.BooleanField(default=False, db_index=True, verbose_name='正式保留账号')
+    # 服务器管理者：可进「服务器设置」（由超级管理员或命令指定；与体验机官方小店无关）
+    is_server_owner = models.BooleanField(default=False, db_index=True, verbose_name='服务器管理者')
 
     class Meta:
         db_table = 'user'
@@ -62,7 +89,7 @@ class User(AbstractUser):
 
 
 class SiteComplianceSettings(models.Model):
-    """整台服务器共用的备案展示设置；只允许服务器拥有者在管理后台维护。"""
+    """整台服务器共用的备案展示设置；由服务器管理者在「服务器设置」维护（总后台亦可救急）。"""
 
     singleton_id = models.PositiveSmallIntegerField(
         primary_key=True, default=1, editable=False, verbose_name='固定编号'
@@ -134,6 +161,135 @@ class SiteComplianceSettings(models.Model):
 
     def __str__(self):
         return '本服务器网站合规信息'
+
+
+class ServerSiteSettings(models.Model):
+    """整台服务器站点品牌设置（「服务器设置」维护；与单店无关）"""
+
+    singleton_id = models.PositiveSmallIntegerField(
+        primary_key=True, default=1, editable=False, verbose_name='固定编号'
+    )
+    site_name = models.CharField(
+        max_length=80, blank=True, default='野草系统', verbose_name='网站顶部名称',
+    )
+    brand_image_url = models.CharField(
+        max_length=500, blank=True, default='', verbose_name='标识图片链接（可选）',
+    )
+    nav_brand_label = models.CharField(
+        max_length=40, blank=True, default='店铺名录', verbose_name='导航「名录」显示名',
+    )
+    show_powered_by = models.BooleanField(
+        default=True, verbose_name='页脚显示「由野草系统提供支持」',
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'server_site_settings'
+        verbose_name = '服务器站点设置'
+        verbose_name_plural = '服务器站点设置'
+
+    def save(self, *args, **kwargs):
+        self.singleton_id = 1
+        self.site_name = (self.site_name or '').strip() or '野草系统'
+        self.nav_brand_label = (self.nav_brand_label or '').strip() or '店铺名录'
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'站点设置:{self.site_name}'
+
+
+class ServerHomePage(models.Model):
+    """服务器主页（整机一份；与店铺主页严格分开）"""
+
+    singleton_id = models.PositiveSmallIntegerField(
+        primary_key=True, default=1, editable=False, verbose_name='固定编号'
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'server_home_page'
+        verbose_name = '服务器主页'
+        verbose_name_plural = '服务器主页'
+
+    def save(self, *args, **kwargs):
+        self.singleton_id = 1
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return '本服务器主页'
+
+
+class ServerHomeBlock(models.Model):
+    """服务器主页积木块（名录、野草介绍、公告等）"""
+
+    block_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='块ID')
+    home_page = models.ForeignKey(
+        ServerHomePage, on_delete=models.CASCADE, related_name='blocks', verbose_name='所属服务器主页',
+    )
+    block_type = models.CharField(max_length=32, db_index=True, verbose_name='块类型')
+    title = models.CharField(max_length=120, blank=True, default='', verbose_name='标题')
+    body = models.TextField(blank=True, default='', verbose_name='正文')
+    image = models.ImageField(
+        upload_to=home_block_image_upload_to,
+        blank=True,
+        verbose_name='上传配图',
+        validators=[
+            FileExtensionValidator(allowed_extensions=['png', 'jpg', 'jpeg', 'webp', 'gif']),
+            validate_home_block_image_size,
+        ],
+    )
+    image_url = models.CharField(max_length=500, blank=True, default='', verbose_name='图片公开链接')
+    link_url = models.CharField(max_length=500, blank=True, default='', verbose_name='附加链接')
+    nav_label = models.CharField(max_length=32, blank=True, default='', verbose_name='导航短名')
+    is_enabled = models.BooleanField(default=False, db_index=True, verbose_name='是否启用')
+    show_in_nav = models.BooleanField(default=True, verbose_name='是否出现在吸顶导航')
+    sort_order = models.PositiveIntegerField(default=100, db_index=True, verbose_name='排序')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'server_home_block'
+        ordering = ['sort_order', 'block_type']
+        verbose_name = '服务器主页积木块'
+        verbose_name_plural = '服务器主页积木块'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['home_page', 'block_type'],
+                condition=~models.Q(block_type='custom'),
+                name='uniq_server_home_block_type_non_custom',
+            ),
+        ]
+
+    def __str__(self):
+        return f'server:{self.block_type}:{self.title}'
+
+
+class UserUploadedPhoto(models.Model):
+    """用户上传配图台账：用于每账号最多 100 张的限额（当前持有张数）。"""
+
+    SCOPE_CHOICES = [
+        ('shop_home_block', '店铺主页积木'),
+        ('server_home_block', '服务器主页积木'),
+    ]
+
+    photo_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='记录ID')
+    owner = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='uploaded_photos', verbose_name='上传人',
+    )
+    scope = models.CharField(max_length=32, choices=SCOPE_CHOICES, db_index=True, verbose_name='用途')
+    block_id = models.UUIDField(db_index=True, verbose_name='积木块ID')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='首次上传时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='最后更新时间')
+
+    class Meta:
+        db_table = 'user_uploaded_photo'
+        verbose_name = '用户上传配图'
+        verbose_name_plural = '用户上传配图'
+        constraints = [
+            models.UniqueConstraint(fields=['owner', 'scope', 'block_id'], name='uniq_owner_block_photo'),
+        ]
+
+    def __str__(self):
+        return f'{self.owner_id}:{self.scope}:{self.block_id}'
 
 
 class StaffAttendanceLog(models.Model):
@@ -208,35 +364,36 @@ class ShopProfile(models.Model):
 
 
 class ShopHomePage(models.Model):
-    """服务器拥有者入口展示主页配置（一店一份；可标为整机默认入口）"""
+    """单店店铺主页配置（一店一份；不再充当整机入口）"""
 
     ORDER_NAV_CHOICES = [
-        ('to_shop', '导航「点餐」直接进点菜页'),
-        ('to_cta_block', '导航「点餐」滚到页内开始点餐块'),
+        ('to_shop', '导航「下单」直接进下单页'),
+        ('to_cta_block', '导航「下单」滚到页内「进入店铺」块'),
     ]
 
     seller_id = models.CharField(max_length=64, primary_key=True, verbose_name='店铺账号ID')
+    # 旧字段：整机入口已迁到 ServerHomePage，本字段仅兼容旧数据，不再驱动 /
     is_server_entry = models.BooleanField(
         default=False, db_index=True,
-        verbose_name='是否本服务器默认入口主页',
+        verbose_name='（已弃用）曾作本服务器默认入口',
     )
     order_nav_mode = models.CharField(
         max_length=16, choices=ORDER_NAV_CHOICES, default='to_shop',
-        verbose_name='顶栏点餐行为',
+        verbose_name='顶栏下单行为',
     )
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
     class Meta:
         db_table = 'shop_home_page'
-        verbose_name = '展示主页'
-        verbose_name_plural = '展示主页'
+        verbose_name = '店铺主页'
+        verbose_name_plural = '店铺主页'
 
     def __str__(self):
-        return f'主页:{self.seller_id}'
+        return f'店铺主页:{self.seller_id}'
 
 
 class ShopHomeBlock(models.Model):
-    """展示主页上的一个积木块（预设类型 + 拥有者填写的内容）"""
+    """店铺主页上的一个积木块（简介、公告等；营业/地址由经营设置自动带出）"""
 
     block_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='块ID')
     home_page = models.ForeignKey(
@@ -245,7 +402,16 @@ class ShopHomeBlock(models.Model):
     block_type = models.CharField(max_length=32, db_index=True, verbose_name='块类型')
     title = models.CharField(max_length=120, blank=True, default='', verbose_name='标题')
     body = models.TextField(blank=True, default='', verbose_name='正文')
-    image_url = models.CharField(max_length=500, blank=True, default='', verbose_name='图片链接')
+    image = models.ImageField(
+        upload_to=home_block_image_upload_to,
+        blank=True,
+        verbose_name='上传配图',
+        validators=[
+            FileExtensionValidator(allowed_extensions=['png', 'jpg', 'jpeg', 'webp', 'gif']),
+            validate_home_block_image_size,
+        ],
+    )
+    image_url = models.CharField(max_length=500, blank=True, default='', verbose_name='图片公开链接')
     link_url = models.CharField(max_length=500, blank=True, default='', verbose_name='附加链接')
     nav_label = models.CharField(max_length=32, blank=True, default='', verbose_name='导航短名')
     is_enabled = models.BooleanField(default=False, db_index=True, verbose_name='是否启用')
@@ -259,7 +425,12 @@ class ShopHomeBlock(models.Model):
         verbose_name = '展示主页积木块'
         verbose_name_plural = '展示主页积木块'
         constraints = [
-            models.UniqueConstraint(fields=['home_page', 'block_type'], name='uniq_home_block_type'),
+            # 预设块每种只能一块；custom 可有多块（见 home_page_helpers）
+            models.UniqueConstraint(
+                fields=['home_page', 'block_type'],
+                condition=~models.Q(block_type='custom'),
+                name='uniq_shop_home_block_type_non_custom',
+            ),
         ]
 
     def __str__(self):
@@ -392,7 +563,7 @@ class BuyOrder(models.Model):
     ]
     ORDER_STATUS_CHOICES = [
         ('awaiting_payment', '待支付'),
-        ('awaiting_shop_confirm', '待店家接单'),
+        ('awaiting_shop_confirm', '待店家备货'),
         ('awaiting_prep', '待备货'),
         ('preparing', '商家备货中'),
         ('ready_pickup', '待取货'),
@@ -449,6 +620,15 @@ class BuyOrder(models.Model):
     ready_at = models.DateTimeField(blank=True, null=True, verbose_name='出餐可配送时间')
     buyer_note = models.TextField(blank=True, verbose_name='买家备注')
     cash_uncollected_reason = models.TextField(blank=True, verbose_name='未收款结案原因')
+    cancelled_at = models.DateTimeField(blank=True, null=True, verbose_name='取消时间')
+    cancel_side = models.CharField(
+        max_length=8,
+        blank=True,
+        default='',
+        choices=[('buyer', '买家'), ('shop', '店家')],
+        verbose_name='取消方',
+    )
+    cancel_note = models.CharField(max_length=500, blank=True, default='', verbose_name='取消说明')
     table_session = models.ForeignKey(
         'TableSession', on_delete=models.SET_NULL, blank=True, null=True,
         related_name='orders', verbose_name='桌台会话',
@@ -470,6 +650,9 @@ class BuyOrder(models.Model):
     vip_service_fee = models.DecimalField(max_digits=6, decimal_places=2, default=0.00, verbose_name='增值服务费（元）')
     created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='下单时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+    # 订单沟通：各方上次看过留言的时间（用于未读红点）
+    buyer_msg_read_at = models.DateTimeField(blank=True, null=True, verbose_name='买家已读沟通时间')
+    seller_msg_read_at = models.DateTimeField(blank=True, null=True, verbose_name='店家已读沟通时间')
     waiter_service_status = models.CharField(
         max_length=20,
         choices=[
@@ -545,7 +728,7 @@ class BuyOrder(models.Model):
         )
 
     def is_awaiting_in_store_order_confirm(self):
-        """堂食/打包到店付：等待店家确认接单并开始备餐"""
+        """堂食/打包到店付：已默认接单，待店家开始备货并告知预计时间"""
         return (
             self.is_in_store()
             and self.payment_method == 'cash'
@@ -602,17 +785,17 @@ class BuyOrder(models.Model):
         """现金单给买家看的说明"""
         if self.is_awaiting_in_store_order_confirm():
             if self.is_dine_in():
-                return '堂食订单已提交，等待店家确认接单。接单后将告知预计出餐时间，用餐时到店付现金即可。'
-            return '打包订单已提交，等待店家确认接单。接单后将告知预计可取餐时间，取餐时到店付现金即可。'
+                return '堂食订单已提交，店家将为您备餐并告知预计出餐时间；用餐时到店付现金即可。有事可在订单沟通里留言。'
+            return '打包订单已提交，店家将为您备货并告知预计可取餐时间；取餐时到店付现金即可。有事可在订单沟通里留言。'
         if self.is_cash_receipt_pending():
             if self.estimated_ready_at:
                 t = format_beijing_time(self.estimated_ready_at)
                 if self.is_dine_in():
-                    return f'店家已接单，预计 {t} 可出餐。用餐时请付现金，店家确认收款后订单完结。'
-                return f'店家已接单，预计 {t} 可取餐。取餐时请付现金，店家确认收款后订单完结。'
+                    return f'店家备餐中，预计 {t} 可出餐。用餐时请付现金，店家确认收款后订单完结。'
+                return f'店家备货中，预计 {t} 可取餐。取餐时请付现金，店家确认收款后订单完结。'
             if self.is_dine_in():
-                return '店家已接单备餐中。用餐时请付现金。'
-            return '店家已接单备货中。取餐时请付现金。'
+                return '店家备餐中。用餐时请付现金。'
+            return '店家备货中。取餐时请付现金。'
         if self.is_dine_in():
             return '堂食订单：请在店内付款。'
         if self.is_takeaway():
@@ -913,3 +1096,30 @@ from .dine_models import (  # noqa: E402
     TableSession,
     VirtualTableCode,
 )
+
+
+class OrderMessage(models.Model):
+    """订单双方沟通留言（非即时聊天；打开详情可看到更新）"""
+
+    SIDE_CHOICES = [
+        ('buyer', '买家'),
+        ('shop', '店家'),
+    ]
+
+    message_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='留言ID')
+    order = models.ForeignKey(
+        BuyOrder, on_delete=models.CASCADE, related_name='messages', verbose_name='所属订单',
+    )
+    author_side = models.CharField(max_length=8, choices=SIDE_CHOICES, db_index=True, verbose_name='发言方')
+    author_username = models.CharField(max_length=128, verbose_name='发言账号')
+    body = models.CharField(max_length=300, verbose_name='留言内容')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='发送时间')
+
+    class Meta:
+        db_table = 'order_message'
+        ordering = ['created_at']
+        verbose_name = '订单沟通留言'
+        verbose_name_plural = '订单沟通留言'
+
+    def __str__(self):
+        return f'{self.order_id}:{self.author_side}:{self.body[:20]}'

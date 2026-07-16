@@ -10,7 +10,7 @@ from .base import PaymentInitResult
 from .registry import build_buyer_pay_options
 from .wechat_native import create_native_payment, try_sync_wechat_payment
 
-# 卖家确认接单时可选的出餐/取餐时间（分钟）
+# 店家开始备货时可选的出餐/取餐时间（分钟）
 IN_STORE_ETA_MINUTES = (10, 15, 20, 30)
 
 
@@ -114,9 +114,9 @@ def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentIni
 
 
 def confirm_in_store_order(order: BuyOrder, eta_minutes: int) -> tuple[bool, str]:
-    """卖家确认堂食/打包到店单：开始备餐并反馈预计出餐时间（不确认收款）"""
+    """堂食/打包到店单：开始备货并反馈预计出餐/取餐时间（不确认收款）"""
     if not order.is_awaiting_in_store_order_confirm():
-        return False, '该订单不是待确认的堂食/打包单'
+        return False, '该订单不是待备货的堂食/打包单'
     if eta_minutes not in IN_STORE_ETA_MINUTES:
         return False, '请选择有效的出餐时间'
 
@@ -130,8 +130,8 @@ def confirm_in_store_order(order: BuyOrder, eta_minutes: int) -> tuple[bool, str
 
     ready_str = format_beijing_time(order.estimated_ready_at)
     if order.is_dine_in():
-        return True, f'已确认堂食订单，预计 {ready_str} 可出餐'
-    return True, f'已确认打包订单，预计 {ready_str} 可取餐'
+        return True, f'已开始备餐，预计 {ready_str} 可出餐'
+    return True, f'已开始备货，预计 {ready_str} 可取餐'
 
 
 def confirm_cash_payment(order: BuyOrder) -> tuple[bool, str]:
@@ -141,7 +141,7 @@ def confirm_cash_payment(order: BuyOrder) -> tuple[bool, str]:
 
     if order.is_in_store():
         if order.is_awaiting_in_store_order_confirm():
-            return False, '请先确认订单并开始备餐，再确认收款'
+            return False, '请先选择预计时间并开始备货，再确认收款'
         if order.order_status not in ('preparing', 'ready_pickup', 'completed'):
             return False, '当前订单状态不能确认收款'
         order.payment_status = 'paid'

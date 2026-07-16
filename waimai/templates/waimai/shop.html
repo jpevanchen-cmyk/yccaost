@@ -22,7 +22,16 @@
 <div class="msg-err">⚠️ {{ error }}</div>
 {% endif %}
 {% if table_label %}
-<div class="msg-ok">🪑 当前桌台：<strong>{{ table_label }}</strong>（扫桌码模式，加点将计入本桌主单）</div>
+<div class="msg-ok">🪑 当前桌台：<strong>{{ table_label }}</strong>（扫桌码 · 堂食通道，加点将计入本桌主单）</div>
+{% elif shop_channel_label %}
+<div class="msg-ok" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
+    <span>当前通道：<strong>{{ shop_channel_label }}</strong></span>
+    <form method="post" style="margin:0;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="clear_channel">
+        <button type="submit" class="btn btn-sm btn-outline">更换通道</button>
+    </form>
+</div>
 {% endif %}
 {% if using_menu %}
 <p class="page-desc">本店当前按「今日菜单清单」展示菜品与价格档位（会员价/特价以清单设置为准）。</p>
@@ -30,6 +39,29 @@
 {% if user.is_authenticated and user.role == 'seller' and user.username == seller_id %}
 <p class="msg-warn">卖家预览：会员价/特价须用<strong>买家账号登录</strong>后才可购买；展示与否以使用中清单为准。</p>
 {% endif %}
+
+{% if need_channel_pick %}
+<div class="card channel-pick-card" style="padding:16px;margin-bottom:14px;">
+    <h2 style="margin:0 0 8px;font-size:18px;">请先选择下单方式</h2>
+    <p class="card-meta" style="margin:0 0 12px;">堂食请扫桌上二维码进入；此处可选外卖配送或打包自取。</p>
+    <div class="channel-pick-grid" style="display:flex;flex-wrap:wrap;gap:10px;">
+        {% for opt in channel_options %}
+        <form method="post" style="margin:0;flex:1 1 140px;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_channel">
+            <input type="hidden" name="channel" value="{{ opt.code }}">
+            <button type="submit" class="btn btn-block {% if opt.available %}btn-orange{% else %}btn-outline{% endif %}"
+                {% if not opt.available %}disabled title="{{ opt.reason }}"{% endif %}>
+                {{ opt.label }}
+            </button>
+            {% if not opt.available %}<p class="card-meta" style="margin:6px 0 0;font-size:12px;">{{ opt.reason }}</p>{% endif %}
+        </form>
+        {% empty %}
+        <p class="card-meta">当前没有可点的外卖/打包通道，请稍后再试或联系店主。</p>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
 
 <div class="shop-layout">
     <div class="dish-list">
@@ -70,14 +102,12 @@
         {% endfor %}
     </div>
 
-    {# 电脑端：右侧固定购物车 #}
     <aside class="cart-sidebar">
         {% include 'waimai/_shop_cart_panel.html' with panel_id='desktop' %}
     </aside>
 </div>
 
 {% if cart_has_lines %}
-{# 手机端：底部购物车条 #}
 <div class="cart-bar is-visible" id="cart-bar">
     <button type="button" class="cart-bar-info" id="cart-open-btn" data-cart-open>
         🛒 共 <strong>{{ cart_count }}</strong> 件 · <strong>¥{{ cart_total }}</strong>
@@ -86,7 +116,6 @@
     <button type="button" class="btn btn-orange btn-sm" data-cart-open>去结算</button>
 </div>
 
-{# 手机端：购物车抽屉 #}
 <div class="cart-drawer" id="cart-drawer">
     <div class="cart-drawer-backdrop" data-cart-close></div>
     <div class="cart-drawer-panel">
@@ -101,5 +130,6 @@
         {% include 'waimai/_shop_cart_panel.html' with panel_id='mobile' %}
     </div>
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}

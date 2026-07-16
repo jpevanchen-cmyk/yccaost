@@ -1,0 +1,11 @@
+{# 员工「允许取消订单」权限开关（店主在工作台管理页使用） #}
+<form method="POST" class="seller-inline-form" style="display:inline-block;margin-left:8px;vertical-align:middle;">
+    {% csrf_token %}
+    <input type="hidden" name="set_staff_cancel_perm" value="1">
+    <input type="hidden" name="staff_username" value="{{ staff_user.username }}">
+    <label style="font-size:13px;margin-right:4px;">
+        <input type="checkbox" name="perm_cancel_order" value="1" {% if staff_user.perm_cancel_order %}checked{% endif %}
+               onchange="this.form.submit()">
+        允许取消订单
+    </label>
+</form>

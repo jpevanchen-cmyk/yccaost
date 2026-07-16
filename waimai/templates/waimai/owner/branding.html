@@ -1,0 +1,21 @@
+{% extends 'waimai/owner/base.html' %}
+{% block title %}站点品牌{% endblock %}
+{% block owner_content %}
+<div class="card" style="padding:16px;">
+    <h2 style="margin:0 0 12px;font-size:18px;">站点品牌</h2>
+    <form method="post">
+        {% csrf_token %}
+        <label class="form-label">网站顶部名称</label>
+        <input class="form-input" type="text" name="site_name" value="{{ site_settings.site_name }}" maxlength="80">
+        <label class="form-label">标识图片链接（可选，公开网址）</label>
+        <input class="form-input" type="text" name="brand_image_url" value="{{ site_settings.brand_image_url }}" maxlength="500">
+        <label class="form-label">导航「名录」显示名</label>
+        <input class="form-input" type="text" name="nav_brand_label" value="{{ site_settings.nav_brand_label }}" maxlength="40">
+        <label class="form-check" style="display:block;margin:12px 0;">
+            <input type="checkbox" name="show_powered_by" value="1" {% if site_settings.show_powered_by %}checked{% endif %}>
+            页脚显示「由野草系统提供支持」
+        </label>
+        <button type="submit" class="btn btn-primary">保存</button>
+    </form>
+</div>
+{% endblock %}

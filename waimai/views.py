@@ -180,7 +180,7 @@ def shop_work_logout(request, shop_code=None):
             actor=work_user,
             request=request,
         )
-    if work_user and work_user.role in ('waiter', 'kitchen', 'rider'):
+    if work_user and work_user.role in ('waiter', 'kitchen', 'rider', 'manager'):
         deactivate_staff_on_logout(work_user)
     clear_shop_work_session(request)
     messages.success(request, '已退出店铺工作台')
@@ -194,24 +194,25 @@ from .session_guard import session_beacon_logout, session_heartbeat  # noqa: E40
 
 
 def home(request):
-    """本服务器默认入口：拥有者展示主页（A.10）；无店时给开通引导"""
-    from .home_page_helpers import build_home_view_context, resolve_entry_home_page
+    """本服务器主页（拥有者配置；与单店主页严格分开）"""
+    from .home_page_helpers import build_server_home_view_context
+    from .models import ShopProfile
 
-    page = resolve_entry_home_page()
-    if not page:
+    # 一台店都没有时仍给开通引导
+    if not ShopProfile.objects.exists():
         return render(request, 'waimai/home_empty.html')
-    context = build_home_view_context(page, request)
+    context = build_server_home_view_context(request)
     return render(request, 'waimai/showcase_home.html', context)
 
 
 def directory(request):
-    """旧名录地址：兼容跳到本服务器入口主页（名录改为可选积木块）"""
+    """旧名录地址：兼容跳到服务器主页（名录为服务器主页积木）"""
     return redirect('home')
 
 
 def shop_showcase(request, shop_code=None):
-    """按店铺码打开某店展示主页（非默认入口时也可直达）"""
-    from .home_page_helpers import build_home_view_context, ensure_home_page_for_seller
+    """按店铺码打开某店店铺主页（单店门面）"""
+    from .home_page_helpers import build_shop_home_view_context, ensure_home_page_for_seller
     from .shop_work_helpers import get_shop_profile_by_code
 
     code = (shop_code or '').strip()
@@ -222,7 +223,7 @@ def shop_showcase(request, shop_code=None):
     if not profile:
         return redirect('home')
     page = ensure_home_page_for_seller(profile.seller_id, profile)
-    context = build_home_view_context(page, request)
+    context = build_shop_home_view_context(page, request)
     return render(request, 'waimai/showcase_home.html', context)
 
 
@@ -272,7 +273,11 @@ def waiter_home(request):
 
 
 def owner_hub(request):
-    """旧地址：跳转到本店工作台"""
+    """旧地址：有管理者权限则进服务器设置，否则进本店工作台"""
+    from .owner_helpers import user_is_server_manager
+
+    if getattr(request.user, 'is_authenticated', False) and user_is_server_manager(request.user):
+        return redirect('server_settings')
     return _redirect_to_shop_work(request) or redirect('seller_panel')
 
 
@@ -348,7 +353,7 @@ def shop_work(request, shop_code):
         context.update(build_shop_work_daily_history(seller_id, work_user))
         from .audit_helpers import query_audit_logs, write_audit_log
         # 服务方仅看本人操作记录（A.12）
-        if work_user.role in ('waiter', 'kitchen', 'rider'):
+        if work_user.role in ('waiter', 'kitchen', 'rider', 'manager'):
             if (request.GET.get('my_audit') or '').strip() == '1':
                 write_audit_log(
                     action_code='view_audit',
@@ -391,7 +396,7 @@ def shop_work(request, shop_code):
             if not ok:
                 messages.error(request, msg)
                 return render(request, 'waimai/shop_work_login.html', {'shop_profile': shop_profile})
-            if user.role in ('waiter', 'kitchen', 'rider'):
+            if user.role in ('waiter', 'kitchen', 'rider', 'manager'):
                 activate_staff_on_login(user)
             establish_shop_work_session(request, user, seller_id=seller_id, shop_code=code)
             touch_online_user(user)
@@ -414,6 +419,95 @@ def shop_work(request, shop_code):
         messages.error(request, '用户名或密码错误')
 
     return render(request, 'waimai/shop_work_login.html', {'shop_profile': shop_profile})
+
+
+def shop_work_order(request, shop_code, order_id):
+    """
+    工作台订单中转页：仅认工作台登录身份。
+    员工可联系客人、留言沟通；有「允许取消订单」时才能取消。
+    不进卖家后台，避免与店主生态登录串号。
+    """
+    from .order_cancel_helpers import (
+        cancel_order_by_shop,
+        shop_can_cancel_order,
+        shop_has_cancel_communication,
+    )
+    from .order_helpers import dish_items_with_line_totals
+    from .order_message_helpers import (
+        mark_order_messages_read,
+        post_order_message,
+        viewer_can_use_order_chat,
+    )
+    from .shop_work_auth import get_shop_work_user
+    from .shop_work_helpers import (
+        SHOP_STAFF_ROLES,
+        build_shop_work_order_path,
+        build_shop_work_path,
+        get_shop_profile_by_code,
+        user_belongs_to_shop,
+    )
+
+    shop_profile = get_shop_profile_by_code(shop_code)
+    if not shop_profile:
+        return render(request, 'waimai/shop_work_login.html', {'shop_profile': None}, status=404)
+
+    code = (shop_profile.shop_code or '').strip()
+    seller_id = shop_profile.seller_id
+    work_user = get_shop_work_user(request)
+
+    if not work_user or not user_belongs_to_shop(work_user, seller_id):
+        messages.error(request, '请先登录本店工作台')
+        return redirect(build_shop_work_path(code))
+
+    order = get_object_or_404(
+        BuyOrder.objects.select_related('delivery_order'),
+        order_id=order_id,
+        seller_id=seller_id,
+    )
+
+    can_chat = viewer_can_use_order_chat(work_user, order)
+    can_shop_cancel = shop_can_cancel_order(work_user, order)
+    # 联系客人：店主或任意本店员工均可（取消权限另判）
+    show_contact = work_user.role == 'seller' or work_user.role in SHOP_STAFF_ROLES
+
+    self_url = build_shop_work_order_path(code, order.order_id)
+
+    if request.method == 'POST' and 'send_order_message' in request.POST:
+        if not can_chat:
+            messages.error(request, '您不能在此订单留言')
+        else:
+            ok, msg = post_order_message(order, work_user, request.POST.get('message_body', ''))
+            if ok:
+                messages.success(request, msg)
+            else:
+                messages.error(request, msg)
+        return redirect(self_url)
+
+    if request.method == 'POST' and 'cancel_order_shop' in request.POST:
+        ok, msg = cancel_order_by_shop(order, work_user, request.POST.get('cancel_note', ''))
+        if ok:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return redirect(self_url)
+
+    if can_chat:
+        mark_order_messages_read(order, work_user)
+
+    return render(request, 'waimai/shop_work_order.html', {
+        'shop_profile': shop_profile,
+        'shop_work_code': code,
+        'work_user': work_user,
+        'order': order,
+        'dish_lines': dish_items_with_line_totals(order.dish_items),
+        'order_messages': list(order.messages.order_by('created_at')),
+        'can_order_chat': can_chat,
+        'show_contact_guest': show_contact,
+        'can_shop_cancel': can_shop_cancel,
+        'shop_has_chat_history': shop_has_cancel_communication(order),
+        'back_url': build_shop_work_path(code, view='waiter'),
+        'shop_work_logout_url': reverse('shop_work_logout', kwargs={'shop_code': code}),
+    })
 
 
 def waiter_pay_order(request, order_id):
@@ -450,7 +544,7 @@ def waiter_pay_order(request, order_id):
                 messages.success(request, '支付成功')
                 return redirect(resolve_waiter_return_url(request))
             if result.redirect_url.startswith('/order/'):
-                messages.success(request, '已选择现金，待店家确认接单后可点「确认已收现金」')
+                messages.success(request, '已选择现金，待店家备货后可点「确认已收现金」')
                 return redirect(resolve_waiter_return_url(request))
             return redirect(result.redirect_url)
         if result.template_name:
@@ -604,20 +698,31 @@ def _merge_cart_into_order(order, cart_items, seller_id, distance_km, fulfillmen
 
 
 def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
-    """店铺页统一渲染（含菜单过滤与桌台信息）"""
+    """店铺页统一渲染（含菜单过滤、桌台与下单通道）"""
+    from .channel_helpers import (
+        channel_template_flags,
+        list_homepage_channels,
+        resolve_shop_channel,
+    )
+
     dishes, using_menu = _shop_page_dishes(seller_id)
     menu_items_map = get_active_menu_items_map(seller_id) if using_menu else {}
     table_session = _get_buyer_table_session(request, seller_id)
-    dish_rows = [
-        {
-            'dish': dish,
-            'tier_options': build_dish_tier_options(
-                dish, request.user, seller_id, cart,
-                menu_item=menu_items_map.get(dish.dish_id),
-            ),
-        }
-        for dish in dishes
-    ]
+    shop_channel = resolve_shop_channel(request, seller_id, table_session)
+    need_channel_pick = (not table_session) and (not shop_channel)
+
+    dish_rows = []
+    if shop_channel:
+        dish_rows = [
+            {
+                'dish': dish,
+                'tier_options': build_dish_tier_options(
+                    dish, request.user, seller_id, cart,
+                    menu_item=menu_items_map.get(dish.dish_id),
+                ),
+            }
+            for dish in dishes
+        ]
     ctx = {
         'dishes': dishes,
         'dish_rows': dish_rows,
@@ -626,7 +731,10 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         'using_menu': using_menu,
         'table_session': table_session,
         'table_label': table_session.display_label() if table_session else '',
+        'need_channel_pick': need_channel_pick,
+        'channel_options': list_homepage_channels(seller_id) if (need_channel_pick or not table_session) else [],
         'error': error or request.GET.get('error', ''),
+        **channel_template_flags(shop_channel),
         **_shop_cart_context(cart, seller_id),
     }
     if extra:
@@ -635,7 +743,15 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
 
 
 def shop_page(request):
-    """店铺页面：菜品展示 + 购物车 + 下单确认"""
+    """店铺页面：选通道 + 菜品展示 + 购物车 + 下单确认"""
+    from .channel_helpers import (
+        CHANNEL_DELIVERY,
+        build_address_and_distance,
+        clear_shop_channel,
+        require_shop_channel,
+        try_set_homepage_channel,
+    )
+
     seller_id = request.GET.get('seller_id', 'seller_001')
     cart = get_shop_cart(request.session, seller_id)
     shop_profile = ShopProfile.objects.filter(seller_id=seller_id).first()
@@ -643,13 +759,32 @@ def shop_page(request):
 
     if request.method == 'POST':
         action = request.POST.get('action', '')
+        table_sess = _get_buyer_table_session(request, seller_id)
+
+        if action == 'set_channel':
+            ok, msg = try_set_homepage_channel(
+                request, seller_id, request.POST.get('channel', ''), table_sess,
+            )
+            if not ok:
+                return _shop_render(request, seller_id, cart, shop_profile, error=msg)
+            return _shop_cart_redirect(seller_id)
+
+        if action == 'clear_channel':
+            if table_sess:
+                return _shop_render(
+                    request, seller_id, cart, shop_profile,
+                    error='扫桌码模式下为堂食通道，不能切换为外卖或打包。',
+                )
+            clear_shop_channel(request.session, seller_id)
+            return _shop_cart_redirect(seller_id)
 
         if action == 'add_to_cart':
             dish_id = request.POST.get('dish_id')
             tier = request.POST.get('price_tier', PRICE_TIER_GENERAL)
             cart = normalize_cart_keys(cart)
-            table_sess = _get_buyer_table_session(request, seller_id)
-            ft = 'dine_in' if table_sess else 'delivery'
+            ft, ch_err = require_shop_channel(request, seller_id, table_sess)
+            if ch_err:
+                return _shop_render(request, seller_id, cart, shop_profile, error=ch_err)
             ok_admit, admit_msg = check_order_admission(seller_id, ft)
             if not ok_admit:
                 return _shop_render(request, seller_id, cart, shop_profile, error=admit_msg)
@@ -714,8 +849,9 @@ def shop_page(request):
                     error='请至少选择一份数量大于 0 的商品再结算',
                 )
 
-            table_sess = _get_buyer_table_session(request, seller_id)
-            fulfillment_type = 'dine_in' if table_sess else 'delivery'
+            fulfillment_type, ch_err = require_shop_channel(request, seller_id, table_sess)
+            if ch_err:
+                return _shop_render(request, seller_id, cart, shop_profile, error=ch_err)
             ok_admit, admit_msg = check_order_admission(seller_id, fulfillment_type)
             if not ok_admit:
                 return _shop_render(request, seller_id, cart, shop_profile, error=admit_msg)
@@ -727,12 +863,9 @@ def shop_page(request):
                 if not ok:
                     return _shop_render(request, seller_id, cart, shop_profile, error=msg)
 
-            distance_km = parse_distance_km(request.POST.get('distance_km'))
-            delivery_address = request.POST.get('delivery_address', '默认地址').strip() or '默认地址'
-            if table_sess:
-                distance_km = 0
-                delivery_address = store_delivery_address(shop_profile, 'dine_in')
-
+            delivery_address, distance_km = build_address_and_distance(
+                request.POST, shop_profile, fulfillment_type,
+            )
             delivery_fee, fee_detail = build_order_pricing(
                 seller_id, subtotal, distance_km, fulfillment_type,
             )
@@ -742,25 +875,25 @@ def shop_page(request):
                     error='配送距离超过该店铺最远配送范围',
                 )
 
-            free_delivery = (
-                delivery_settings.free_delivery_threshold
-                and subtotal >= delivery_settings.free_delivery_threshold
-            )
             total_amount = subtotal + delivery_fee
-
+            from .channel_helpers import channel_template_flags
             return render(request, 'waimai/confirm_order.html', {
                 'cart_items': cart_items,
                 'subtotal': subtotal,
                 'delivery_fee': delivery_fee,
                 'delivery_fee_detail': fee_detail,
-                'free_delivery': delivery_fee == 0 and subtotal > 0 and fulfillment_type == 'delivery',
+                'free_delivery': (
+                    delivery_fee == 0 and subtotal > 0 and fulfillment_type == CHANNEL_DELIVERY
+                ),
                 'total_amount': total_amount,
                 'distance_km': distance_km,
                 'delivery_address': delivery_address,
                 'fulfillment_type': fulfillment_type,
+                'channel_locked': True,
                 'seller_id': seller_id,
                 'shop_profile': shop_profile,
                 'table_label': table_sess.display_label() if table_sess else '',
+                **channel_template_flags(fulfillment_type),
             })
 
     return _shop_render(request, seller_id, cart, shop_profile, extra={
@@ -950,7 +1083,12 @@ def seller_panel_section(request, section):
         from .models import BuyOrder
 
         order_search = parse_seller_order_search(request.GET)
-        orders = query_seller_orders(seller_id, order_search)
+        orders = list(query_seller_orders(seller_id, order_search))
+        from .order_message_helpers import unread_map_for_orders
+
+        unread_map = unread_map_for_orders(orders, side='shop')
+        for o in orders:
+            o.unread_msg_count = unread_map.get(o.order_id, 0)
         context['orders'] = orders
         context['order_search'] = order_search
         context['order_date_range_choices'] = ORDER_DATE_RANGE_CHOICES
@@ -1000,8 +1138,9 @@ def seller_panel_section(request, section):
     elif section == 'workbench':
         import base64
 
-        from .forms import CreateKitchenForm, CreateRiderForm, CreateWaiterForm, ShopWorkbenchSettingsForm
+        from .forms import CreateKitchenForm, CreateManagerForm, CreateRiderForm, CreateWaiterForm, ShopWorkbenchSettingsForm
         from .kitchen_helpers import get_shop_kitchens
+        from .manager_handlers import get_shop_managers
         from .staff_account_helpers import (
             AttendanceFilterForm,
             attendance_status_options,
@@ -1015,6 +1154,8 @@ def seller_panel_section(request, section):
 
         operating = get_operating_settings(seller_id)
         context['workbench_settings_form'] = ShopWorkbenchSettingsForm(instance=operating)
+        context['managers'] = get_shop_managers(seller_id)
+        context['manager_form'] = CreateManagerForm(seller_id=seller_id)
         context['waiters'] = get_shop_waiters(seller_id)
         context['waiter_form'] = CreateWaiterForm(seller_id=seller_id)
         context['kitchens'] = get_shop_kitchens(seller_id)
@@ -1023,7 +1164,12 @@ def seller_panel_section(request, section):
         context['rider_form'] = CreateRiderForm(seller_id=seller_id)
         attendance_filter_form = AttendanceFilterForm(request.GET or None)
         attendance_filters = attendance_filter_form.cleaned_data if attendance_filter_form.is_valid() else {}
-        staff_users = list(context['waiters']) + list(context['kitchens']) + list(context['riders'])
+        staff_users = (
+            list(context['managers'])
+            + list(context['waiters'])
+            + list(context['kitchens'])
+            + list(context['riders'])
+        )
         staff_users.sort(key=lambda user: (staff_role_label(user.role), user.date_joined, user.username))
         attendance_logs = list(query_attendance_logs(
             seller_id,
@@ -1103,14 +1249,54 @@ def seller_panel_section(request, section):
             context['runtime_log_lines'] = read_tech_log_tail('runtime.log', 150)
             context['error_payment_log_lines'] = read_tech_log_tail('error_payment.log', 150)
     elif section == 'homepage':
-        from .home_page_helpers import ensure_home_page_for_seller, get_block_spec
+        from django.db.models import Case, IntegerField, When
+
+        from .home_page_helpers import (
+            BLOCK_CUSTOM,
+            MAX_SHOP_CUSTOM_BLOCKS,
+            SERVER_ONLY_BLOCK_TYPES,
+            SHOP_LEGACY_BLOCK_TYPES,
+            block_dom_id,
+            count_shop_custom_blocks,
+            ensure_home_page_for_seller,
+            get_shop_block_spec,
+        )
 
         page = ensure_home_page_for_seller(seller_id, shop_profile)
-        blocks = list(page.blocks.order_by('sort_order', 'block_type'))
+        # 预设块在前，自定义块永远排在最后
+        blocks = list(
+            page.blocks.exclude(block_type__in=SERVER_ONLY_BLOCK_TYPES | SHOP_LEGACY_BLOCK_TYPES)
+            .annotate(
+                _custom_last=Case(
+                    When(block_type=BLOCK_CUSTOM, then=1),
+                    default=0,
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by('_custom_last', 'sort_order', 'block_type')
+        )
         for b in blocks:
-            b.spec = get_block_spec(b.block_type)
+            b.spec = get_shop_block_spec(b.block_type)
+            b.dom_id = block_dom_id(b)
+            b.is_custom = b.block_type == BLOCK_CUSTOM
+            if b.is_custom:
+                b.fold_title = (b.title or '').strip() or '自定义积木'
+            else:
+                b.fold_title = b.spec.label if b.spec else b.block_type
+            from .home_block_media import block_display_image_src
+            from .home_page_helpers import BLOCK_DIRECTORY, BLOCK_ORDER_CTA
+            b.display_image_src = block_display_image_src(b)
+            b.shows_rich_media = b.block_type not in (BLOCK_ORDER_CTA, BLOCK_DIRECTORY)
+        custom_count = count_shop_custom_blocks(page)
+        from .home_block_media import photo_quota_hint
+        context.update(photo_quota_hint(request.user))
         context['home_page'] = page
         context['home_blocks'] = blocks
+        context['custom_block_count'] = custom_count
+        context['max_custom_blocks'] = MAX_SHOP_CUSTOM_BLOCKS
+        context['can_add_custom_block'] = custom_count < MAX_SHOP_CUSTOM_BLOCKS
+        context['save_block_action_name'] = 'save_home_block'
+        context['delete_block_action_name'] = 'delete_home_block'
         context['showcase_preview_url'] = '/'
         if shop_profile and (shop_profile.shop_code or '').strip():
             context['showcase_preview_url'] = f"/s/{shop_profile.shop_code.strip()}/home/"
@@ -1132,22 +1318,33 @@ def place_order(request):
     if not cart:
         return redirect(f'/shop/?seller_id={seller_id}')
 
-    fulfillment_type = parse_fulfillment_type(request.POST.get('fulfillment_type'))
+    from .channel_helpers import (
+        CHANNEL_DINE_IN,
+        build_address_and_distance,
+        validate_place_order_channel,
+    )
+
     shop_profile = ShopProfile.objects.filter(seller_id=seller_id).first()
     table_sess = _get_buyer_table_session(request, seller_id)
+    fulfillment_type, ch_err = validate_place_order_channel(
+        request, seller_id, request.POST.get('fulfillment_type'), table_sess,
+    )
+    if ch_err:
+        messages.error(request, ch_err)
+        return redirect(f'/shop/?seller_id={seller_id}&error={ch_err}')
 
-    if table_sess:
-        fulfillment_type = 'dine_in'
-    elif fulfillment_type == 'dine_in' and not request.POST.get('dine_in_at_shop'):
-        messages.error(request, '堂食下单须勾选「我已在店内」')
-        return redirect(f'/shop/?seller_id={seller_id}&error=堂食须勾选已在店内')
+    if fulfillment_type == CHANNEL_DINE_IN and not table_sess:
+        messages.error(request, '堂食请扫桌上的二维码进入')
+        return redirect(f'/shop/?seller_id={seller_id}&error=堂食请扫桌码进入')
+    if fulfillment_type == CHANNEL_DINE_IN and not request.POST.get('dine_in_at_shop'):
+        # 扫桌码进店已视为在店；仍要求勾选时：桌码会话可免勾
+        if not table_sess:
+            messages.error(request, '堂食下单须勾选「我已在店内」')
+            return redirect(f'/shop/?seller_id={seller_id}&error=堂食须勾选已在店内')
 
-    if fulfillment_type in ('dine_in', 'takeaway'):
-        delivery_address = store_delivery_address(shop_profile, fulfillment_type)
-        distance_km = 0
-    else:
-        distance_km = parse_distance_km(request.POST.get('distance_km'))
-        delivery_address = request.POST.get('delivery_address', '默认地址').strip() or '默认地址'
+    delivery_address, distance_km = build_address_and_distance(
+        request.POST, shop_profile, fulfillment_type,
+    )
 
     cart_items, subtotal = build_cart_items(cart, seller_id, for_checkout=True)
     if not cart_items:
@@ -1302,6 +1499,8 @@ def order_history(request):
     if request.user.role != 'buyer':
         return redirect('directory')
 
+    from .order_message_helpers import unread_map_for_orders
+
     orders = list(
         BuyOrder.objects.filter(buyer_id=request.user.username)
         .select_related('delivery_order')
@@ -1312,37 +1511,114 @@ def order_history(request):
         s.seller_id: s.shop_name
         for s in ShopProfile.objects.filter(seller_id__in=seller_ids)
     }
+    unread_map = unread_map_for_orders(orders, side='buyer')
     order_rows = [
         {
             'order': o,
             'shop_name': shop_names.get(o.seller_id, o.seller_id),
+            'unread_msg_count': unread_map.get(o.order_id, 0),
         }
         for o in orders
     ]
     return render(request, 'waimai/order_history.html', {'order_rows': order_rows})
 
 
-@login_required
+def _order_page_viewer(request):
+    """
+    生态订单详情页身份（仅买家 / 卖家后台 / 骑手）。
+    工作台员工不走本页，见 shop_work_order。
+    """
+    eco = request.user if getattr(request.user, 'is_authenticated', False) else None
+    if eco and eco.role in ('buyer', 'seller', 'rider'):
+        return eco
+    return None
+
+
 def order_detail(request, order_id):
-    """订单详情（买家、卖家均可查看自己的订单）"""
+    """订单详情（买家、卖家后台、骑手）。员工请走工作台订单中转页。"""
+    from .order_cancel_helpers import (
+        BUYER_BLOCKED_HINT,
+        buyer_can_self_cancel,
+        cancel_order_by_buyer,
+        cancel_order_by_shop,
+        shop_can_cancel_order,
+        shop_has_cancel_communication,
+    )
+    from .order_message_helpers import (
+        mark_order_messages_read,
+        post_order_message,
+        viewer_can_use_order_chat,
+    )
+    from .shop_work_auth import get_shop_work_user
+    from .shop_work_helpers import (
+        SHOP_STAFF_ROLES,
+        build_shop_work_order_path,
+        get_shop_code_for_user,
+    )
+
+    # 员工若误开后台详情，强制改走工作台中转页（避免串成店主身份）
+    work = get_shop_work_user(request)
+    if work and work.role in SHOP_STAFF_ROLES:
+        code = get_shop_code_for_user(work) or (request.session.get('shop_work_code') or '').strip()
+        if code:
+            return redirect(build_shop_work_order_path(code, order_id))
+        return redirect('directory')
+
+    user = _order_page_viewer(request)
+    if not user:
+        return redirect('login')
+
     order = get_object_or_404(
         BuyOrder.objects.select_related('delivery_order'),
         order_id=order_id,
     )
-    user = request.user
     if user.role == 'buyer' and order.buyer_id != user.username:
         return redirect('order_history')
     if user.role == 'seller' and order.seller_id != user.username:
         return redirect('seller_panel_section', section='orders')
-    if user.role == 'waiter':
-        from .waiter_helpers import ensure_waiter_employer
-        employer = ensure_waiter_employer(user)
-        if not employer or order.seller_id != employer:
-            return redirect('waiter_home')
     if user.role == 'rider':
         delivery = getattr(order, 'delivery_order', None)
         if not delivery or delivery.rider_id != user.username:
             return redirect('rider_home')
+
+    can_chat = viewer_can_use_order_chat(user, order)
+    can_buyer_cancel = user.role == 'buyer' and buyer_can_self_cancel(order)
+    show_buyer_cancel_blocked = (
+        user.role == 'buyer'
+        and order.order_status not in ('cancelled',)
+        and not buyer_can_self_cancel(order)
+    )
+    can_shop_cancel = shop_can_cancel_order(user, order)
+
+    if request.method == 'POST' and 'send_order_message' in request.POST:
+        if not can_chat:
+            messages.error(request, '您不能在此订单留言')
+        else:
+            ok, msg = post_order_message(order, user, request.POST.get('message_body', ''))
+            if ok:
+                messages.success(request, msg)
+            else:
+                messages.error(request, msg)
+        return redirect('order_detail', order_id=order.order_id)
+
+    if request.method == 'POST' and 'cancel_order_buyer' in request.POST:
+        ok, msg = cancel_order_by_buyer(order, user)
+        if ok:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return redirect('order_detail', order_id=order.order_id)
+
+    if request.method == 'POST' and 'cancel_order_shop' in request.POST:
+        ok, msg = cancel_order_by_shop(order, user, request.POST.get('cancel_note', ''))
+        if ok:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return redirect('order_detail', order_id=order.order_id)
+
+    if can_chat:
+        mark_order_messages_read(order, user)
 
     shop_profile = ShopProfile.objects.filter(seller_id=order.seller_id).first()
     fee_detail = order.delivery_fee_detail
@@ -1356,8 +1632,8 @@ def order_detail(request, order_id):
         back_url = 'seller_panel_section'
     elif user.role == 'rider':
         back_url = 'my_deliveries'
-    elif user.role == 'waiter':
-        back_url = 'waiter_home'
+
+    order_messages = list(order.messages.order_by('created_at'))
 
     return render(request, 'waimai/order_detail.html', {
         'order': order,
@@ -1369,4 +1645,14 @@ def order_detail(request, order_id):
         'delivery_fee_detail': fee_detail,
         'back_url': back_url,
         'viewer_role': user.role,
+        'order_messages': order_messages,
+        'can_order_chat': can_chat,
+        'show_contact_guest': user.role == 'seller',
+        'can_buyer_cancel': can_buyer_cancel,
+        'show_buyer_cancel_blocked': show_buyer_cancel_blocked,
+        'buyer_cancel_blocked_hint': BUYER_BLOCKED_HINT,
+        'can_shop_cancel': can_shop_cancel,
+        'shop_has_chat_history': shop_has_cancel_communication(order),
+        'shop_work_code': '',
+        'shop_work_back_url': '',
     })

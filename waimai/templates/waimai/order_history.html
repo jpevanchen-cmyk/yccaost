@@ -35,11 +35,16 @@
             <span class="badge badge-order-prep" style="margin-left:6px;">{{ order.get_order_status_display }}</span>
         </div>
         <div class="order-card-actions">
-            <a class="btn btn-outline btn-sm" href="{% url 'order_detail' order.order_id %}">订单详情</a>
+            <a class="btn btn-outline btn-sm" href="{% url 'order_detail' order.order_id %}">
+                订单详情
+                {% if row.unread_msg_count %}
+                <span class="msg-unread-dot" title="有未读沟通">{{ row.unread_msg_count }}</span>
+                {% endif %}
+            </a>
             {% if order.payment_status == 'pending_payment' and not order.is_in_store_cash_order and not order.is_cash_awaiting_confirm %}
             <a class="btn btn-wechat btn-sm" href="{% url 'pay_order' order.order_id %}">去支付</a>
             {% elif order.is_awaiting_in_store_order_confirm %}
-            <span class="badge badge-pay-pending">待店家接单</span>
+            <span class="badge badge-pay-pending">{{ order.get_order_status_display }}</span>
             {% elif order.is_cash_receipt_pending %}
             <span class="badge badge-pay-pending">到店付现金</span>
             {% elif order.is_cash_awaiting_confirm %}

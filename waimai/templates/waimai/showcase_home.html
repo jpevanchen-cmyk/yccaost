@@ -1,6 +1,6 @@
 {% extends 'waimai/base.html' %}
 {% load static %}
-{% block title %}{% if shop_profile %}{{ shop_profile.shop_name }}{% else %}入口主页{% endif %}{% endblock %}
+{% block title %}{{ brand_title|default:"入口主页" }}{% endblock %}
 {% block body_class %}showcase-home-page{% endblock %}
 
 {% block page_back %}{% endblock %}
@@ -8,34 +8,46 @@
 {% block content %}
 <nav class="showcase-sticky-nav" aria-label="主页导航">
     <div class="showcase-sticky-inner">
-        <a class="showcase-brand" href="#top">{% if shop_profile %}{{ shop_profile.shop_name }}{% else %}入口主页{% endif %}</a>
+        <a class="showcase-brand" href="#top">{{ brand_title|default:"入口主页" }}</a>
         <div class="showcase-nav-links">
             {% for item in home_nav_items %}
             <a href="#{{ item.anchor }}">{{ item.label }}</a>
             {% endfor %}
-            <a class="showcase-nav-order" href="{{ order_nav_href }}">点餐</a>
+            {% if home_kind == 'shop' %}
+            <a class="showcase-nav-order" href="{{ order_nav_href }}">下单</a>
+            {% endif %}
         </div>
     </div>
 </nav>
 
 <div id="top" class="showcase-stack">
+{% if home_kind == 'shop' and shop_profile %}
+<div class="card showcase-shop-header" style="padding:12px 16px;margin-bottom:12px;">
+    <strong>{{ shop_profile.shop_name }}</strong>
+    {% if shop_status_text %}<span class="card-meta" style="margin-left:8px;">{{ shop_status_text }}</span>{% endif %}
+    {% if shop_hours_text %}
+    <div class="card-meta" style="margin-top:6px;white-space:pre-wrap;">{{ shop_hours_text }}</div>
+    {% endif %}
+    <div class="card-meta" style="margin-top:4px;">{{ shop_profile.address }}</div>
+</div>
+{% endif %}
+
 {% for block in home_blocks %}
-<section class="showcase-block card" id="block-{{ block.block_type }}">
-    {% if block.block_type == 'hero' %}
-        <h1 class="page-title" style="margin-bottom:8px;">{{ block.title }}</h1>
-        {% if block.image_url %}
-        <div class="showcase-hero-media" style="margin:12px 0;">
-            <img src="{{ block.image_url }}" alt="" style="width:100%;max-height:280px;object-fit:cover;border-radius:8px;">
-        </div>
-        {% endif %}
-        {% if block.body %}<p class="page-desc">{{ block.body }}</p>{% endif %}
-    {% elif block.block_type == 'order_cta' %}
-        <h2 style="margin:0 0 10px;font-size:18px;">{{ block.title|default:"开始点餐" }}</h2>
+<section class="showcase-block card" id="{% if block.dom_id %}{{ block.dom_id }}{% else %}block-{{ block.block_type }}{% endif %}">
+    {% if block.block_type == 'order_cta' %}
+        <h2 style="margin:0 0 10px;font-size:18px;">{{ block.title|default:"进入店铺" }}</h2>
         {% if block.body %}<p class="card-meta" style="margin-bottom:12px;">{{ block.body }}</p>{% endif %}
-        <a class="btn btn-orange btn-block" href="{{ order_url }}">{{ block.title|default:"开始点餐" }}</a>
+        <a class="btn btn-orange btn-block" href="{{ order_url }}">{{ block.title|default:"进入店铺" }}</a>
     {% elif block.block_type == 'directory' %}
         <h2 style="margin:0 0 10px;font-size:18px;">{{ block.title|default:"店铺名录" }}</h2>
         {% if block.body %}<p class="card-meta" style="margin-bottom:12px;">{{ block.body }}</p>{% endif %}
+        <form method="get" action="/" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
+            <input class="form-input" type="search" name="q" value="{{ directory_query }}" placeholder="按店名或地址搜索" style="flex:1;min-width:160px;">
+            <button type="submit" class="btn btn-primary">搜索</button>
+            {% if directory_query %}
+            <a class="btn btn-outline" href="/">清除</a>
+            {% endif %}
+        </form>
         {% if directory_shops %}
             {% for shop in directory_shops %}
             <div class="line-item" style="flex-wrap:wrap;gap:8px;border-bottom:1px solid #eee;padding:10px 0;">
@@ -45,32 +57,43 @@
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     {% if shop.shop_code %}
-                    <a class="btn btn-sm btn-outline" href="{% url 'shop_showcase' shop.shop_code %}">介绍</a>
+                    <a class="btn btn-sm btn-outline" href="{% url 'shop_showcase' shop.shop_code %}">进店主页</a>
                     {% endif %}
                     <a class="btn btn-sm btn-green" href="/shop/?seller_id={{ shop.seller_id }}">点餐</a>
                 </div>
             </div>
             {% endfor %}
         {% else %}
-            <p class="card-meta">暂无可展示的店铺。</p>
+            <p class="card-meta">{% if directory_query %}没有符合「{{ directory_query }}」的店铺。{% else %}暂无可展示的店铺。{% endif %}</p>
         {% endif %}
     {% else %}
         <h2 style="margin:0 0 10px;font-size:18px;">{{ block.title }}</h2>
-        {% if block.image_url %}
+        {% if block.display_image_src %}
+        <img src="{{ block.display_image_src }}" alt="" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-bottom:10px;">
+        {% elif block.image_url %}
         <img src="{{ block.image_url }}" alt="" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-bottom:10px;">
         {% endif %}
         {% if block.body %}
         <div class="showcase-body" style="white-space:pre-wrap;line-height:1.6;">{{ block.body }}</div>
         {% endif %}
+        {% if block.display_image_src or block.image_url %}
+        <p style="margin-top:10px;">
+            <a class="btn btn-sm btn-outline" href="{% if block.display_image_src %}{{ block.display_image_src }}{% else %}{{ block.image_url }}{% endif %}" target="_blank" rel="noopener">查看原图</a>
+        </p>
+        {% endif %}
         {% if block.link_url %}
-        <p style="margin-top:10px;"><a class="btn btn-sm btn-outline" href="{{ block.link_url }}" rel="noopener">了解更多</a></p>
+        <p style="margin-top:10px;"><a class="btn btn-sm btn-outline" href="{{ block.link_url }}" rel="noopener" target="_blank">了解更多</a></p>
         {% endif %}
     {% endif %}
 </section>
 {% empty %}
 <div class="card">
-    <p class="card-meta">主页尚未启用任何积木块。服务器拥有者可在店铺管理「展示主页」中开启。</p>
-    <a class="btn btn-orange" href="{{ order_url }}">直接点餐</a>
+    {% if home_kind == 'server' %}
+    <p class="card-meta">服务器主页尚未启用积木。服务器管理者可在「服务器设置 → 服务器主页」中开启名录等块。</p>
+    {% else %}
+    <p class="card-meta">店铺主页尚未启用积木。店主可在店铺管理「展示主页」中开启。</p>
+    {% if order_url %}<a class="btn btn-orange" href="{{ order_url }}">直接下单</a>{% endif %}
+    {% endif %}
 </div>
 {% endfor %}
 </div>
@@ -78,6 +101,6 @@
 <button type="button" class="showcase-back-top" id="showcase-back-top" aria-label="回到顶部" hidden>顶部</button>
 {% endblock %}
 
-{% block pre_mobile_js %}
-<script src="{% static 'waimai/showcase_home.js' %}?v=1"></script>
+{% block extra_js %}
+<script src="{% static 'waimai/showcase_home.js' %}?v=2"></script>
 {% endblock %}

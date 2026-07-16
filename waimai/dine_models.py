@@ -39,6 +39,7 @@ class ShopOperatingSettings(models.Model):
     delivery_open = models.TimeField(blank=True, null=True, verbose_name='外卖接单开始')
     delivery_close = models.TimeField(blank=True, null=True, verbose_name='外卖接单结束')
     dine_channel_enabled = models.BooleanField(default=True, verbose_name='当前堂食接单开')
+    takeaway_channel_enabled = models.BooleanField(default=True, verbose_name='当前打包接单开')
     delivery_channel_enabled = models.BooleanField(default=True, verbose_name='当前外卖接单开')
     delivery_handoff_mode = models.CharField(
         max_length=16,

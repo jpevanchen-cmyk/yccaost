@@ -61,6 +61,7 @@
         if (!heartbeatUrl || leaving) return;
         var fd = new FormData();
         fd.append('csrfmiddlewaretoken', resolveCsrf());
+        fd.append('channel', channel);
         if (asActivity) fd.append('activity', '1');
         fetch(heartbeatUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (r) { return r.json(); })

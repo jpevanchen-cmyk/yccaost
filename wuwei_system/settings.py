@@ -97,7 +97,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'waimai',
+    'waimai.apps.WaimaiConfig',
 ]
 
 MIDDLEWARE = [
@@ -117,7 +117,7 @@ ROOT_URLCONF = 'wuwei_system.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -128,6 +128,7 @@ TEMPLATES = [
                 'waimai.context_processors.nav_shop_work',
                 'waimai.context_processors.experience_site',
                 'waimai.context_processors.site_compliance',
+                'waimai.context_processors.site_branding',
             ],
         },
     },
@@ -187,6 +188,9 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # 服务器拥有者上传的备案图标等文件；目录不进 Git，生产环境由 Nginx 提供访问。
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+# 主页积木配图单张上限 5MB，请求体略放大以免被默认 2.5MB 拦住
+DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

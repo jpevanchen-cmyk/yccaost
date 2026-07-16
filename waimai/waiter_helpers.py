@@ -105,7 +105,7 @@ def get_waiter_phase_label(order: BuyOrder) -> str:
     if order.payment_status == 'pending_payment' and order.order_status == 'awaiting_payment':
         return '新订单 · 待客人支付'
     if order.is_awaiting_in_store_order_confirm():
-        return '待店家接单'
+        return '待店家备货'
     if order.payment_status == 'paid' and order.order_status == 'awaiting_prep':
         return '已支付 · 待开始备货'
     if order.order_status == 'preparing':

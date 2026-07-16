@@ -184,6 +184,13 @@ def build_order_timeline(order):
             ('取餐时间', delivery.picked_up_at),
             ('送达时间', delivery.completed_at),
         ])
+    if order.cancelled_at or order.order_status == 'cancelled':
+        side = ''
+        if order.cancel_side == 'buyer':
+            side = '（买家）'
+        elif order.cancel_side == 'shop':
+            side = '（店家）'
+        rows.append((f'取消时间{side}', order.cancelled_at))
     return rows
 
 

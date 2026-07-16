@@ -87,7 +87,7 @@
                         · 支付：{{ order.get_payment_status_display }}
                     </div>
                 </div>
-                <a class="btn btn-outline btn-sm" href="{% url 'order_detail' order.order_id %}">查看详情</a>
+                <a class="btn btn-outline btn-sm" href="{% url 'shop_work_order' shop_work_code order.order_id %}">联系 / 沟通</a>
             </div>
             {% endwith %}
             {% endfor %}

@@ -46,15 +46,41 @@ def idle_expired(request) -> bool:
 
 def force_logout_all_channels(request) -> None:
     """同时清掉生态登录与工作台登录（超时 / 关页兜底）"""
+    logout_eco_channel(request)
+    logout_work_channel(request)
+
+
+def logout_work_channel(request) -> None:
+    """仅清工作台登录"""
     from .shop_work_auth import clear_shop_work_session, get_shop_work_user
     from .staff_account_helpers import deactivate_staff_on_logout
 
     work_user = get_shop_work_user(request)
-    if work_user and work_user.role in ('waiter', 'kitchen', 'rider'):
+    if work_user and work_user.role in ('waiter', 'kitchen', 'rider', 'manager'):
         deactivate_staff_on_logout(work_user)
     clear_shop_work_session(request)
-    if getattr(request.user, 'is_authenticated', False):
-        ecosystem_logout(request)
+
+
+def logout_eco_channel(request) -> None:
+    """仅清野草生态登录（保留工作台会话）"""
+    from .shop_work_auth import restore_shop_work_session, snapshot_shop_work_session
+
+    if not getattr(request.user, 'is_authenticated', False):
+        return
+    snap = snapshot_shop_work_session(request)
+    ecosystem_logout(request)
+    restore_shop_work_session(request, snap)
+
+
+def logout_by_channel(request, channel: str) -> None:
+    """按页面通道只退一侧，避免店主与员工互相踢下线"""
+    ch = (channel or '').strip()
+    if ch == 'work':
+        logout_work_channel(request)
+    elif ch == 'eco':
+        logout_eco_channel(request)
+    else:
+        force_logout_all_channels(request)
 
 
 @require_POST
@@ -62,13 +88,14 @@ def session_heartbeat(request):
     """页面报平安：延长会话；可选附带「有操作」标记"""
     from .shop_work_auth import get_shop_work_user
 
+    channel = (request.POST.get('channel') or 'all').strip()
     has_eco = getattr(request.user, 'is_authenticated', False)
     has_work = get_shop_work_user(request) is not None
     if not has_eco and not has_work:
         return JsonResponse({'ok': False, 'reason': 'not_logged_in'}, status=401)
 
     if idle_expired(request):
-        force_logout_all_channels(request)
+        logout_by_channel(request, channel)
         return JsonResponse({'ok': False, 'reason': 'idle_timeout', 'logout': True})
 
     touch_heartbeat(request)
@@ -112,19 +139,12 @@ def session_beacon_logout(request):
         return JsonResponse({'ok': False, 'reason': 'csrf'}, status=403)
 
     channel = (request.POST.get('channel') or 'all').strip()
-    from .shop_work_auth import clear_shop_work_session, get_shop_work_user, restore_shop_work_session, snapshot_shop_work_session
-    from .staff_account_helpers import deactivate_staff_on_logout
+    from .shop_work_auth import get_shop_work_user
 
     if channel == 'work':
-        work_user = get_shop_work_user(request)
-        if work_user and work_user.role in ('waiter', 'kitchen', 'rider'):
-            deactivate_staff_on_logout(work_user)
-        clear_shop_work_session(request)
+        logout_work_channel(request)
     elif channel == 'eco':
-        snap = snapshot_shop_work_session(request)
-        if getattr(request.user, 'is_authenticated', False):
-            ecosystem_logout(request)
-        restore_shop_work_session(request, snap)
+        logout_eco_channel(request)
     else:
         force_logout_all_channels(request)
 

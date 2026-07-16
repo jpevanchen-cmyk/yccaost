@@ -162,6 +162,50 @@
         </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 
+{% include 'waimai/seller/_panel_fold.html' with fold_id='manager-create-form' fold_title='👔 本店店长' %}
+        <p class="card-meta">店长是独立岗位；也可给服务员/后厨/骑手勾选「允许取消订单」。取消订单前须有沟通记录或写明沟通过程，并记入操作留痕。</p>
+        {% if managers %}
+        <ul class="seller-rider-list">
+            {% for m in managers %}
+            <li class="seller-rider-item">
+                👔 {{ m.username|staff_display }}
+                {% if m.is_active %}
+                <span class="badge badge-pay-paid">启用</span>
+                {% else %}
+                <span class="badge badge-default">已停用</span>
+                {% endif %}
+                {% if m.staff_work_status == 'on_duty' %}
+                <span class="badge badge-order-prep">上班</span>
+                {% elif m.staff_work_status == 'break' %}
+                <span class="badge badge-default">休息</span>
+                {% else %}
+                <span class="badge badge-default">下班</span>
+                {% endif %}
+                {% if m.perm_cancel_order %}<span class="badge badge-order-prep">可取消订单</span>{% endif %}
+                <form method="POST" class="seller-inline-form" style="display:inline;margin-left:8px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="toggle_manager" value="1">
+                    <input type="hidden" name="manager_username" value="{{ m.username }}">
+                    <button type="submit" class="btn btn-sm btn-outline">
+                        {% if m.is_active %}停用{% else %}重新启用{% endif %}
+                    </button>
+                </form>
+                {% include 'waimai/seller/_staff_cancel_perm.html' with staff_user=m %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="card-meta">还没有店长账号。</p>
+        {% endif %}
+        <h4 style="margin-top:16px;">创建店长</h4>
+        <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+            {% csrf_token %}
+            <input type="hidden" name="create_manager" value="1">
+            {{ manager_form.as_p }}
+            <button type="submit" class="btn btn-green btn-block">创建店长账号</button>
+        </form>
+{% include 'waimai/seller/_panel_fold_end.html' %}
+
 {% include 'waimai/seller/_panel_fold.html' with fold_id='waiter-create-form' fold_title='🍽 本店服务员' %}
         <p class="card-meta">由店铺创建子账号；员工只能登录本店工作台。</p>
         {% if waiters %}
@@ -189,6 +233,7 @@
                         {% if w.is_active %}停用{% else %}重新启用{% endif %}
                     </button>
                 </form>
+                {% include 'waimai/seller/_staff_cancel_perm.html' with staff_user=w %}
             </li>
             {% endfor %}
         </ul>
@@ -230,6 +275,7 @@
                         {% if k.is_active %}停用{% else %}重新启用{% endif %}
                     </button>
                 </form>
+                {% include 'waimai/seller/_staff_cancel_perm.html' with staff_user=k %}
             </li>
             {% endfor %}
         </ul>
@@ -271,6 +317,7 @@
                         {% if r.is_active %}停用{% else %}重新启用{% endif %}
                     </button>
                 </form>
+                {% include 'waimai/seller/_staff_cancel_perm.html' with staff_user=r %}
             </li>
             {% endfor %}
         </ul>

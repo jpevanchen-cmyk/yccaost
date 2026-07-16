@@ -98,7 +98,7 @@ def mark_user_experience(user) -> None:
 
 
 def mark_shop_official(seller_id: str) -> None:
-    """将某店标为官方小店，店主标为正式保留（不占体验额度、不日清）"""
+    """将某店标为官方小店，店主标为正式保留（不占体验额度、不日清）。不授予服务器管理者。"""
     from .models import ShopProfile, User
 
     seller_id = (seller_id or '').strip()
@@ -107,7 +107,6 @@ def mark_shop_official(seller_id: str) -> None:
         is_experience=False,
         is_permanent=True,
     )
-    # 本店员工子账号一并保留
     User.objects.filter(employer_seller_id=seller_id).update(
         is_experience=False,
         is_permanent=True,

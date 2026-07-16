@@ -23,6 +23,9 @@
         <div class="delivery-card-head">
             订单 {{ order.get_display_order_no }}
             · {{ order.get_fulfillment_display_short }}
+            {% if row.unread_msg_count %}
+            <span class="msg-unread-dot" title="有未读沟通">{{ row.unread_msg_count }}</span>
+            {% endif %}
         </div>
         <p class="delivery-card-meta">
             {% if order.table_label %}桌台：<strong>{{ order.table_label }}</strong><br>{% endif %}
@@ -89,7 +92,7 @@
                     分钟
                 </label>
                 <button type="submit" class="btn btn-sm btn-primary">
-                    {% if order.is_dine_in %}确认订单堂食{% else %}确认订单打包{% endif %}
+                    {% if order.is_dine_in %}开始备餐{% else %}开始备货{% endif %}
                 </button>
             </form>
             {% endif %}
@@ -174,6 +177,15 @@
             </div>
         </details>
         {% endif %}
+
+        <p style="margin:10px 0 0;">
+            <a class="btn btn-outline btn-sm" href="{% url 'shop_work_order' shop_work_code order.order_id %}">
+                联系 / 沟通{% if work_user.role == 'seller' or work_user.perm_cancel_order %} / 取消{% endif %}
+                {% if row.unread_msg_count %}
+                <span class="msg-unread-dot" title="有未读沟通">{{ row.unread_msg_count }}</span>
+                {% endif %}
+            </a>
+        </p>
     </div>
     {% endwith %}
     {% endfor %}

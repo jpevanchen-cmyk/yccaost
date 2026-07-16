@@ -37,6 +37,7 @@ STAFF_ROLE_LABELS = {
     'waiter': '服务员',
     'kitchen': '后厨',
     'rider': '骑手',
+    'manager': '店长',
 }
 
 
@@ -144,6 +145,7 @@ class AttendanceFilterForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['role'].choices = [('', '全部岗位')] + [
+            ('manager', '店长'),
             ('waiter', '服务员'),
             ('kitchen', '后厨'),
             ('rider', '骑手'),
@@ -431,6 +433,7 @@ def build_mobile_share_url(page_url: str) -> str:
 
 # 三岗位停用/启用：表单字段名与岗位称谓
 STAFF_TOGGLE_POST = {
+    'manager': ('toggle_manager', 'manager_username', '店长'),
     'waiter': ('toggle_waiter', 'waiter_username', '服务员'),
     'kitchen': ('toggle_kitchen', 'kitchen_username', '后厨'),
     'rider': ('toggle_rider', 'rider_username', '骑手'),
@@ -475,4 +478,41 @@ def handle_seller_staff_toggle_post(request, seller_id: str, role: str, *, secti
     display = staff_display_username(user.username)
     state_word = '启用' if user.is_active else '停用'
     messages.success(request, f'已{state_word}{role_label} {display}')
+    return redirect('seller_panel_section', section=section)
+
+
+def handle_staff_cancel_perm_post(request, seller_id: str, *, section='workbench'):
+    """店主勾选/取消员工的「允许取消订单」权限"""
+    from django.contrib import messages
+    from django.shortcuts import get_object_or_404, redirect
+
+    if 'set_staff_cancel_perm' not in request.POST:
+        return None
+    username = (request.POST.get('staff_username') or '').strip()
+    user = get_object_or_404(
+        User,
+        username=username,
+        employer_seller_id=seller_id,
+        role__in=SHOP_STAFF_ROLES,
+    )
+    enabled = request.POST.get('perm_cancel_order') == '1'
+    user.perm_cancel_order = enabled
+    user.save(update_fields=['perm_cancel_order'])
+    display = staff_display_username(user.username)
+    if enabled:
+        messages.success(request, f'已授权 {display} 可取消订单')
+    else:
+        messages.success(request, f'已取消 {display} 的取消订单权限')
+    from .audit_helpers import write_audit_log
+
+    write_audit_log(
+        action_code='other',
+        action_label='店长权限变更',
+        seller_id=seller_id,
+        actor=request.user,
+        target_type='staff',
+        target_id=user.username,
+        summary=f'{"授权" if enabled else "收回"}取消订单权限：{display}',
+        request=request,
+    )
     return redirect('seller_panel_section', section=section)

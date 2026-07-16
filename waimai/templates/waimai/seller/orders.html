@@ -88,7 +88,12 @@
                 {% if order.payment_method %}支付：{{ order.get_payment_method_display }}{% endif %}
             </div>
             <p style="margin:8px 0 0;">
-                <a href="{% url 'order_detail' order.order_id %}">查看订单详情</a>
+                <a href="{% url 'order_detail' order.order_id %}">
+                    查看订单详情
+                    {% if order.unread_msg_count %}
+                    <span class="msg-unread-dot" title="有未读沟通">{{ order.unread_msg_count }}</span>
+                    {% endif %}
+                </a>
             </p>
             <div class="seller-order-actions">
                 {% if order.estimated_ready_at and order.order_status != 'completed' and order.order_status != 'cancelled' %}

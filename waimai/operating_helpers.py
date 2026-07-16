@@ -19,8 +19,8 @@ def _in_time_window(now_t, start_t, end_t) -> bool:
 
 
 def _channel_window(settings: ShopOperatingSettings, channel: str):
-    """取渠道接单时段，未单独设置则用全天营业时段"""
-    if channel == 'dine':
+    """取渠道接单时段，未单独设置则用全天营业时段。打包暂与堂食共用堂食时段。"""
+    if channel in ('dine', 'takeaway'):
         if settings.dine_open and settings.dine_close:
             return settings.dine_open, settings.dine_close
     elif channel == 'delivery':
@@ -34,6 +34,8 @@ def check_order_admission(seller_id: str, fulfillment_type: str) -> tuple[bool, 
     新单准入（A.11.1）：须同时满足全天营业、渠道时段、渠道开关、未打烊、未暂停。
     fulfillment_type: delivery / dine_in / takeaway
     """
+    from .channel_helpers import channel_label, channel_switch_enabled
+
     settings = get_operating_settings(seller_id)
     now_t = timezone.localtime(timezone.now()).time()
 
@@ -44,19 +46,20 @@ def check_order_admission(seller_id: str, fulfillment_type: str) -> tuple[bool, 
     if not _in_time_window(now_t, settings.business_open, settings.business_close):
         return False, '当前不在营业时间内'
 
-    if fulfillment_type == 'delivery':
-        if not settings.delivery_channel_enabled:
-            return False, '外卖接单已关闭'
-        start_t, end_t = _channel_window(settings, 'delivery')
-        if not _in_time_window(now_t, start_t, end_t):
-            return False, '当前不在外卖接单时段内'
-    else:
-        if not settings.dine_channel_enabled:
-            return False, '堂食/打包接单已关闭'
-        start_t, end_t = _channel_window(settings, 'dine')
-        if not _in_time_window(now_t, start_t, end_t):
-            return False, '当前不在堂食接单时段内'
+    # 通道开关与时段：统一查表，不按通道复制三套 if
+    window_key = {
+        'delivery': 'delivery',
+        'takeaway': 'takeaway',
+        'dine_in': 'dine',
+    }.get(fulfillment_type)
+    if not window_key:
+        return False, '未知的取餐方式'
+    if not channel_switch_enabled(settings, fulfillment_type):
+        return False, f'{channel_label(fulfillment_type)}接单已关闭'
 
+    start_t, end_t = _channel_window(settings, window_key)
+    if not _in_time_window(now_t, start_t, end_t):
+        return False, f'当前不在{channel_label(fulfillment_type)}接单时段内'
     return True, ''
 
 

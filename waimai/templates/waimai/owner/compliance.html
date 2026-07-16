@@ -1,0 +1,22 @@
+{% extends 'waimai/owner/base.html' %}
+{% block title %}备案信息{% endblock %}
+{% block owner_content %}
+<div class="card" style="padding:16px;">
+    <h2 style="margin:0 0 12px;font-size:18px;">备案信息</h2>
+    <p class="card-meta">填写后会在全站页脚显示。公安备案号须同时上传该网站审核平台提供的图标。</p>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <label class="form-label">ICP 备案号</label>
+        <input class="form-input" type="text" name="icp_record_number" value="{{ compliance.icp_record_number }}">
+        <label class="form-label">公安联网备案号</label>
+        <input class="form-input" type="text" name="police_record_number" value="{{ compliance.police_record_number }}">
+        <label class="form-label">公安备案图标</label>
+        {% if compliance.police_record_icon %}
+        <p><img src="{{ compliance.police_record_icon.url }}" alt="" style="height:28px;"></p>
+        <label class="form-check"><input type="checkbox" name="clear_police_icon" value="1"> 清除现有图标</label>
+        {% endif %}
+        <input class="form-input" type="file" name="police_record_icon" accept=".png,.jpg,.jpeg,image/png,image/jpeg">
+        <button type="submit" class="btn btn-primary" style="margin-top:12px;">保存备案</button>
+    </form>
+</div>
+{% endblock %}

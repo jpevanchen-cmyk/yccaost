@@ -8,7 +8,10 @@ from .models import (
     DeliveryOrder,
     Dish,
     OperationAuditLog,
+    OrderMessage,
     PaymentRecord,
+    ServerHomePage,
+    ServerSiteSettings,
     ShopDeliverySettings,
     ShopPaymentSettings,
     ShopProfile,
@@ -21,10 +24,13 @@ admin.site.unregister(Group)
 
 @admin.register(User)
 class CustomUserAdmin(DefaultUserAdmin):
-    list_display = ['username', 'role', 'employer_seller_id', 'is_experience', 'is_permanent', 'is_active', 'date_joined']
-    list_filter = ['role', 'is_active', 'is_experience', 'is_permanent']
+    list_display = ['username', 'role', 'employer_seller_id', 'is_experience', 'is_permanent', 'is_server_owner', 'is_active', 'date_joined']
+    list_filter = ['role', 'is_active', 'is_experience', 'is_permanent', 'is_server_owner']
     fieldsets = DefaultUserAdmin.fieldsets + (
-        ('用户身份', {'fields': ('role', 'employer_seller_id', 'is_experience', 'is_permanent')}),
+        ('用户身份', {
+            'fields': ('role', 'employer_seller_id', 'perm_cancel_order', 'is_experience', 'is_permanent', 'is_server_owner'),
+            'description': '「服务器管理者」可进「服务器设置」。体验相关标记仅在体验机模式下有意义，与管理者权限无关。「允许取消订单」为店长权限勾选项。',
+        }),
     )
 
 
@@ -148,6 +154,14 @@ class BuyOrderAdmin(admin.ModelAdmin):
         return obj.get_display_order_no()
 
 
+@admin.register(OrderMessage)
+class OrderMessageAdmin(admin.ModelAdmin):
+    list_display = ['created_at', 'order', 'author_side', 'author_username', 'body']
+    list_filter = ['author_side']
+    search_fields = ['author_username', 'body', 'order__buyer_id', 'order__seller_id']
+    readonly_fields = ['message_id', 'created_at']
+
+
 @admin.register(DeliveryOrder)
 class DeliveryOrderAdmin(admin.ModelAdmin):
     list_display = ['delivery_id_truncated', 'rider_id', 'delivery_fee', 'delivery_status', 'created_at']
@@ -170,3 +184,13 @@ class OperationAuditLogAdmin(admin.ModelAdmin):
         'action_code', 'action_label', 'target_type', 'target_id',
         'summary', 'result', 'ip_address', 'created_at',
     ]
+
+
+@admin.register(ServerSiteSettings)
+class ServerSiteSettingsAdmin(admin.ModelAdmin):
+    list_display = ['site_name', 'nav_brand_label', 'show_powered_by', 'updated_at']
+
+
+@admin.register(ServerHomePage)
+class ServerHomePageAdmin(admin.ModelAdmin):
+    list_display = ['singleton_id', 'updated_at']

@@ -74,10 +74,10 @@ def build_buyer_pay_options(settings, order=None) -> list[PayMethodOption]:
     if settings.enable_cash:
         if order.is_dine_in():
             cash_label = '现金 · 到店支付（堂食）'
-            cash_desc = '在店内用餐，店家接单备餐后用餐时付现金'
+            cash_desc = '在店内用餐，店家备餐后用餐时付现金'
         elif order.is_takeaway():
             cash_label = '现金 · 到店支付（打包）'
-            cash_desc = '打包自取，店家接单备货后取餐时付现金'
+            cash_desc = '打包自取，店家备货后取餐时付现金'
         elif order:
             cash_label = '现金 · 货到付款'
             cash_desc = '配送上门，送达时付现金，店家确认收款后派单'

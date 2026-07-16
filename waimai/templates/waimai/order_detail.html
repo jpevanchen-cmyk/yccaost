@@ -7,20 +7,23 @@
 {% include 'waimai/_page_back.html' with back_url="/seller-panel/orders/" back_label="返回订单管理" %}
 {% elif viewer_role == 'rider' %}
 {% include 'waimai/_page_back.html' with back_url="/my-deliveries/" back_label="返回我的配送" %}
-{% elif viewer_role == 'waiter' %}
-{% include 'waimai/_page_back.html' with back_url="/waiter-home/" back_label="返回服务员工作台" %}
 {% else %}
 {% include 'waimai/_page_back.html' with back_url="/order-history/" back_label="返回我的订单" %}
 {% endif %}
 {% endblock %}
 
 {% block content %}
+{% if messages %}
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}msg-err{% else %}msg-ok{% endif %}" style="margin-bottom:12px;">{{ message }}</div>
+    {% endfor %}
+{% endif %}
 {% if request.GET.cash_pending %}
 <div class="msg-ok">
     {% if request.GET.dine_in or order.is_dine_in %}
-    已选择<strong>堂食 · 到店付现金</strong>。订单已提交，等待店家确认接单；接单后将告知预计出餐时间。
+    已选择<strong>堂食 · 到店付现金</strong>。订单已提交，店家将为您备餐并告知预计出餐时间。有事可在下方「订单沟通」留言。
     {% elif request.GET.takeaway or order.is_takeaway %}
-    已选择<strong>打包 · 到店付现金</strong>。订单已提交，等待店家确认接单；接单后将告知预计可取餐时间。
+    已选择<strong>打包 · 到店付现金</strong>。订单已提交，店家将为您备货并告知预计可取餐时间。有事可在下方「订单沟通」留言。
     {% else %}
     已选择<strong>外卖 · 货到付款</strong>。送达时请付现金，店家确认收款后将备货并派单。
     {% endif %}
@@ -46,7 +49,53 @@
     <a class="btn btn-wechat btn-block" style="margin-top:14px;" href="{% url 'pay_order' order.order_id %}">去支付</a>
         {% endif %}
     {% endif %}
+    {% if can_buyer_cancel %}
+    <form method="post" style="margin-top:14px;" onsubmit="return confirm('确定取消这份订单吗？');">
+        {% csrf_token %}
+        <input type="hidden" name="cancel_order_buyer" value="1">
+        <button type="submit" class="btn btn-outline btn-block">取消订单</button>
+    </form>
+    {% elif show_buyer_cancel_blocked %}
+    <p class="msg-err" style="margin-top:14px;">{{ buyer_cancel_blocked_hint }}</p>
+    {% endif %}
 </div>
+
+{% if can_shop_cancel %}
+<details class="detail-collapse" open>
+    <summary>⚠️ 店家取消订单（兜底）</summary>
+    <div class="detail-collapse-body">
+        <p class="card-meta" style="margin:0 0 10px;">
+            仅在无法继续履约时使用（例如食材失误）。须先与客人协商：
+            {% if shop_has_chat_history %}
+            本单沟通区<strong>已有记录</strong>，可直接取消。
+            {% else %}
+            请先在「订单沟通」留言，或在下方写明沟通方式与过程（至少 8 个字）。
+            {% endif %}
+            取消后若已收款，请线下退款。操作会写入留痕。
+        </p>
+        <form method="post" onsubmit="return confirm('确定取消此订单？此操作会记入操作留痕。');">
+            {% csrf_token %}
+            <input type="hidden" name="cancel_order_shop" value="1">
+            <label class="card-meta" for="cancel_note">沟通说明（无沟通记录时必填）</label>
+            <textarea id="cancel_note" name="cancel_note" rows="3" maxlength="500" class="order-chat-input"
+                      placeholder="例如：已电话联系客人张三，因最后一份做错，客人同意取消并退款"></textarea>
+            <button type="submit" class="btn btn-sm btn-outline" style="margin-top:8px;color:#c62828;border-color:#c62828;">确认取消订单</button>
+        </form>
+    </div>
+</details>
+{% endif %}
+
+{% if show_contact_guest %}
+<details class="detail-collapse" open>
+    <summary>📞 联系客人</summary>
+    <div class="detail-collapse-body">
+        <p class="card-meta" style="margin:0 0 10px;">有问题请先电话/微信联系客人协商，不要直接拒单。谈妥后可在「订单沟通」写一句确认留痕。</p>
+        <div class="detail-row"><span>买家账号</span><span id="guest-contact-id">{{ order.buyer_id }}</span></div>
+        <button type="button" class="btn btn-outline btn-sm" id="copy-guest-id-btn" style="margin-top:8px;">复制买家账号</button>
+        <p class="card-meta" id="copy-guest-id-hint" style="margin:8px 0 0;display:none;">已复制</p>
+    </div>
+</details>
+{% endif %}
 
 {% if viewer_role == 'buyer' %}
 <details class="detail-collapse" open>
@@ -94,6 +143,36 @@
     </div>
 </details>
 {% endif %}
+
+<details class="detail-collapse" open>
+    <summary>💬 订单沟通</summary>
+    <div class="detail-collapse-body">
+        <p class="card-meta" style="margin:0 0 10px;">重要事情请先电话/微信商量；这里用来双方留痕确认。打开本页即视为已看过新留言。</p>
+        {% if order_messages %}
+            {% for m in order_messages %}
+            <div class="order-chat-bubble {% if m.author_side == 'buyer' %}order-chat-buyer{% else %}order-chat-shop{% endif %}">
+                <div class="order-chat-meta">
+                    {% if m.author_side == 'buyer' %}买家{% else %}店家{% endif %}
+                    · {{ m.author_username }}
+                    · {{ m.created_at|beijing:"m-d H:i" }}
+                </div>
+                <div class="order-chat-body">{{ m.body }}</div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="pending-text">暂无留言</p>
+        {% endif %}
+        {% if can_order_chat %}
+        <form method="post" style="margin-top:12px;">
+            {% csrf_token %}
+            <input type="hidden" name="send_order_message" value="1">
+            <label class="card-meta" for="message_body">写一句留言（最多 300 字）</label>
+            <textarea id="message_body" name="message_body" rows="3" maxlength="300" class="order-chat-input" placeholder="例如：改晚半小时取 / 少放辣，已电话说好"></textarea>
+            <button type="submit" class="btn btn-sm btn-primary" style="margin-top:8px;">发送留言</button>
+        </form>
+        {% endif %}
+    </div>
+</details>
 
 <details class="detail-collapse">
     <summary>🍱 订单内容</summary>
@@ -155,22 +234,17 @@
     </div>
 </details>
 
-<details class="detail-collapse">
-    <summary>📦 配送进度</summary>
+<details class="detail-collapse" open>
+    <summary>📦 订单进度</summary>
     <div class="detail-collapse-body">
-        <div class="detail-row"><span>订单进度</span><span>{{ order.get_order_status_display }}</span></div>
+        <div class="detail-row"><span>当前状态</span><span>{{ order.get_order_status_display }}</span></div>
         {% if order.delivery_order %}
         <div class="detail-row"><span>配送骑手</span><span>{{ order.delivery_order.rider_id }}</span></div>
         <div class="detail-row"><span>配送单状态</span><span>{{ order.delivery_order.get_delivery_status_display }}</span></div>
-        {% else %}
+        {% elif not order.is_in_store %}
         <div class="detail-row"><span>配送骑手</span><span class="pending-text">尚未派单</span></div>
         {% endif %}
-    </div>
-</details>
-
-<details class="detail-collapse">
-    <summary>⏱ 订单时间线</summary>
-    <div class="detail-collapse-body">
+        <p class="card-meta" style="margin:12px 0 8px;"><strong>时间线</strong></p>
         {% for label, dt in timeline %}
         <div class="detail-row">
             <span>{{ label }}</span>
@@ -179,4 +253,28 @@
         {% endfor %}
     </div>
 </details>
+
+{% if show_contact_guest %}
+<script>
+(function () {
+    var btn = document.getElementById('copy-guest-id-btn');
+    var hint = document.getElementById('copy-guest-id-hint');
+    var el = document.getElementById('guest-contact-id');
+    if (!btn || !el) return;
+    btn.addEventListener('click', function () {
+        var text = (el.textContent || '').trim();
+        function ok() {
+            if (hint) { hint.style.display = 'block'; }
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(ok).catch(function () {
+                window.prompt('请手动复制账号：', text);
+            });
+        } else {
+            window.prompt('请手动复制账号：', text);
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

@@ -6,14 +6,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}野草系统{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=22">
+    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=26">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
     <div class="site-top">
         <header class="site-header">
             <button type="button" class="nav-toggle" id="nav-toggle" aria-label="打开菜单">☰</button>
-            <a class="site-brand" href="/directory/">🌿 野草系统</a>
+            <a class="site-brand" href="/">{% if site_brand_image_url %}<img src="{{ site_brand_image_url }}" alt="" style="height:22px;vertical-align:middle;margin-right:4px;">{% endif %}{{ site_brand_name|default:"🌿 野草系统" }}</a>
             {% if on_shop_work_site and shop_work_user %}
             <div class="site-user" title="{{ shop_work_user.username }}">工作台 · {{ shop_work_user.get_role_display }}</div>
             {% elif user.is_authenticated and user.role == 'buyer' %}
@@ -29,7 +29,7 @@
         <div class="nav-overlay" id="nav-overlay"></div>
         <nav class="site-nav" id="site-nav">
             <div class="nav-section-title">导航</div>
-            <a href="/directory/">🌿 店铺名录</a>
+            <a href="/">🌿 {{ site_nav_label|default:"店铺名录" }}</a>
             {% if user.is_authenticated and user.role == 'buyer' %}
                 <a href="/order-history/">📜 我的订单</a>
             {% endif %}
@@ -37,8 +37,11 @@
                 <a href="/seller-panel/">📦 管理店铺</a>
                 <a href="/shop/?seller_id={{ user.username }}">👀 预览店铺</a>
             {% endif %}
+            {% if show_server_settings_link or show_owner_console_link %}
+                <a href="{% url 'server_settings' %}">⚙️ 服务器设置</a>
+            {% endif %}
             {% if user.is_superuser %}
-                <a href="/admin/waimai/sitecompliancesettings/">⚙️ 服务器合规设置</a>
+                <a href="/admin/">🛠️ 技术总后台（仅维护人员·高风险）</a>
             {% endif %}
 
             <div class="nav-section-title">账户</div>
@@ -75,18 +78,21 @@
         {% block content %}{% endblock %}
     </main>
 
-    {% if site_compliance.icp_record_number or site_compliance.police_record_number %}
+    {% if site_compliance and site_compliance.icp_record_number or site_compliance and site_compliance.police_record_number or site_show_powered_by %}
     <footer class="site-compliance-footer" aria-label="网站备案信息">
-        {% if site_compliance.icp_record_number %}
+        {% if site_compliance and site_compliance.icp_record_number %}
         <a href="{{ site_compliance.icp_query_url }}" target="_blank" rel="noopener noreferrer">
             {{ site_compliance.icp_record_number }}
         </a>
         {% endif %}
-        {% if site_compliance.police_record_number and site_compliance.police_record_icon and site_compliance.police_query_url %}
+        {% if site_compliance and site_compliance.police_record_number and site_compliance.police_record_icon and site_compliance.police_query_url %}
         <a href="{{ site_compliance.police_query_url }}" target="_blank" rel="noopener noreferrer">
             <img class="site-compliance-police-icon" src="{{ site_compliance.police_record_icon.url }}" alt="公安备案图标">
             {{ site_compliance.police_record_number }}
         </a>
+        {% endif %}
+        {% if site_show_powered_by %}
+        <span class="card-meta">由野草系统提供支持</span>
         {% endif %}
     </footer>
     {% endif %}
@@ -105,7 +111,7 @@
         idleSeconds: {{ session_idle_seconds|default:900 }}
     };
     </script>
-    <script src="{% static 'waimai/session_guard.js' %}?v=1"></script>
+    <script src="{% static 'waimai/session_guard.js' %}?v=2"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
 </body>

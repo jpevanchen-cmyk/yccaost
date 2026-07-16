@@ -84,16 +84,18 @@ class ShopRegistrationForm(UserCreationForm):
                 pay.enable_simulate = True
                 pay.save(update_fields=['enable_wechat', 'enable_simulate'])
             ShopOperatingSettings.objects.create(seller_id=user.username)
-            from .home_page_helpers import ensure_home_page_for_seller, set_server_entry
-            from .models import ShopHomePage
+            from .home_page_helpers import ensure_home_page_for_seller, ensure_server_home_page
             ensure_home_page_for_seller(user.username, profile)
-            if not ShopHomePage.objects.filter(is_server_entry=True).exists():
-                set_server_entry(user.username)
+            ensure_server_home_page()
         return user
 
 
 class CreateRiderForm(UserCreationForm):
     """卖家为本店创建专属骑手账号（工牌名仅本店唯一）"""
+
+    perm_cancel_order = forms.BooleanField(
+        required=False, initial=False, label='允许取消订单（店长权限）',
+    )
 
     class Meta(UserCreationForm.Meta):
         model = User
@@ -126,6 +128,7 @@ class CreateRiderForm(UserCreationForm):
         user.username = staff_internal_username(self.seller_id, self.cleaned_data['username'])
         user.role = 'rider'
         user.employer_seller_id = self.seller_id
+        user.perm_cancel_order = bool(self.cleaned_data.get('perm_cancel_order'))
         if commit:
             user.save()
             from .experience_helpers import inherit_experience_from_employer
@@ -135,6 +138,10 @@ class CreateRiderForm(UserCreationForm):
 
 class CreateWaiterForm(UserCreationForm):
     """卖家为本店创建服务员子账号（工牌名仅本店唯一）"""
+
+    perm_cancel_order = forms.BooleanField(
+        required=False, initial=False, label='允许取消订单（店长权限）',
+    )
 
     class Meta(UserCreationForm.Meta):
         model = User
@@ -167,6 +174,7 @@ class CreateWaiterForm(UserCreationForm):
         user.username = staff_internal_username(self.seller_id, self.cleaned_data['username'])
         user.role = 'waiter'
         user.employer_seller_id = self.seller_id
+        user.perm_cancel_order = bool(self.cleaned_data.get('perm_cancel_order'))
         if commit:
             user.save()
             from .experience_helpers import inherit_experience_from_employer
@@ -176,6 +184,10 @@ class CreateWaiterForm(UserCreationForm):
 
 class CreateKitchenForm(UserCreationForm):
     """卖家为本店创建后厨子账号（工牌名仅本店唯一）"""
+
+    perm_cancel_order = forms.BooleanField(
+        required=False, initial=False, label='允许取消订单（店长权限）',
+    )
 
     class Meta(UserCreationForm.Meta):
         model = User
@@ -208,6 +220,54 @@ class CreateKitchenForm(UserCreationForm):
         user.username = staff_internal_username(self.seller_id, self.cleaned_data['username'])
         user.role = 'kitchen'
         user.employer_seller_id = self.seller_id
+        user.perm_cancel_order = bool(self.cleaned_data.get('perm_cancel_order'))
+        if commit:
+            user.save()
+            from .experience_helpers import inherit_experience_from_employer
+            inherit_experience_from_employer(user, self.seller_id)
+        return user
+
+
+class CreateManagerForm(UserCreationForm):
+    """卖家为本店创建店长子账号（工牌名仅本店唯一）"""
+
+    perm_cancel_order = forms.BooleanField(
+        required=False, initial=True, label='允许取消订单（店长权限）',
+        help_text='店长默认勾选；也可事后在列表里改',
+    )
+
+    class Meta(UserCreationForm.Meta):
+        model = User
+        fields = ('username', 'password1', 'password2')
+
+    def __init__(self, *args, seller_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.seller_id = seller_id
+        self.fields['username'].label = '员工用户名'
+        self.fields['username'].help_text = '只在本店不能重复；别的店可以用同名'
+
+    def clean_username(self):
+        from .staff_account_helpers import STAFF_USERNAME_SEP, staff_username_taken
+
+        name = (self.cleaned_data.get('username') or '').strip()
+        if not name:
+            raise forms.ValidationError('请输入用户名')
+        if STAFF_USERNAME_SEP in name:
+            raise forms.ValidationError('用户名不能包含 ::')
+        if not self.seller_id:
+            raise forms.ValidationError('店铺信息无效')
+        if staff_username_taken(self.seller_id, name):
+            raise forms.ValidationError('本店已有该员工用户名')
+        return name
+
+    def save(self, commit=True):
+        from .staff_account_helpers import staff_internal_username
+
+        user = super().save(commit=False)
+        user.username = staff_internal_username(self.seller_id, self.cleaned_data['username'])
+        user.role = 'manager'
+        user.employer_seller_id = self.seller_id
+        user.perm_cancel_order = bool(self.cleaned_data.get('perm_cancel_order'))
         if commit:
             user.save()
             from .experience_helpers import inherit_experience_from_employer
@@ -302,7 +362,7 @@ class ShopOperatingSettingsForm(forms.ModelForm):
             'business_open', 'business_close',
             'dine_open', 'dine_close',
             'delivery_open', 'delivery_close',
-            'dine_channel_enabled', 'delivery_channel_enabled',
+            'dine_channel_enabled', 'takeaway_channel_enabled', 'delivery_channel_enabled',
             'closed_for_today', 'pause_new_orders',
             'share_table_enabled', 'share_table_mode',
             'restrict_same_device',
@@ -318,11 +378,12 @@ class ShopOperatingSettingsForm(forms.ModelForm):
         labels = {
             'business_open': '全天营业开始',
             'business_close': '全天营业结束',
-            'dine_open': '堂食接单开始（可留空）',
+            'dine_open': '堂食接单开始（可留空；打包暂共用此时段）',
             'dine_close': '堂食接单结束（可留空）',
             'delivery_open': '外卖接单开始（可留空）',
             'delivery_close': '外卖接单结束（可留空）',
-            'dine_channel_enabled': '当前允许堂食/打包接单',
+            'dine_channel_enabled': '当前允许堂食接单（扫桌码等现场入口）',
+            'takeaway_channel_enabled': '当前允许打包接单',
             'delivery_channel_enabled': '当前允许外卖接单',
             'closed_for_today': '本日打烊',
             'pause_new_orders': '暂停接单',

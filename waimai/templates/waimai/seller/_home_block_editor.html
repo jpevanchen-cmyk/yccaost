@@ -1,0 +1,109 @@
+{# 主页积木编辑：上半显示设置 + 下半前台样式内容区（店铺/服务器共用） #}
+<form method="post" enctype="multipart/form-data" class="home-block-editor">
+    {% csrf_token %}
+    <input type="hidden" name="{{ save_block_action_name }}" value="1">
+    <input type="hidden" name="block_id" value="{{ block.block_id }}">
+
+    <div class="home-block-settings">
+        <p class="home-block-settings-label">显示设置</p>
+        {% if block.spec %}
+        <p class="card-meta" style="margin:0 0 8px;">{{ block.spec.description }}</p>
+        {% endif %}
+        <div class="home-block-settings-row">
+            <label class="form-check">
+                <input type="checkbox" name="is_enabled" value="1" {% if block.is_enabled %}checked{% endif %}> 在主页显示
+            </label>
+            <label class="form-check">
+                <input type="checkbox" name="show_in_nav" value="1" {% if block.show_in_nav %}checked{% endif %}> 进吸顶导航
+            </label>
+            <label class="home-block-inline-field">
+                <span>排序</span>
+                <input class="form-input" type="number" name="sort_order" value="{{ block.sort_order }}" title="数字越小越靠前">
+            </label>
+            <label class="home-block-inline-field">
+                <span>导航短名</span>
+                <input class="form-input" type="text" name="nav_label" value="{{ block.nav_label }}" maxlength="32">
+            </label>
+        </div>
+    </div>
+
+    <div class="home-block-content">
+        <p class="home-block-content-label">主页上会显示成这样（编辑区）</p>
+        <div class="home-block-content-preview showcase-block">
+            {% if block.block_type == 'order_cta' %}
+            <label class="form-label">按钮标题</label>
+            <input class="form-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="进入店铺">
+            <label class="form-label">按钮上方说明</label>
+            <textarea class="form-input home-block-body-input" name="body" rows="4" placeholder="浏览菜单、加入购物车并下单">{{ block.body }}</textarea>
+            <p class="card-meta" style="margin:8px 0 0;">本块在主页上是橙色大按钮；配图与「了解更多」链接对本块无效。</p>
+            <input type="hidden" name="image_url" value="{{ block.image_url }}">
+            <input type="hidden" name="link_url" value="{{ block.link_url }}">
+            {% elif block.block_type == 'directory' %}
+            <label class="form-label">标题</label>
+            <input class="form-input" type="text" name="title" value="{{ block.title }}" maxlength="120">
+            <label class="form-label">说明文字</label>
+            <textarea class="form-input home-block-body-input" name="body" rows="4">{{ block.body }}</textarea>
+            <p class="card-meta" style="margin:8px 0 0;">名录块自带搜索与店铺列表；一般不用配图和附加链接。</p>
+            <input type="hidden" name="image_url" value="{{ block.image_url }}">
+            <input type="hidden" name="link_url" value="{{ block.link_url }}">
+            {% else %}
+            <label class="form-label">标题</label>
+            <input class="form-input home-block-title-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="显示在主页上的大标题">
+
+            <div class="home-block-media-box">
+                <p class="form-label" style="margin-bottom:6px;">配图（可选，本账号已用 {{ photo_used }} / {{ photo_max }} 张）</p>
+                <p class="card-meta" style="margin:0 0 10px;">两种方式二选一，上传的图片优先显示。</p>
+
+                {% if block.display_image_src %}
+                <div class="home-block-img-preview">
+                    <img src="{{ block.display_image_src }}" alt="">
+                </div>
+                {% endif %}
+
+                {% if block.image %}
+                <label class="form-check" style="margin:0 0 10px;">
+                    <input type="checkbox" name="clear_block_image" value="1"> 清除已上传的图片（释放 1 张名额）
+                </label>
+                {% endif %}
+
+                <div class="home-block-path-row">
+                    <span class="home-block-path-label">上传图片</span>
+                    <label class="btn btn-sm btn-outline home-block-file-btn">
+                        选择图片
+                        <input type="file" name="block_image" class="home-block-file-input" accept=".png,.jpg,.jpeg,.webp,.gif,image/*" hidden>
+                    </label>
+                    <input type="text" class="form-input home-block-path-display" readonly tabindex="-1"
+                           value="{% if block.image %}{{ block.image.url }}{% endif %}"
+                           placeholder="从手机/电脑直接上传，单张不超过 {{ photo_max_mb }} MB"
+                           title="{% if block.image %}已上传，本站地址：{{ block.image.url }}{% endif %}">
+                </div>
+
+                <div class="home-block-path-row" style="margin-top:10px;">
+                    <span class="home-block-path-label">图片链接</span>
+                    <input class="form-input home-block-path-input" type="text" name="image_url" value="{{ block.image_url }}" maxlength="500" placeholder="此处粘贴图片的公开链接，以 https:// 开头" inputmode="url" autocomplete="off">
+                </div>
+                <p class="card-meta" style="margin:8px 0 0;">粘贴后请点「保存本块」。主页正文下方会有「查看原图」按钮（上传图也会有）。若预览仍无图，可点该按钮打开，或改用上方「上传图片」。</p>
+            </div>
+
+            <label class="form-label">正文</label>
+            <textarea class="form-input home-block-body-input" name="body" rows="8" placeholder="客人在主页上看到的文字">{{ block.body }}</textarea>
+
+            <div class="home-block-link-box">
+                <div class="home-block-path-row">
+                    <span class="home-block-path-label">附加链接</span>
+                    <input class="form-input home-block-path-input" type="text" name="link_url" value="{{ block.link_url }}" maxlength="500" placeholder="可选：粘贴网页地址，主页会出现「了解更多」按钮；以 https:// 开头" inputmode="url" autocomplete="off">
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top:12px;">保存本块</button>
+    </div>
+</form>
+{% if block.is_custom %}
+<form method="post" style="margin-top:8px;" onsubmit="return confirm('确定删除这块自定义积木吗？');">
+    {% csrf_token %}
+    <input type="hidden" name="{{ delete_block_action_name }}" value="1">
+    <input type="hidden" name="block_id" value="{{ block.block_id }}">
+    <button type="submit" class="btn btn-sm btn-outline">删除本块</button>
+</form>
+{% endif %}

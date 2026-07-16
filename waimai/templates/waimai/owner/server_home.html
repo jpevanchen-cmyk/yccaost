@@ -1,0 +1,33 @@
+{% extends 'waimai/owner/base.html' %}
+{% block title %}服务器主页{% endblock %}
+{% block owner_content %}
+{% include 'waimai/seller/_panel_fold.html' with fold_id='server-home-intro' fold_title='🖥️ 服务器主页说明' fold_open=True %}
+    <p class="card-meta">打开网站根地址 <code>/</code> 时显示这里的内容。推荐启用「店铺名录」。各店自己的门面在店铺管理里改，不会混进这里。</p>
+    <p class="card-meta" style="margin:8px 0;">
+        配图上传名额：本账号已用 <strong>{{ photo_used }}</strong> / {{ photo_max }} 张（单张不超过 {{ photo_max_mb }} MB）。
+    </p>
+    <p><a class="btn btn-sm btn-outline" href="{{ preview_url }}" target="_blank" rel="noopener">预览根地址</a></p>
+{% include 'waimai/seller/_panel_fold_end.html' %}
+
+{% for block in home_blocks %}
+{% include 'waimai/seller/_panel_fold.html' with fold_id=block.dom_id fold_title=block.fold_title %}
+    {% if block.is_custom %}<p class="card-meta" style="margin:0 0 8px;">自定义积木</p>{% endif %}
+    {% include 'waimai/seller/_home_block_editor.html' %}
+{% include 'waimai/seller/_panel_fold_end.html' %}
+{% endfor %}
+
+{% include 'waimai/seller/_panel_fold.html' with fold_id='custom-blocks-toolbar' fold_title='➕ 自定义积木（添加）' %}
+    <p class="card-meta" style="margin:0 0 10px;">
+        已用 {{ custom_block_count }} / {{ max_custom_blocks }} 块。新加的块会出现在最下面。
+    </p>
+    {% if can_add_custom_block %}
+    <form method="post" style="display:inline;">
+        {% csrf_token %}
+        <input type="hidden" name="add_server_custom_block" value="1">
+        <button type="submit" class="btn btn-sm btn-outline">+ 添加一块自定义积木</button>
+    </form>
+    {% else %}
+    <p class="card-meta" style="margin:0;">已达上限，请删除不需要的块后再添加。</p>
+    {% endif %}
+{% include 'waimai/seller/_panel_fold_end.html' %}
+{% endblock %}

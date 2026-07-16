@@ -16,7 +16,7 @@
     <div class="card delivery-card" id="delivery-{{ order.delivery_id.hex|slice:":8" }}">
         <div class="delivery-card-head">
             配送 #{{ order.delivery_id.hex|slice:":8" }}
-            · <a href="{% url 'order_detail' order.buy_order.order_id %}">订单详情</a>
+            · <a href="{% url 'shop_work_order' shop_work_code order.buy_order.order_id %}">联系 / 沟通</a>
         </div>
         <p class="delivery-card-meta">
             <strong>取餐</strong>：{{ order.pickup_address }}<br>

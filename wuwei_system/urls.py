@@ -4,6 +4,7 @@ from django.conf.urls.static import static
 from django.urls import path
 
 from waimai import views
+from waimai import owner_views as views_owner
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -15,7 +16,21 @@ urlpatterns = [
     path('kitchen-home/', views.kitchen_home, name='kitchen_home'),
     path('s/<str:shop_code>/work/', views.shop_work, name='shop_work'),
     path('s/<str:shop_code>/work/logout/', views.shop_work_logout, name='shop_work_logout'),
+    path(
+        's/<str:shop_code>/work/order/<uuid:order_id>/',
+        views.shop_work_order,
+        name='shop_work_order',
+    ),
     path('owner-hub/', views.owner_hub, name='owner_hub'),
+    # 服务器设置（通用）；旧 /owner/ 路径兼容跳转
+    path('server-settings/', views_owner.server_settings_home, name='server_settings'),
+    path('server-settings/branding/', views_owner.server_settings_branding, name='server_settings_branding'),
+    path('server-settings/compliance/', views_owner.server_settings_compliance, name='server_settings_compliance'),
+    path('server-settings/home/', views_owner.server_settings_home_page, name='server_settings_home_page'),
+    path('owner/', views_owner.server_settings_home, name='owner_console'),
+    path('owner/branding/', views_owner.server_settings_branding, name='owner_branding'),
+    path('owner/compliance/', views_owner.server_settings_compliance, name='owner_compliance'),
+    path('owner/server-home/', views_owner.server_settings_home_page, name='owner_server_home'),
     path('waiter-home/', views.waiter_home, name='waiter_home'),
     path('waiter-home/pay/<uuid:order_id>/', views.waiter_pay_order, name='waiter_pay_order'),
     path('waiter-home/pay/<uuid:order_id>/status/', views.waiter_pay_order_status, name='waiter_pay_order_status'),
