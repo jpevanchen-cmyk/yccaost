@@ -187,6 +187,9 @@ def sync_waiter_service_status(order: BuyOrder) -> list[str]:
         order.order_status = 'completed'
         order.waiter_service_status = WAITER_STATUS_SETTLED
         update_fields.extend(['order_status', 'waiter_service_status'])
+        # 堂食结账完成 → 翻台：关掉桌台会话（游客本机随即看不见）
+        from .guest_order_helpers import maybe_close_table_session_after_settle
+        maybe_close_table_session_after_settle(order)
 
     if update_fields:
         update_fields.append('updated_at')
@@ -313,7 +316,7 @@ def waiter_can_confirm_cash(order: BuyOrder) -> bool:
     if order.is_awaiting_in_store_order_confirm():
         return False
     if order.is_in_store():
-        return order.order_status in ('preparing', 'ready_pickup', 'completed')
+        return order.order_status in ('awaiting_prep', 'preparing', 'ready_pickup', 'completed')
     return order.order_status in ('preparing', 'ready_pickup', 'delivering')
 
 

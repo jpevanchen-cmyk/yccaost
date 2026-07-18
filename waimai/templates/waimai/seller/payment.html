@@ -38,4 +38,58 @@
         <button type="submit" name="save_payment_settings" value="1" class="btn btn-primary btn-block">保存支付设置</button>
     </form>
 </div>
+
+{# 外卖货到付款：骑手现金入金（批次 B） #}
+<div class="seller-panel-box" id="rider-cash-card">
+    <h2>💵 骑手现金入金</h2>
+    <p class="card-meta" style="margin-bottom:12px;">
+        外卖「现金货到付款」的钱由骑手当面收取。骑手把现金交回店里时，在这里点「确认入金」。
+        确认后这笔钱记为「店里已收」，方便对账。
+    </p>
+
+    <div class="rider-cash-stats">
+        <div class="rider-cash-stat">
+            <div class="rider-cash-stat-num">{{ rider_cash.pending_count }}</div>
+            <div class="rider-cash-stat-label">待入金单数</div>
+        </div>
+        <div class="rider-cash-stat">
+            <div class="rider-cash-stat-num">¥{{ rider_cash.pending_total }}</div>
+            <div class="rider-cash-stat-label">待入金金额</div>
+        </div>
+        <div class="rider-cash-stat">
+            <div class="rider-cash-stat-num">¥{{ rider_cash.remitted_total }}</div>
+            <div class="rider-cash-stat-label">已入金累计</div>
+        </div>
+    </div>
+
+    {% if rider_cash.riders %}
+    <table class="seller-table" style="margin-top:12px;">
+        <thead>
+            <tr><th>骑手</th><th>已收未交</th><th>金额</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+            {% for r in rider_cash.riders %}
+            <tr>
+                <td>{{ r.rider_id }}</td>
+                <td>{{ r.count }} 单</td>
+                <td>¥{{ r.amount }}</td>
+                <td>
+                    <form method="POST" style="margin:0;">
+                        {% csrf_token %}
+                        <input type="hidden" name="rider_id" value="{{ r.rider_id }}">
+                        <button type="submit" name="confirm_rider_remit" value="1"
+                            class="btn btn-sm btn-primary"
+                            onclick="return confirm('确认骑手 {{ r.rider_id }} 已交回 ¥{{ r.amount }} 现金？');">
+                            确认入金
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="card-meta">当前没有待入金的骑手现金。</p>
+    {% endif %}
+</div>
 {% endblock %}

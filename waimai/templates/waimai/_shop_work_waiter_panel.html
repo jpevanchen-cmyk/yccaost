@@ -35,6 +35,9 @@
             · {{ order.created_at|beijing:"m-d H:i" }}
         </p>
         <span class="delivery-status-badge delivery-status-accepted">{{ row.phase_label }}</span>
+        {% if order.estimated_ready_at %}
+        <span class="delivery-status-badge badge-order-prep">⏱ {{ order.get_estimated_ready_label }}</span>
+        {% endif %}
 
         {% if order.buyer_note %}
         <p class="msg-ok" style="margin:8px 0;font-size:14px;font-weight:bold;">备注：{{ order.buyer_note }}</p>
@@ -76,24 +79,17 @@
 
         {% if can_operate %}
         <div class="delivery-action-stack" style="margin-top:12px;">
-            {% if row.can_confirm_in_store_order %}
-            <form method="POST" class="seller-inline-form seller-confirm-order-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            {% if row.can_adjust_wait_time %}
+            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
-                <input type="hidden" name="confirm_in_store_order" value="1">
+                <input type="hidden" name="adjust_wait_time" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
-                <label class="seller-eta-label">
-                    约
-                    <select name="eta_minutes" class="seller-select seller-eta-select">
-                        <option value="10">10</option>
-                        <option value="15">15</option>
-                        <option value="20" selected>20</option>
-                        <option value="30">30</option>
-                    </select>
-                    分钟
+                <label>
+                    从现在起约
+                    <input type="number" name="wait_minutes" min="1" max="240" value="20" required style="width:78px;">
+                    分钟完成
                 </label>
-                <button type="submit" class="btn btn-sm btn-primary">
-                    {% if order.is_dine_in %}开始备餐{% else %}开始备货{% endif %}
-                </button>
+                <button type="submit" class="btn btn-sm btn-outline">修改本单时间</button>
             </form>
             {% endif %}
             {% if order.is_cash_awaiting_confirm %}

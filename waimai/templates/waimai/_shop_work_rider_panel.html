@@ -30,6 +30,17 @@
             {% else %}delivery-status-other{% endif %}">
             {{ order.get_delivery_status_display }}
         </span>
+        {# 货到付款：应收与收款状态 #}
+        {% if order.buy_order.is_delivery_cod %}
+        <div class="delivery-cod-box">
+            <p class="delivery-cod-line">💵 <strong>货到付款</strong> · 应收 <strong style="color:var(--yc-orange);">¥{{ order.buy_order.total_amount }}</strong></p>
+            {% if order.buy_order.payment_status == 'paid' %}
+            <p class="card-meta">✅ 已收款{% if order.buy_order.cash_collected_amount %}（实收 ¥{{ order.buy_order.cash_collected_amount }}）{% else %}（顾客已在线付款）{% endif %}，可点「我已送达」。</p>
+            {% else %}
+            <p class="card-meta">尚未收款。收到现金后请填写实收金额确认；确认收款后才能点「我已送达」。</p>
+            {% endif %}
+        </div>
+        {% endif %}
         <div class="delivery-action-stack">
             {% if not order.handoff_ready %}
             <p class="card-meta">餐品尚未完成交接，请等店内先交给骑手。</p>
@@ -44,12 +55,27 @@
                     我已取餐
                 </button>
             </form>
+            {% if order.buy_order.is_cod_awaiting_collection %}
+            <form method="POST" class="delivery-cash-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                {% csrf_token %}
+                <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
+                <input type="hidden" name="action" value="collect_cash">
+                <label class="delivery-cash-label">收到现金（元）
+                    <input type="number" name="cash_amount" step="0.01" min="0"
+                        value="{{ order.buy_order.total_amount }}" inputmode="decimal">
+                </label>
+                <button type="submit" class="btn btn-orange"
+                    {% if order.delivery_status != 'picked_up' %}disabled title="请先取餐"{% endif %}>
+                    确认收到现金
+                </button>
+            </form>
+            {% endif %}
             <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
                 <input type="hidden" name="action" value="complete">
                 <button type="submit" class="btn btn-complete"
-                    {% if order.delivery_status != 'picked_up' %}disabled{% endif %}>
+                    {% if order.delivery_status != 'picked_up' or order.buy_order.is_cod_awaiting_collection %}disabled{% endif %}>
                     我已送达
                 </button>
             </form>

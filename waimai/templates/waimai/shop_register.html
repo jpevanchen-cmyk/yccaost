@@ -15,9 +15,9 @@
 {% endif %}
 <p>开通店铺账号后，您的店铺将自动出现在<a href="/directory/">公共名录</a>中。</p>
 
-<form method="POST" style="max-width: 480px;">
+<form method="POST" class="auth-form" style="max-width: 480px;">
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit" style="background: #4caf50; color: white; padding: 10px 24px; border: none; border-radius: 4px; cursor: pointer; margin-top: 12px;">注册并开通</button>
+    {% include 'waimai/_auth_form_fields.html' %}
+    <button type="submit" class="btn btn-green btn-block">注册并开通</button>
 </form>
 {% endblock %}

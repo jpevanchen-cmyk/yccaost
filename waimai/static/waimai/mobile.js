@@ -18,14 +18,15 @@
     }
 
     function scrollToAnchor(anchorId) {
-        if (!anchorId || anchorId === 'cart') return;
+        if (!anchorId || anchorId === 'cart') return false;
         var el = document.getElementById(anchorId);
-        if (!el) return;
+        if (!el) return false;
         el.scrollIntoView({ block: 'center', behavior: 'auto' });
         el.classList.add('scroll-flash');
         setTimeout(function () {
             el.classList.remove('scroll-flash');
         }, 1200);
+        return true;
     }
 
     function saveScrollBeforeSubmit(form) {
@@ -83,7 +84,14 @@
         var anchor = hash || savedAnchor || '';
         if (anchor) {
             setTimeout(function () {
-                scrollToAnchor(anchor);
+                var found = scrollToAnchor(anchor);
+                // 锚点对不上时（如旧链接缺档位后缀），退回提交前记下的纵向位置，避免滚回顶部
+                if (!found && savedY !== null && savedY !== '') {
+                    var fallbackY = parseInt(savedY, 10);
+                    if (!isNaN(fallbackY) && fallbackY > 0) {
+                        window.scrollTo(0, fallbackY);
+                    }
+                }
                 done();
             }, 50);
             return;

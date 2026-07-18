@@ -1,0 +1,28 @@
+{# 通用注册/表单字段渲染：顶部醒目错误汇总 + 逐字段标红提示 #}
+{% if form.errors %}
+<div class="form-alert" role="alert">
+    <strong>没有注册成功，请按下面红色提示修改后再试：</strong>
+    <ul>
+        {% for error in form.non_field_errors %}
+        <li>{{ error }}</li>
+        {% endfor %}
+        {% for field in form %}
+            {% for error in field.errors %}
+            <li>「{{ field.label }}」：{{ error }}</li>
+            {% endfor %}
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% for field in form %}
+<p{% if field.errors %} class="has-error"{% endif %}>
+    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+    {{ field }}
+    {% if field.help_text %}<span class="field-help">{{ field.help_text|safe }}</span>{% endif %}
+    {% if field.errors %}
+    <ul class="errorlist">
+        {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+</p>
+{% endfor %}

@@ -334,6 +334,7 @@ def build_waiter_board_context(seller_id: str, *, allow_dispatch: bool = False) 
     raw_orders = list(query_waiter_active_orders(seller_id))
     dispatch_riders = list(get_shop_riders(seller_id))
     from .order_message_helpers import unread_map_for_orders
+    from .wait_time_helpers import can_adjust_order_wait_time
 
     unread_map = unread_map_for_orders(raw_orders, side='shop')
     orders = []
@@ -349,6 +350,7 @@ def build_waiter_board_context(seller_id: str, *, allow_dispatch: bool = False) 
             'can_collect': waiter_can_collect_payment(order),
             'can_confirm_cash': waiter_can_confirm_cash(order),
             'can_confirm_in_store_order': waiter_can_confirm_in_store_order(order),
+            'can_adjust_wait_time': can_adjust_order_wait_time(order),
             'can_complete_in_store': waiter_can_complete_in_store(order),
             'can_close_uncollected': waiter_can_close_uncollected(order),
             'unread_msg_count': unread_map.get(order.order_id, 0),
@@ -378,6 +380,7 @@ def build_kitchen_board_context(seller_id: str, *, allow_dispatch: bool = False)
         build_kitchen_dish_rows,
         build_kitchen_phase_label,
         build_kitchen_summary,
+        kitchen_order_can_start,
         latest_kitchen_new_order_ts,
         query_kitchen_board_orders,
         recent_kitchen_activity_logs,
@@ -385,6 +388,8 @@ def build_kitchen_board_context(seller_id: str, *, allow_dispatch: bool = False)
 
     raw_orders = list(query_kitchen_board_orders(seller_id))
     dispatch_riders = list(get_shop_riders(seller_id))
+    from .wait_time_helpers import can_adjust_order_wait_time
+
     rows = []
     for order in raw_orders:
         delivery = getattr(order, 'delivery_order', None)
@@ -394,6 +399,8 @@ def build_kitchen_board_context(seller_id: str, *, allow_dispatch: bool = False)
             'dish_rows': build_kitchen_dish_rows(order),
             'dish_groups': build_kitchen_dish_groups(order),
             'log_lines': recent_kitchen_activity_logs(order),
+            'can_adjust_wait_time': can_adjust_order_wait_time(order),
+            'can_start_preparing': kitchen_order_can_start(order),
             'can_dispatch': bool(
                 allow_dispatch
                 and order.fulfillment_type == 'delivery'

@@ -16,7 +16,7 @@
 <p class="page-desc">注册后可浏览店铺、下单。骑手由店铺创建账号；开店请用 <a href="/shop-register/">店铺开通</a>。</p>
 <form method="POST" class="auth-form">
     {% csrf_token %}
-    {{ form.as_p }}
+    {% include 'waimai/_auth_form_fields.html' %}
     <button type="submit" class="btn btn-green btn-block">注册</button>
 </form>
 <p class="card-meta">已有账户？<a href="/accounts/login/">登录</a></p>

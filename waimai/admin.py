@@ -119,7 +119,7 @@ class ShopDeliverySettingsAdmin(admin.ModelAdmin):
 class ShopPaymentSettingsAdmin(admin.ModelAdmin):
     list_display = [
         'seller_id', 'enable_simulate', 'enable_wechat', 'enable_cash',
-        'is_showcase_shop', 'wechat_mch_id',
+        'wechat_mch_id',
     ]
     list_filter = ['enable_simulate', 'enable_wechat', 'enable_cash']
 

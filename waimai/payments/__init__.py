@@ -3,6 +3,7 @@
 from .service import (
     build_pay_page_context,
     confirm_cash_payment,
+    confirm_cash_remittance,
     confirm_in_store_order,
     close_uncollected_cash_order,
     confirm_order_paid,
@@ -10,6 +11,7 @@ from .service import (
     handle_wechat_notify,
     initiate_payment,
     poll_wechat_payment,
+    rider_collect_cash,
     IN_STORE_ETA_MINUTES,
 )
 
@@ -20,6 +22,8 @@ __all__ = [
     'confirm_order_paid',
     'confirm_in_store_order',
     'confirm_cash_payment',
+    'confirm_cash_remittance',
+    'rider_collect_cash',
     'close_uncollected_cash_order',
     'handle_wechat_notify',
     'poll_wechat_payment',

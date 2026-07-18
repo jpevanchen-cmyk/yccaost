@@ -64,6 +64,41 @@ class ShopOperatingSettings(models.Model):
     table_rules_acknowledged = models.BooleanField(default=False, verbose_name='已确认桌码硬规则')
     share_rules_confirmed = models.BooleanField(default=False, verbose_name='已确认拼桌硬规则')
     restrict_same_device = models.BooleanField(default=False, verbose_name='同桌仅允许同一设备下单')
+    # 桌码局域网固定地址：桌贴/桌码优先用它（勿填宽带公网 IP）
+    table_lan_base_url = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name='桌码局域网固定地址',
+        help_text='如 http://192.168.1.10:8000 ；仅店内访客 WiFi 可访问。勿填宽带公网 IP。',
+    )
+    # ---- 新订单提醒（网页内强提醒）自定义 ----
+    alert_volume = models.PositiveSmallIntegerField(
+        default=60, verbose_name='提醒音量（0～100）',
+    )
+    alert_interval_sec = models.PositiveSmallIntegerField(
+        default=8, verbose_name='提醒重复间隔（秒）',
+    )
+    alert_sound = models.FileField(
+        upload_to='alert_sounds/', blank=True, null=True,
+        verbose_name='自定义提醒音频（留空用系统默认提示音）',
+    )
+    # ---- 新订单邮件通知 ----
+    order_notify_enabled = models.BooleanField(
+        default=False, verbose_name='开启新订单邮件通知',
+    )
+    order_notify_email = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name='新订单通知收件邮箱（多个用逗号分隔）',
+    )
+    # ---- 三类订单默认等待时间 ----
+    dine_default_wait_minutes = models.PositiveSmallIntegerField(
+        default=20, verbose_name='堂食默认等待时间（分钟）',
+    )
+    takeaway_default_wait_minutes = models.PositiveSmallIntegerField(
+        default=20, verbose_name='打包默认等待时间（分钟）',
+    )
+    delivery_default_wait_minutes = models.PositiveSmallIntegerField(
+        default=30, verbose_name='外卖默认等待时间（分钟）',
+    )
     active_menu_profile = models.ForeignKey(
         'MenuProfile', on_delete=models.SET_NULL,
         blank=True, null=True, related_name='+', verbose_name='当前菜单清单',
@@ -88,6 +123,41 @@ class ShopOperatingSettings(models.Model):
 
     def __str__(self):
         return f'{self.seller_id} 营业设置'
+
+
+class ShopWaitTimeRule(models.Model):
+    """店铺按取餐方式和时间段设置的预计等待时间。"""
+
+    CHANNEL_CHOICES = [
+        ('dine_in', '堂食'),
+        ('takeaway', '打包'),
+        ('delivery', '外卖'),
+    ]
+
+    rule_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    settings = models.ForeignKey(
+        ShopOperatingSettings,
+        on_delete=models.CASCADE,
+        related_name='wait_time_rules',
+        verbose_name='所属店铺营业设置',
+    )
+    channel = models.CharField(max_length=16, choices=CHANNEL_CHOICES, verbose_name='订单类型')
+    start_time = models.TimeField(verbose_name='开始时间')
+    end_time = models.TimeField(verbose_name='结束时间')
+    wait_minutes = models.PositiveSmallIntegerField(verbose_name='等待时间（分钟）')
+    sort_order = models.PositiveSmallIntegerField(default=0, verbose_name='排序')
+
+    class Meta:
+        db_table = 'shop_wait_time_rule'
+        ordering = ['sort_order', 'start_time']
+        verbose_name = '分时段等待时间'
+        verbose_name_plural = '分时段等待时间'
+
+    def __str__(self):
+        return (
+            f'{self.settings_id} {self.get_channel_display()} '
+            f'{self.start_time:%H:%M}-{self.end_time:%H:%M} · {self.wait_minutes}分钟'
+        )
 
 
 class ShopTable(models.Model):

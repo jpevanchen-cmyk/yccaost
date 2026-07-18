@@ -15,6 +15,7 @@ urlpatterns = [
     path('rider-home/', views.rider_home, name='rider_home'),
     path('kitchen-home/', views.kitchen_home, name='kitchen_home'),
     path('s/<str:shop_code>/work/', views.shop_work, name='shop_work'),
+    path('s/<str:shop_code>/work/new-orders.json', views.shop_work_new_orders_json, name='shop_work_new_orders_json'),
     path('s/<str:shop_code>/work/logout/', views.shop_work_logout, name='shop_work_logout'),
     path(
         's/<str:shop_code>/work/order/<uuid:order_id>/',
@@ -46,6 +47,7 @@ urlpatterns = [
     path('accounts/session/heartbeat/', views.session_heartbeat, name='session_heartbeat'),
     path('accounts/session/beacon-logout/', views.session_beacon_logout, name='session_beacon_logout'),
     path('seller-panel/', views.seller_panel, name='seller_panel'),
+    path('seller-panel/orders/pending.json', views.seller_pending_orders_json, name='seller_pending_orders_json'),
     path('seller-panel/<str:section>/', views.seller_panel_section, name='seller_panel_section'),
     path('place-order/', views.place_order, name='place_order'),
     path('pay/<uuid:order_id>/', views.pay_order, name='pay_order'),

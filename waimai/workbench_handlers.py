@@ -24,7 +24,7 @@ def handle_seller_workbench_post(request, seller_id: str):
 
     if 'save_workbench_settings' in request.POST:
         operating = get_operating_settings(seller_id)
-        form = ShopWorkbenchSettingsForm(request.POST, instance=operating)
+        form = ShopWorkbenchSettingsForm(request.POST, request.FILES, instance=operating)
         if form.is_valid():
             form.save()
             purge_old_attendance_logs(seller_id, form.cleaned_data.get('attendance_retention_days'))
@@ -157,7 +157,31 @@ def handle_my_deliveries_post(request, *, seller_id: str, shop_code: str, user, 
                 summary=f'骑手取餐 {order.buy_order.get_display_order_no()}',
                 request=request,
             )
+        elif action == 'collect_cash':
+            # 外卖货到付款：骑手送达时收现金，记录实收金额
+            from .payments import rider_collect_cash
+            ok, msg = rider_collect_cash(
+                order.buy_order, user.username, request.POST.get('cash_amount', ''),
+            )
+            if ok:
+                messages.success(request, msg)
+                from .audit_helpers import audit_order_status
+                audit_order_status(
+                    order=order.buy_order,
+                    actor=user,
+                    summary=f'骑手收款 {order.buy_order.get_display_order_no()} · ¥{order.buy_order.cash_collected_amount}',
+                    request=request,
+                )
+            else:
+                messages.error(request, msg)
         elif action == 'complete' and order.delivery_status == 'picked_up':
+            # 货到付款单：未收款不许结单（须先收现金或顾客已扫码付）
+            if order.buy_order.is_cod_awaiting_collection():
+                messages.error(request, '这是货到付款单，请先确认收到现金（或顾客已扫码付款）再点已送达')
+                short_id = str(delivery_id).replace('-', '')[:8] if delivery_id else ''
+                if short_id:
+                    return redirect(f'{fallback}#delivery-{short_id}')
+                return redirect(fallback)
             order.delivery_status = 'completed'
             order.completed_at = timezone.now()
             order.save()

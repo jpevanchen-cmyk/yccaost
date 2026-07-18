@@ -65,6 +65,28 @@ def handle_seller_post(request, seller_id, section):
             messages.error(request, err)
         return _seller_panel_redirect('payment', 'payment-settings-form')
 
+    if 'confirm_rider_remit' in request.POST and section == 'payment':
+        # 骑手入金：店主确认某骑手交回的现金（店主后台仅店主可进；店长入金待工作台入口）
+        from .payments import confirm_cash_remittance
+        from .rider_cash_helpers import pending_remit_orders_for_rider
+
+        rider_id = (request.POST.get('rider_id') or '').strip()
+        orders = list(pending_remit_orders_for_rider(seller_id, rider_id))
+        count, msg = confirm_cash_remittance(orders, request.user.username)
+        from .audit_helpers import write_audit_log
+        write_audit_log(
+            action_code='rider_cash_remit',
+            summary=f'确认骑手 {rider_id} 入金 {count} 笔',
+            seller_id=seller_id,
+            actor=request.user,
+            request=request,
+        )
+        if count:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return _seller_panel_redirect('payment', 'rider-cash-card')
+
     if section == 'orders':
         messages.error(request, '订单管理仅用于查询历史，请到店铺工作台处理现场操作')
         return _seller_panel_redirect('orders', request=request)

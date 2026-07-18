@@ -39,15 +39,39 @@ def query_kitchen_board_orders(seller_id: str):
     return (
         BuyOrder.objects.filter(
             seller_id=seller_id,
-            payment_status='paid',
-        )
-        .filter(
-            Q(order_status__in=('awaiting_prep', 'preparing', 'ready_pickup'))
-            | Q(fulfillment_type='delivery', delivery_order__delivery_status='accepted')
+        ).filter(
+            (
+                Q(payment_status='paid')
+                & (
+                    Q(order_status__in=('awaiting_prep', 'preparing', 'ready_pickup'))
+                    | Q(fulfillment_type='delivery', delivery_order__delivery_status='accepted')
+                )
+            )
+            | Q(
+                fulfillment_type__in=('dine_in', 'takeaway'),
+                payment_method='cash',
+                payment_status='pending_payment',
+                order_status__in=(
+                    'awaiting_shop_confirm', 'awaiting_prep', 'preparing', 'ready_pickup',
+                ),
+            )
         )
         .exclude(order_status='completed')
         .select_related('delivery_order')
         .order_by('created_at')
+    )
+
+
+def kitchen_order_can_start(order: BuyOrder) -> bool:
+    """后厨能否开始此单：已付单，或堂食/打包现场付单。"""
+    if order.order_status not in ('awaiting_shop_confirm', 'awaiting_prep'):
+        return False
+    if order.payment_status == 'paid':
+        return True
+    return bool(
+        order.is_in_store()
+        and order.payment_method == 'cash'
+        and order.payment_status == 'pending_payment'
     )
 
 
@@ -71,7 +95,7 @@ def build_kitchen_phase_label(order: BuyOrder) -> str:
     """后厨看板上的阶段说明"""
     total, prepared = count_kitchen_units(order)
     handoff_mode = get_delivery_handoff_mode(order.seller_id)
-    if order.order_status == 'awaiting_prep':
+    if order.order_status in ('awaiting_shop_confirm', 'awaiting_prep'):
         return '新单待备货'
     if order.order_status == 'preparing':
         if prepared > 0 and prepared < total:
@@ -108,7 +132,7 @@ def build_kitchen_summary(orders: list[BuyOrder]) -> list[dict]:
     """待备菜品汇总：只统计还没备好的份数"""
     merged: dict[str, dict] = {}
     for order in orders:
-        if order.order_status not in ('awaiting_prep', 'preparing'):
+        if order.order_status not in ('awaiting_shop_confirm', 'awaiting_prep', 'preparing'):
             continue
         for item in build_kitchen_dish_groups(order):
             remain = int(item.get('total_qty', 0) or 0) - int(item.get('prepared_qty', 0) or 0)
@@ -123,7 +147,9 @@ def build_kitchen_summary(orders: list[BuyOrder]) -> list[dict]:
 
 def latest_kitchen_new_order_ts(orders: list[BuyOrder]) -> int:
     """给前端提示音用：最新新单时间戳（毫秒）"""
-    new_orders = [o for o in orders if o.order_status == 'awaiting_prep']
+    from .order_alert_helpers import is_shop_new_order
+
+    new_orders = [o for o in orders if is_shop_new_order(o)]
     if not new_orders:
         return 0
     latest = max(o.created_at for o in new_orders if o.created_at)

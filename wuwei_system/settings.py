@@ -214,6 +214,20 @@ YECAO_EXPERIENCE_DAILY_ACCOUNTS = int(os.environ.get('YECAO_EXPERIENCE_DAILY_ACC
 YECAO_EXPERIENCE_CONCURRENT = int(os.environ.get('YECAO_EXPERIENCE_CONCURRENT', '10'))
 YECAO_EXPERIENCE_NOTIFY_EMAIL = os.environ.get('YECAO_EXPERIENCE_NOTIFY_EMAIL', '').strip()
 
+# ---------- 邮件发送（新订单通知等）----------
+# 未在 .env 填写发信邮箱时不会发邮件，也不会报错（YECAO_EMAIL_READY 为 False）。
+EMAIL_HOST = os.environ.get('YECAO_EMAIL_HOST', '').strip()
+EMAIL_PORT = int(os.environ.get('YECAO_EMAIL_PORT', '465'))
+EMAIL_HOST_USER = os.environ.get('YECAO_EMAIL_USER', '').strip()
+EMAIL_HOST_PASSWORD = os.environ.get('YECAO_EMAIL_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('YECAO_EMAIL_TLS', '0') == '1'
+# 465 端口用 SSL；587 端口用 TLS。两者不能同时开。
+EMAIL_USE_SSL = (os.environ.get('YECAO_EMAIL_SSL', '1') == '1') and not EMAIL_USE_TLS
+DEFAULT_FROM_EMAIL = os.environ.get('YECAO_EMAIL_FROM', '').strip() or EMAIL_HOST_USER
+EMAIL_TIMEOUT = 10
+# 三项齐全才认为发信邮箱可用；否则通知逻辑直接跳过，避免卡顿或报错。
+YECAO_EMAIL_READY = bool(EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD)
+
 # ---------- A.12 技术运行日志（文件不进 Git；普通约 30 天、错误/支付约 90 天）----------
 YECAO_LOG_DIR = BASE_DIR / 'logs'
 YECAO_LOG_DIR.mkdir(parents=True, exist_ok=True)

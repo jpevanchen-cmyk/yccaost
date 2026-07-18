@@ -188,31 +188,49 @@ body.nav-open {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
+    align-items: center; /* 同一排文字垂直对齐 */
     gap: 8px 16px;
     padding: 16px 12px calc(16px + var(--yc-safe-bottom));
     border-top: 1px solid var(--yc-border);
     color: var(--yc-muted);
     font-size: 13px;
+    line-height: 1.4;
     text-align: center;
 }
 
-.site-compliance-footer a {
+.site-compliance-footer a,
+.site-compliance-powered {
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    margin: 0;
     color: inherit;
     text-decoration: none;
+    line-height: 1.4;
 }
 
 .site-compliance-police-icon {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     object-fit: contain;
+    flex-shrink: 0;
+    /* 避免图标把整行字基线顶歪 */
+    vertical-align: middle;
 }
 
 .site-compliance-footer a:hover {
     color: var(--yc-green);
     text-decoration: underline;
+}
+
+/* 手机窄屏：三排居中，避免挤成一排对不齐 */
+@media (max-width: 640px) {
+    .site-compliance-footer {
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 10px;
+    }
 }
 
 .page-title {
@@ -249,6 +267,127 @@ body.nav-open {
     background: #fff8e1;
     border: 1px solid #ffe082;
     color: #6d4c00;
+}
+
+/* 骑手现金入金统计（批次 B） */
+.rider-cash-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.rider-cash-stat {
+    flex: 1 1 90px;
+    background: #f6f6f6;
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+}
+.rider-cash-stat-num {
+    font-size: 20px;
+    font-weight: 700;
+    color: #c62828;
+}
+.rider-cash-stat-label {
+    font-size: 12px;
+    color: #777;
+    margin-top: 2px;
+}
+
+/* 骑手货到付款收款区（批次 B） */
+.delivery-cod-box {
+    margin: 8px 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #fff8f0;
+    border: 1px solid #ffd8a8;
+}
+.delivery-cod-line {
+    margin: 0 0 4px;
+    font-size: 14px;
+}
+.delivery-cash-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.delivery-cash-label {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: #666;
+    gap: 4px;
+}
+.delivery-cash-label input {
+    width: 120px;
+    padding: 8px;
+    border: 1px solid var(--yc-border);
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+/* 堂食凭证超时提示条（批次 A） */
+.dine-timeout-hint {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    font-weight: 600;
+    border-color: #ffb300;
+    background: #fff3cd;
+}
+.dine-timeout-hint-close {
+    flex: 0 0 auto;
+    border: none;
+    background: transparent;
+    color: #6d4c00;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+}
+
+/* 桌码局域网四段数字填写（方案甲） */
+.lan-prefix {
+    font-family: ui-monospace, Consolas, monospace;
+    color: #555;
+    font-size: 13px;
+}
+.lan-ip-row {
+    margin: 0 0 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+.lan-port-row {
+    gap: 6px;
+}
+.lan-hint {
+    margin: 0;
+}
+/* 必须盖过 display:flex，否则 hidden 藏不住 */
+.lan-ip-row[hidden],
+.lan-hint[hidden] {
+    display: none !important;
+}
+.lan-ip-octet {
+    width: 3.2em !important;
+    text-align: center;
+    padding: 8px 4px !important;
+    font-size: 16px !important;
+}
+.lan-port-input {
+    width: 5em !important;
+    text-align: center;
+    padding: 8px 4px !important;
+    font-size: 16px !important;
+}
+.lan-hostname-input {
+    min-width: 10em;
+    flex: 1 1 140px;
+    padding: 8px !important;
+    font-size: 15px !important;
 }
 
 /* ---------- 按钮 ---------- */
@@ -1212,6 +1351,7 @@ body.seller-page .content {
 }
 
 .seller-tabs-desktop a {
+    position: relative;
     padding: 10px 16px;
     border-radius: 8px;
     text-decoration: none;
@@ -1256,12 +1396,77 @@ body.seller-page .content {
 }
 
 .seller-tab-icon {
+    position: relative;
     font-size: 20px;
     line-height: 1.2;
 }
 
 .seller-tab-label {
     margin-top: 2px;
+}
+
+/* 大标签「订单管理」未读沟通红数字 */
+.seller-nav-badge {
+    display: inline-block;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    border-radius: 999px;
+    background: #e53935;
+    color: #fff;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+    vertical-align: middle;
+    font-weight: 700;
+}
+.seller-nav-badge-tab {
+    position: absolute;
+    top: -6px;
+    right: -10px;
+    margin-left: 0;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    font-size: 10px;
+    padding: 0 4px;
+}
+
+/* 订单页顶：未读沟通 / 新订单快捷条 */
+.seller-shortcut-block {
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    border: 1px solid #ffcdd2;
+    border-radius: 10px;
+    background: #fff8f8;
+}
+.seller-shortcut-title {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #c62828;
+}
+.seller-shortcut-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.seller-shortcut-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid #ef9a9a;
+    color: #b71c1c;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+}
+.seller-shortcut-link:hover {
+    background: #ffebee;
 }
 
 /* A.11 堂食硬规则醒目展示 */
@@ -2041,6 +2246,133 @@ body.seller-page .content {
     margin-top: 8px;
 }
 
+/* ---------- 新订单强提醒（网页内）---------- */
+.order-alert-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0;
+    padding: 10px 12px;
+    border: 1px dashed var(--yc-border, #ddd);
+    border-radius: 8px;
+    background: #fffdf5;
+}
+/* 放到指定位置（标题右侧 / 工作台按钮排）时去掉上下外边距，方便对齐 */
+#order-alert-mount .order-alert-bar {
+    margin: 0;
+}
+.order-alert-enable {
+    flex-shrink: 0;
+}
+.order-alert-status {
+    font-size: 12px;
+    color: var(--yc-muted, #888);
+    line-height: 1.5;
+}
+.order-alert-banner {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: 12px;
+    z-index: 400;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #d32f2f;
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    animation: order-alert-flash 1s ease-in-out infinite alternate;
+}
+.order-alert-banner[hidden] {
+    display: none !important;
+}
+@keyframes order-alert-flash {
+    from { background: #d32f2f; }
+    to { background: #b71c1c; }
+}
+.order-alert-banner-text {
+    flex: 1 1 auto;
+    font-size: 15px;
+    font-weight: 700;
+    min-width: 160px;
+}
+.order-alert-btn {
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+    font-family: inherit;
+}
+.order-alert-btn-primary {
+    background: #fff;
+    color: #b71c1c;
+}
+
+/* 表单顶部「没成功」醒目提示框 */
+.form-alert {
+    border: 1px solid #e57373;
+    border-left: 4px solid #d32f2f;
+    background: #fdecea;
+    color: #b71c1c;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+}
+.form-alert strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 15px;
+}
+.form-alert ul {
+    margin: 6px 0 0;
+    padding-left: 20px;
+}
+
+/* 字段旁的填写要求（灰色小字） */
+.field-help {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--yc-muted, #888);
+    line-height: 1.5;
+}
+.field-help ul {
+    margin: 4px 0 0;
+    padding-left: 18px;
+}
+
+/* 逐条错误：红字，字段下方明显 */
+ul.errorlist {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+}
+ul.errorlist li {
+    color: #d32f2f;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
+    margin-top: 2px;
+}
+/* 出错字段的输入框描红 */
+.auth-form p.has-error input,
+.auth-form p.has-error select,
+.auth-form p.has-error textarea {
+    border-color: #d32f2f;
+    background: #fffafa;
+}
+
 /* ---------- 电脑宽屏：恢复横排导航与侧边购物车 ---------- */
 @media (min-width: 768px) {
     .content {
@@ -2233,9 +2565,150 @@ body.seller-page .content {
     flex-direction: column;
     gap: 14px;
 }
+/* 后台编辑预览可复用此 class，仅保留基础内边距，不要限高 */
 .showcase-block {
     padding: 16px;
 }
+/* 客人主页：默认随内容高度自适应；超过半屏才由脚本加上 is-over-threshold 裁切 */
+.showcase-home-page .showcase-block {
+    padding: 12px 14px;
+    box-sizing: border-box;
+    overflow: visible;
+}
+.showcase-home-page .showcase-block-title {
+    margin: 0 0 8px;
+    font-size: 17px;
+}
+.showcase-home-page .showcase-block-actions {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.showcase-home-page .showcase-block-img {
+    width: 100%;
+    max-height: 160px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    display: block;
+}
+.showcase-home-page .showcase-body {
+    white-space: pre-wrap;
+    line-height: 1.55;
+    font-size: 14px;
+}
+.showcase-home-page .showcase-body-more {
+    display: none;
+}
+/* 超过半屏：预览裁切，底部提示点开，块内不出现滚动条 */
+.showcase-home-page .showcase-block.is-over-threshold {
+    overflow: hidden;
+    position: relative;
+    padding-bottom: 2.75rem;
+}
+.showcase-home-page .showcase-block.is-over-threshold::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 2.5rem;
+    height: 3.5rem;
+    background: linear-gradient(to bottom, transparent, var(--yc-card, #fff));
+    pointer-events: none;
+    z-index: 1;
+}
+.showcase-home-page .showcase-expand-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 2.5rem;
+    border: 0;
+    padding: 0.5rem 12px;
+    background: var(--yc-card, #fff);
+    color: var(--yc-orange, #e67e22);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+.showcase-home-page .showcase-expand-bar:active {
+    opacity: 0.85;
+}
+
+/* 长文大阅读区（仅客人主页会挂这些节点） */
+body.showcase-reader-open {
+    overflow: hidden;
+}
+.showcase-reader {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    padding: 12px;
+    box-sizing: border-box;
+}
+.showcase-reader[hidden] {
+    display: none !important;
+}
+.showcase-reader-panel {
+    background: #fff;
+    border-radius: 12px;
+    width: min(720px, 100%);
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+.showcase-reader-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--yc-border, #eee);
+    flex-shrink: 0;
+}
+.showcase-reader-title {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.35;
+    flex: 1;
+}
+.showcase-reader-close {
+    flex-shrink: 0;
+    border: 1px solid var(--yc-border, #ddd);
+    background: #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    cursor: pointer;
+}
+.showcase-reader-body {
+    padding: 16px;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: pre-wrap;
+    line-height: 1.7;
+    font-size: 15px;
+    flex: 1;
+    min-height: 0;
+}
+/* 名录等用网页结构展开时，不要按纯文字换行 */
+.showcase-reader-body.is-html {
+    white-space: normal;
+}
+
 .showcase-back-top {
     position: fixed;
     right: 16px;

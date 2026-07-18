@@ -7,6 +7,8 @@
 {% include 'waimai/_page_back.html' with back_url="/seller-panel/orders/" back_label="返回订单管理" %}
 {% elif viewer_role == 'rider' %}
 {% include 'waimai/_page_back.html' with back_url="/my-deliveries/" back_label="返回我的配送" %}
+{% elif viewer_role == 'guest' %}
+{% include 'waimai/_page_back.html' with back_url=guest_shop_back_url back_label="返回点菜" %}
 {% else %}
 {% include 'waimai/_page_back.html' with back_url="/order-history/" back_label="返回我的订单" %}
 {% endif %}
@@ -21,7 +23,7 @@
 {% if request.GET.cash_pending %}
 <div class="msg-ok">
     {% if request.GET.dine_in or order.is_dine_in %}
-    已选择<strong>堂食 · 到店付现金</strong>。订单已提交，店家将为您备餐并告知预计出餐时间。有事可在下方「订单沟通」留言。
+    已选择<strong>堂食 · 到店付现金</strong>。订单已提交，店家将为您备餐并告知预计出餐时间。{% if viewer_role != 'guest' %}有事可在下方「订单沟通」留言。{% else %}结账后本机将不再保留本桌订单查看（有问题请以店内小票为准）。{% endif %}
     {% elif request.GET.takeaway or order.is_takeaway %}
     已选择<strong>打包 · 到店付现金</strong>。订单已提交，店家将为您备货并告知预计可取餐时间。有事可在下方「订单沟通」留言。
     {% else %}
@@ -40,13 +42,15 @@
         · {{ order.get_fulfillment_display_short }}
         · 合计 <strong style="color:var(--yc-orange);font-size:18px;">¥{{ order.total_amount }}</strong>
     </p>
-    {% if order.payment_status == 'pending_payment' and viewer_role == 'buyer' %}
+    {% if order.payment_status == 'pending_payment' %}
+        {% if viewer_role == 'buyer' or viewer_role == 'guest' %}
         {% if order.is_in_store_cash_order %}
     <p class="msg-ok" style="margin-top:14px;">{{ order.get_cash_payment_hint }}</p>
         {% elif order.is_cash_awaiting_confirm %}
     <p class="msg-ok" style="margin-top:14px;">{{ order.get_cash_payment_hint }}</p>
-        {% else %}
+        {% elif viewer_role == 'buyer' %}
     <a class="btn btn-wechat btn-block" style="margin-top:14px;" href="{% url 'pay_order' order.order_id %}">去支付</a>
+        {% endif %}
         {% endif %}
     {% endif %}
     {% if can_buyer_cancel %}
@@ -90,9 +94,13 @@
     <summary>📞 联系客人</summary>
     <div class="detail-collapse-body">
         <p class="card-meta" style="margin:0 0 10px;">有问题请先电话/微信联系客人协商，不要直接拒单。谈妥后可在「订单沟通」写一句确认留痕。</p>
-        <div class="detail-row"><span>买家账号</span><span id="guest-contact-id">{{ order.buyer_id }}</span></div>
+        <div class="detail-row"><span>称呼 / 买家</span><span id="guest-contact-id">{{ order.get_buyer_display_name }}{% if order.is_guest_order %}（游客）{% elif order.buyer_id %} · {{ order.buyer_id }}{% endif %}</span></div>
+        {% if order.buyer_id %}
         <button type="button" class="btn btn-outline btn-sm" id="copy-guest-id-btn" style="margin-top:8px;">复制买家账号</button>
         <p class="card-meta" id="copy-guest-id-hint" style="margin:8px 0 0;display:none;">已复制</p>
+        {% elif order.table_label %}
+        <p class="card-meta" style="margin:8px 0 0;">桌台：{{ order.table_label }} · 请按桌号/取餐号当面确认</p>
+        {% endif %}
     </div>
 </details>
 {% endif %}
@@ -274,6 +282,23 @@
             window.prompt('请手动复制账号：', text);
         }
     });
+})();
+</script>
+{% endif %}
+{% if viewer_role == 'seller' %}
+<script>
+(function () {
+    var key = 'yc_seller_dismissed_new_orders';
+    var oid = '{{ order.order_id }}';
+    try {
+        var raw = sessionStorage.getItem(key);
+        var list = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(list)) list = [];
+        if (list.indexOf(oid) < 0) {
+            list.push(oid);
+            sessionStorage.setItem(key, JSON.stringify(list));
+        }
+    } catch (e) {}
 })();
 </script>
 {% endif %}

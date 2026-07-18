@@ -44,11 +44,83 @@
         <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
             {% csrf_token %}
             <input type="hidden" name="save_operating" value="1">
+            {{ operating_form.table_lan_base_url }}
             {% for field in operating_form %}
-                {% if field.name != 'acknowledge_table_rules' and field.name != 'confirm_share_rules' %}
-                <p>{{ field.label_tag }} {{ field }}</p>
+                {% if field.name != 'acknowledge_table_rules' and field.name != 'confirm_share_rules' and field.name != 'table_lan_base_url' and field.name != 'lan_mode' and field.name != 'lan_ip1' and field.name != 'lan_ip2' and field.name != 'lan_ip3' and field.name != 'lan_ip4' and field.name != 'lan_port' and field.name != 'lan_hostname' %}
+                <p>
+                    {{ field.label_tag }} {{ field }}
+                    {% if field.help_text %}<span class="field-help">{{ field.help_text }}</span>{% endif %}
+                    {% for err in field.errors %}<span class="msg-err" style="display:block;margin-top:4px;">{{ err }}</span>{% endfor %}
+                </p>
                 {% endif %}
             {% endfor %}
+
+            {# 桌码局域网固定地址：方案甲——http:// 写死；四段数字 + 默认可改端口；高级固定名字 #}
+            <div class="hard-rule-block lan-address-box" id="lan-address-box" style="border-color:#90a4ae;background:#f7fafb;">
+                <strong>桌码局域网固定地址</strong>
+                <p class="card-meta" style="margin:6px 0 10px;">
+                    导出桌贴时优先用这里的地址。协议固定为 <code>http://</code>（不用手填）。
+                    推荐用四段数字，避免输入点和冒号出错。勿填宽带公网 IP。
+                    桌贴会印「先连店内访客 WiFi → 再扫此码点餐」。
+                </p>
+                <p style="margin:0 0 8px;">
+                    <label for="{{ operating_form.lan_mode.id_for_label }}">{{ operating_form.lan_mode.label }}</label><br>
+                    {{ operating_form.lan_mode }}
+                </p>
+                <div id="lan-ip-panel" class="lan-ip-row">
+                    <span class="lan-prefix">http://</span>
+                    {{ operating_form.lan_ip1 }}
+                    <span>.</span>
+                    {{ operating_form.lan_ip2 }}
+                    <span>.</span>
+                    {{ operating_form.lan_ip3 }}
+                    <span>.</span>
+                    {{ operating_form.lan_ip4 }}
+                </div>
+                <div id="lan-name-panel" class="lan-ip-row" hidden>
+                    <span class="lan-prefix">http://</span>
+                    {{ operating_form.lan_hostname }}
+                </div>
+                <p class="lan-ip-row lan-port-row">
+                    <span>端口</span>
+                    <span>:</span>
+                    {{ operating_form.lan_port }}
+                    <span class="card-meta">默认 8000；正式站可能是 80 或 443</span>
+                </p>
+                <p class="card-meta lan-hint" id="lan-ip-hint">四段全填，或全留空表示不设。例：192　168　3　120</p>
+                <p class="card-meta lan-hint" id="lan-name-hint" hidden>只填主机名，例如 <code>yecao.local</code>。手机须能在访客 WiFi 下打开这个名字。</p>
+                {% for err in operating_form.lan_ip1.errors %}<p class="msg-err">{{ err }}</p>{% endfor %}
+                {% for err in operating_form.lan_hostname.errors %}<p class="msg-err">{{ err }}</p>{% endfor %}
+                {% for err in operating_form.lan_port.errors %}<p class="msg-err">{{ err }}</p>{% endfor %}
+                {% if operating_form.instance.table_lan_base_url %}
+                <p class="card-meta" style="margin:10px 0 0;">当前保存为：<code id="lan-saved-url">{{ operating_form.instance.table_lan_base_url }}</code></p>
+                {% endif %}
+            </div>
+            <div class="hard-rule-block" style="border-color:#90a4ae;background:#f7fafb;">
+                <strong>按时间段自动调整等待时间（可选）</strong>
+                <p class="card-meta" style="margin:6px 0 10px;">
+                    新订单会先按订单类型和下单时段自动给出预计时间；没有匹配行时，使用上面的普通默认时间。服务员和后厨仍可临时改单个订单。
+                </p>
+                <div id="wait-time-rule-list">
+                    {% for rule in wait_time_rules %}
+                    <div class="seller-inline-form wait-time-rule-row" style="margin-bottom:8px;align-items:center;">
+                        <select name="wait_rule_channel" aria-label="订单类型">
+                            <option value="dine_in" {% if rule.channel == 'dine_in' %}selected{% endif %}>堂食</option>
+                            <option value="takeaway" {% if rule.channel == 'takeaway' %}selected{% endif %}>打包</option>
+                            <option value="delivery" {% if rule.channel == 'delivery' %}selected{% endif %}>外卖</option>
+                        </select>
+                        <input type="time" name="wait_rule_start" value="{{ rule.start_time|time:'H:i' }}" aria-label="开始时间" required>
+                        <span>至</span>
+                        <input type="time" name="wait_rule_end" value="{{ rule.end_time|time:'H:i' }}" aria-label="结束时间" required>
+                        <input type="number" name="wait_rule_minutes" value="{{ rule.wait_minutes }}" min="1" max="240" aria-label="等待分钟数" required style="width:90px;">
+                        <span>分钟</span>
+                        <button type="button" class="btn btn-outline btn-sm wait-time-rule-remove">删除</button>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" id="add-wait-time-rule">添加时间段</button>
+                <p class="card-meta" style="margin:8px 0 0;">同一种订单的时间段不能重叠；跨午夜可填写例如 22:00 至 02:00。</p>
+            </div>
             {% if not operating.table_rules_acknowledged %}
             <div class="hard-rule-block">
                 <label>{{ operating_form.acknowledge_table_rules }} {{ operating_form.acknowledge_table_rules.label }}</label>
@@ -70,6 +142,81 @@
             shareCb.addEventListener('change', sync);
             sync();
         })();
+        (function () {
+            // 桌码局域网：切换「四段数字 / 固定名字」
+            var mode = document.getElementById('id_lan_mode');
+            var ipPanel = document.getElementById('lan-ip-panel');
+            var namePanel = document.getElementById('lan-name-panel');
+            var ipHint = document.getElementById('lan-ip-hint');
+            var nameHint = document.getElementById('lan-name-hint');
+            if (!mode || !ipPanel || !namePanel) return;
+            function syncLan() {
+                var isName = mode.value === 'name';
+                // 用 hidden + CSS display:none !important，避免 flex 盖住隐藏
+                ipPanel.hidden = isName;
+                namePanel.hidden = !isName;
+                if (ipHint) ipHint.hidden = isName;
+                if (nameHint) nameHint.hidden = !isName;
+                // 未选中的输入框禁用，避免误填、也不会互相干扰
+                ['id_lan_ip1', 'id_lan_ip2', 'id_lan_ip3', 'id_lan_ip4'].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el) el.disabled = isName;
+                });
+                var hostEl = document.getElementById('id_lan_hostname');
+                if (hostEl) hostEl.disabled = !isName;
+            }
+            mode.addEventListener('change', syncLan);
+            syncLan();
+
+            // 填满一段数字后自动跳到下一段，少打点
+            var octets = [
+                document.getElementById('id_lan_ip1'),
+                document.getElementById('id_lan_ip2'),
+                document.getElementById('id_lan_ip3'),
+                document.getElementById('id_lan_ip4'),
+            ];
+            octets.forEach(function (el, idx) {
+                if (!el) return;
+                el.addEventListener('input', function () {
+                    el.value = el.value.replace(/\D/g, '').slice(0, 3);
+                    if (el.value.length >= 3 && octets[idx + 1]) {
+                        octets[idx + 1].focus();
+                    }
+                });
+            });
+            var portEl = document.getElementById('id_lan_port');
+            if (portEl) {
+                portEl.addEventListener('input', function () {
+                    portEl.value = portEl.value.replace(/\D/g, '').slice(0, 5);
+                });
+            }
+        })();
+        (function () {
+            var list = document.getElementById('wait-time-rule-list');
+            var addBtn = document.getElementById('add-wait-time-rule');
+            if (!list || !addBtn) return;
+            function bindRemove(button) {
+                button.addEventListener('click', function () {
+                    var row = button.closest('.wait-time-rule-row');
+                    if (row) row.remove();
+                });
+            }
+            list.querySelectorAll('.wait-time-rule-remove').forEach(bindRemove);
+            addBtn.addEventListener('click', function () {
+                var row = document.createElement('div');
+                row.className = 'seller-inline-form wait-time-rule-row';
+                row.style.cssText = 'margin-bottom:8px;align-items:center;';
+                row.innerHTML =
+                    '<select name="wait_rule_channel" aria-label="订单类型">' +
+                    '<option value="dine_in">堂食</option><option value="takeaway">打包</option><option value="delivery">外卖</option>' +
+                    '</select><input type="time" name="wait_rule_start" aria-label="开始时间" required>' +
+                    '<span>至</span><input type="time" name="wait_rule_end" aria-label="结束时间" required>' +
+                    '<input type="number" name="wait_rule_minutes" min="1" max="240" value="20" aria-label="等待分钟数" required style="width:90px;">' +
+                    '<span>分钟</span><button type="button" class="btn btn-outline btn-sm wait-time-rule-remove">删除</button>';
+                list.appendChild(row);
+                bindRemove(row.querySelector('.wait-time-rule-remove'));
+            });
+        })();
         </script>
         <form method="POST" style="margin-top:12px;display:inline-block;">
             {% csrf_token %}
@@ -89,7 +236,7 @@
 <details class="seller-panel-fold" id="table-list">
     <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">🪑 实体桌台与桌码</span></summary>
     <div class="seller-panel-fold-body">
-        <p class="page-desc">桌号只能是<strong>纯数字</strong>。填最小～最大桌号，可一次建好一整批（如 1 到 30）。点选桌号后，用下方按钮批量操作；<strong>导出桌贴 PDF</strong> 可打印贴桌（每页 12 张）。若已配置支付页的<strong>店铺公网网址</strong>，二维码将指向该网址；未配置则用当前浏览器访问的地址（本机测试可用）。</p>
+        <p class="page-desc">桌号只能是<strong>纯数字</strong>。填最小～最大桌号，可一次建好一整批（如 1 到 30）。点选桌号后，用下方按钮批量操作；<strong>导出桌贴 PDF</strong> 可打印贴桌（每页 12 张）。二维码地址优先用上方「营业与接单」里的<strong>桌码局域网固定地址</strong>（推荐店内访客 WiFi 可访问的地址，勿填宽带公网 IP）；未填则用支付页公网网址；再没有则用当前浏览器地址。桌贴会印「先连店内访客 WiFi → 再扫此码点餐」。</p>
         <form method="POST" class="seller-panel-form seller-inline-form" data-unsaved-guard>
             {% csrf_token %}
             <input type="hidden" name="add_table" value="1">

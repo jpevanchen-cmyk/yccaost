@@ -591,7 +591,8 @@ class BuyOrder(models.Model):
     ]
 
     order_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='订单ID')
-    buyer_id = models.CharField(max_length=64, db_index=True, verbose_name='买家ID')
+    # 游客堂食单可为空：归属靠桌台会话，不挂买家账号
+    buyer_id = models.CharField(max_length=64, blank=True, default='', db_index=True, verbose_name='买家ID')
     seller_id = models.CharField(max_length=64, db_index=True, verbose_name='卖家ID')
     total_amount = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0.01)], verbose_name='订单总金额（元）')
     subtotal_amount = models.DecimalField(
@@ -634,6 +635,8 @@ class BuyOrder(models.Model):
         related_name='orders', verbose_name='桌台会话',
     )
     table_label = models.CharField(max_length=64, blank=True, default='', verbose_name='桌号/拼桌标识')
+    # 可选称呼：方便店员叫人；不填则展示时用桌号
+    guest_nickname = models.CharField(max_length=20, blank=True, default='', verbose_name='称呼（可选）')
     order_kind = models.CharField(
         max_length=16, choices=ORDER_KIND_CHOICES, default='normal', verbose_name='订单类型',
     )
@@ -664,6 +667,19 @@ class BuyOrder(models.Model):
         default='',
         db_index=True,
         verbose_name='前台服务状态',
+    )
+    # 外卖货到付款：骑手送达时收取的现金记录
+    cash_collected_amount = models.DecimalField(
+        max_digits=8, decimal_places=2, blank=True, null=True, verbose_name='骑手实收现金（元）'
+    )
+    cash_collected_by = models.CharField(
+        max_length=64, blank=True, default='', verbose_name='收款骑手'
+    )
+    cash_collected_at = models.DateTimeField(blank=True, null=True, verbose_name='骑手收款时间')
+    # 骑手入金：把收到的现金交回店里，由店主/店长确认
+    cash_remitted_at = models.DateTimeField(blank=True, null=True, verbose_name='入金确认时间')
+    cash_remitted_by = models.CharField(
+        max_length=64, blank=True, default='', verbose_name='入金确认人'
     )
 
     class Meta:
@@ -706,6 +722,24 @@ class BuyOrder(models.Model):
             parts.append(date_code)
         return '-'.join(parts)
 
+    def is_guest_order(self) -> bool:
+        """没有买家账号的订单（堂食游客）。"""
+        return not (self.buyer_id or '').strip()
+
+    def get_buyer_display_name(self) -> str:
+        """给人看的称呼：优先可选称呼 → 桌号 → 买家账号 →「游客」。"""
+        nick = (self.guest_nickname or '').strip()
+        if nick:
+            return nick
+        label = (self.table_label or '').strip()
+        if self.is_guest_order() and label:
+            return label
+        if (self.buyer_id or '').strip():
+            return self.buyer_id
+        if label:
+            return label
+        return '游客'
+
     def get_subtotal(self):
         """商品小计（优先读下单时保存的值）"""
         if self.subtotal_amount is not None:
@@ -720,11 +754,27 @@ class BuyOrder(models.Model):
         return self.total_amount - self.get_subtotal()
 
     def is_cash_awaiting_confirm(self):
-        """外卖货到付款：等待卖家确认收款后才备货"""
+        """外卖货到付款：先备货派单，送达时由骑手收款（尚未收款）"""
         return (
             self.fulfillment_type == 'delivery'
             and self.payment_status == 'pending_payment'
             and self.payment_method == 'cash'
+        )
+
+    def is_delivery_cod(self):
+        """是否外卖 · 现金货到付款单"""
+        return self.fulfillment_type == 'delivery' and self.payment_method == 'cash'
+
+    def is_cod_awaiting_collection(self):
+        """外卖货到付款：尚未收款（骑手送达时收）"""
+        return self.is_delivery_cod() and self.payment_status == 'pending_payment'
+
+    def cash_remit_pending(self):
+        """骑手已收现金、但尚未交回店里入金"""
+        return bool(
+            self.payment_method == 'cash'
+            and self.cash_collected_at is not None
+            and self.cash_remitted_at is None
         )
 
     def is_awaiting_in_store_order_confirm(self):
@@ -742,7 +792,7 @@ class BuyOrder(models.Model):
             self.is_in_store()
             and self.payment_method == 'cash'
             and self.payment_status == 'pending_payment'
-            and self.order_status in ('preparing', 'ready_pickup')
+            and self.order_status in ('awaiting_prep', 'preparing', 'ready_pickup')
         )
 
     def can_complete_in_store_order(self):
@@ -790,6 +840,10 @@ class BuyOrder(models.Model):
         if self.is_cash_receipt_pending():
             if self.estimated_ready_at:
                 t = format_beijing_time(self.estimated_ready_at)
+                if self.order_status == 'awaiting_prep':
+                    if self.is_dine_in():
+                        return f'订单已进入备餐队列，预计 {t} 可出餐。请在店内付款。'
+                    return f'订单已进入备货队列，预计 {t} 可取餐。请在取餐时付款。'
                 if self.is_dine_in():
                     return f'店家备餐中，预计 {t} 可出餐。用餐时请付现金，店家确认收款后订单完结。'
                 return f'店家备货中，预计 {t} 可取餐。取餐时请付现金，店家确认收款后订单完结。'
@@ -800,7 +854,7 @@ class BuyOrder(models.Model):
             return '堂食订单：请在店内付款。'
         if self.is_takeaway():
             return '打包自取：请到店取餐并付款。'
-        return '外卖货到付款：送达时付现金，店家确认收款后备货并派单。'
+        return '外卖货到付款：店家会先备货并派骑手，骑手送达时向您收现金（也可当面扫码付）。'
 
     def get_estimated_ready_label(self):
         """预计出餐/取餐时间的展示文案（北京时间）"""
@@ -822,10 +876,7 @@ class ShopPaymentSettings(models.Model):
     enable_simulate = models.BooleanField(default=True, verbose_name='开启模拟支付（演示用）')
     enable_wechat = models.BooleanField(default=False, verbose_name='开启微信支付')
     enable_cash = models.BooleanField(default=True, verbose_name='开启现金支付')
-    is_showcase_shop = models.BooleanField(
-        default=False, verbose_name='示范店模式',
-        help_text='勾选后可在店铺说明中提示：可同时提供模拟与真微信供体验',
-    )
+    enable_cod = models.BooleanField(default=True, verbose_name='允许外卖现金货到付款')
     wechat_mch_id = models.CharField(max_length=32, blank=True, default='', verbose_name='微信商户号')
     wechat_app_id = models.CharField(max_length=32, blank=True, default='', verbose_name='微信 AppID')
     wechat_api_key = models.CharField(max_length=64, blank=True, default='', verbose_name='微信 APIv2 密钥')
@@ -1093,6 +1144,7 @@ from .dine_models import (  # noqa: E402
     MenuProfileItem,
     ShopOperatingSettings,
     ShopTable,
+    ShopWaitTimeRule,
     TableSession,
     VirtualTableCode,
 )

@@ -7,6 +7,7 @@ from .models import BuyOrder
 from .dispatch_helpers import dispatch_buy_order, maybe_auto_dispatch_order, validate_shop_rider
 from .kitchen_helpers import (
     get_delivery_handoff_mode,
+    kitchen_order_can_start,
     mark_kitchen_dish_unit_prepared,
     undo_kitchen_dish_unit_prepared,
 )
@@ -43,6 +44,23 @@ def handle_kitchen_board_post(request, seller_id: str, *, redirect_to=None):
         return None
     order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
 
+    if 'adjust_wait_time' in request.POST:
+        from .audit_helpers import audit_order_status
+        from .wait_time_helpers import adjust_order_wait_time
+
+        ok, msg, minutes = adjust_order_wait_time(order, request.POST.get('wait_minutes'))
+        if ok:
+            audit_order_status(
+                order=order,
+                actor=operator,
+                summary=f'调整预计时间 {order.get_display_order_no()}（从现在起约 {minutes} 分钟）',
+                request=request,
+            )
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return redirect(target)
+
     if 'mark_prepared_unit' in request.POST:
         dish_id = request.POST.get('dish_id', '').strip()
         ok, msg = mark_kitchen_dish_unit_prepared(order, dish_id, operator_username=operator.username)
@@ -62,10 +80,16 @@ def handle_kitchen_board_post(request, seller_id: str, *, redirect_to=None):
         return redirect(target)
 
     if 'start_preparing' in request.POST:
-        if order.payment_status == 'paid' and order.order_status == 'awaiting_prep':
+        if kitchen_order_can_start(order):
             order.order_status = 'preparing'
             order.preparing_at = timezone.now()
-            order.save(update_fields=['order_status', 'preparing_at', 'updated_at'])
+            update_fields = ['order_status', 'preparing_at', 'updated_at']
+            if not order.estimated_ready_at:
+                from .wait_time_helpers import assign_default_wait_time
+
+                assign_default_wait_time(order, at=order.preparing_at, save=False)
+                update_fields.append('estimated_ready_at')
+            order.save(update_fields=update_fields)
             from .audit_helpers import audit_order_status
             audit_order_status(
                 order=order,

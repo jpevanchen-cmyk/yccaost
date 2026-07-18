@@ -95,3 +95,39 @@ def unread_map_for_orders(orders, *, side: str) -> dict:
         if since is None or created_at > since:
             counts[oid] += 1
     return counts
+
+
+def shop_unread_message_summary(seller_id: str, *, limit: int = 40) -> dict:
+    """
+    店家侧未读顾客沟通：总数 + 有未读的订单列表（供大标签红点与页顶直达）。
+    返回 {'total': int, 'orders': [{'order': BuyOrder, 'count': int, ...}, ...]}
+    """
+    from django.db.models import F, Q
+    from django.urls import reverse
+
+    unread_qs = (
+        OrderMessage.objects.filter(
+            order__seller_id=seller_id,
+            author_side='buyer',
+        )
+        .filter(
+            Q(order__seller_msg_read_at__isnull=True)
+            | Q(created_at__gt=F('order__seller_msg_read_at'))
+        )
+        .select_related('order')
+        .order_by('-created_at')
+    )
+    total = unread_qs.count()
+    # 按「最近一条未读」排订单，并累计每单未读条数
+    grouped: dict = {}
+    for msg in unread_qs[:300]:
+        oid = msg.order_id
+        if oid not in grouped:
+            grouped[oid] = {'order': msg.order, 'count': 0}
+        grouped[oid]['count'] += 1
+    rows = list(grouped.values())[:limit]
+    for row in rows:
+        order = row['order']
+        row['display_no'] = order.get_display_order_no()
+        row['url'] = reverse('order_detail', kwargs={'order_id': order.order_id})
+    return {'total': total, 'orders': rows}

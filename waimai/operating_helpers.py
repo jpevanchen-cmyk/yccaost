@@ -1,5 +1,10 @@
 # A.11.1 营业时间与接单准入
 
+from __future__ import annotations
+
+import re
+from urllib.parse import urlparse
+
 from django.utils import timezone
 
 from .models import ShopOperatingSettings
@@ -9,6 +14,122 @@ def get_operating_settings(seller_id: str) -> ShopOperatingSettings:
     """获取店铺营业设置，没有则创建默认"""
     settings, _ = ShopOperatingSettings.objects.get_or_create(seller_id=seller_id)
     return settings
+
+
+def parse_table_lan_url(raw: str) -> dict:
+    """
+    把已保存的桌码局域网地址拆成填写界面用的几块。
+    返回：mode(ip/name)、ip1～ip4、port、hostname。
+    """
+    empty = {
+        'mode': 'ip',
+        'ip1': '', 'ip2': '', 'ip3': '', 'ip4': '',
+        'port': '8000',
+        'hostname': '',
+    }
+    text = (raw or '').strip().rstrip('/')
+    if not text:
+        return empty
+
+    # 没有协议时补上，方便解析
+    if '://' not in text:
+        text = 'http://' + text
+    try:
+        parsed = urlparse(text)
+    except Exception:
+        return empty
+
+    host = (parsed.hostname or '').strip()
+    port = parsed.port
+    if not host:
+        return empty
+
+    # 纯数字四段 → IP 模式
+    if re.fullmatch(r'\d{1,3}(?:\.\d{1,3}){3}', host):
+        parts = host.split('.')
+        return {
+            'mode': 'ip',
+            'ip1': parts[0],
+            'ip2': parts[1],
+            'ip3': parts[2],
+            'ip4': parts[3],
+            'port': str(port) if port else '8000',
+            'hostname': '',
+        }
+
+    return {
+        'mode': 'name',
+        'ip1': '', 'ip2': '', 'ip3': '', 'ip4': '',
+        'port': str(port) if port else '8000',
+        'hostname': host,
+    }
+
+
+def assemble_table_lan_url(
+    *,
+    mode: str,
+    ip1='', ip2='', ip3='', ip4='',
+    port='',
+    hostname='',
+) -> tuple[str, str]:
+    """
+    拼装桌码局域网根地址。成功返回 (url, '')；失败返回 ('', 白话错误)。
+    协议固定 http://；端口可空（空则默认 8000）。
+    """
+    mode = (mode or 'ip').strip()
+    port_raw = (str(port) if port is not None else '').strip()
+    if port_raw == '':
+        port_num = 8000
+    else:
+        if not port_raw.isdigit():
+            return '', '端口须填写数字'
+        port_num = int(port_raw)
+        if port_num < 1 or port_num > 65535:
+            return '', '端口须在 1～65535 之间'
+
+    if mode == 'name':
+        host = (hostname or '').strip().rstrip('/')
+        if not host:
+            return '', ''  # 清空
+        if '://' in host or '/' in host or ' ' in host:
+            return '', '店内固定名字只需填主机名，例如 yecao.local，不要带 http:// 或斜杠'
+        if re.fullmatch(r'\d{1,3}(?:\.\d{1,3}){3}', host):
+            return '', '数字地址请改用「四段数字」填写，不要填在固定名字里'
+        return f'http://{host}:{port_num}', ''
+
+    # IP 模式
+    parts = [(ip1 or '').strip(), (ip2 or '').strip(), (ip3 or '').strip(), (ip4 or '').strip()]
+    if all(p == '' for p in parts):
+        return '', ''  # 清空
+    if any(p == '' for p in parts):
+        return '', '四段数字须全部填齐，或全部留空表示不设局域网地址'
+    nums = []
+    for p in parts:
+        if not p.isdigit():
+            return '', '四段地址只能填数字'
+        n = int(p)
+        if n < 0 or n > 255:
+            return '', '每一段数字须在 0～255 之间'
+        nums.append(str(n))
+    return f'http://{".".join(nums)}:{port_num}', ''
+
+
+def build_order_alert_config(seller_id: str) -> dict:
+    """给新单强提醒前端用的店铺自定义配置：音量(0~1)、重复间隔(秒)、自定义音频网址。"""
+    settings = get_operating_settings(seller_id)
+    volume = int(getattr(settings, 'alert_volume', 60) or 0)
+    volume = max(0, min(100, volume)) / 100.0
+    interval = int(getattr(settings, 'alert_interval_sec', 8) or 8)
+    if interval < 3:
+        interval = 3
+    sound_url = ''
+    sound = getattr(settings, 'alert_sound', None)
+    if sound:
+        try:
+            sound_url = sound.url
+        except Exception:
+            sound_url = ''
+    return {'volume': volume, 'interval': interval, 'sound_url': sound_url}
 
 
 def _in_time_window(now_t, start_t, end_t) -> bool:

@@ -6,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}野草系统{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=26">
+    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=40">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -92,13 +92,13 @@
         </a>
         {% endif %}
         {% if site_show_powered_by %}
-        <span class="card-meta">由野草系统提供支持</span>
+        <span class="site-compliance-powered">由野草系统提供支持</span>
         {% endif %}
     </footer>
     {% endif %}
 
     {% block pre_mobile_js %}{% endblock %}
-    <script src="{% static 'waimai/mobile.js' %}?v=7"></script>
+    <script src="{% static 'waimai/mobile.js' %}?v=8"></script>
     {% if session_guard_enabled %}
     <script>
     window.YC_SESSION_GUARD = {

@@ -16,7 +16,7 @@
 {# 电脑：顶部 Tab #}
 <nav class="seller-tabs-desktop" aria-label="店铺管理">
     <a href="{% url 'seller_panel_section' 'homepage' %}" class="{% if section == 'homepage' %}active{% endif %}">🏠 店铺主页</a>
-    <a href="{% url 'seller_panel_section' 'orders' %}" class="{% if section == 'orders' %}active{% endif %}">📋 订单管理</a>
+    <a href="{% url 'seller_panel_section' 'orders' %}" class="seller-nav-link {% if section == 'orders' %}active{% endif %}">📋 订单管理{% if shop_unread_msg_total %}<span class="seller-nav-badge" title="未读顾客沟通">{{ shop_unread_msg_total }}</span>{% endif %}</a>
     <a href="{% url 'seller_panel_section' 'products' %}" class="{% if section == 'products' %}active{% endif %}">🛍 商品上架</a>
     <a href="{% url 'seller_panel_section' 'dine' %}" class="{% if section == 'dine' %}active{% endif %}">🪑 堂食营业</a>
     <a href="{% url 'seller_panel_section' 'workbench' %}" class="{% if section == 'workbench' %}active{% endif %}">👥 员工工作台</a>
@@ -37,7 +37,7 @@
         <span class="seller-tab-label">主页</span>
     </a>
     <a href="{% url 'seller_panel_section' 'orders' %}" class="seller-tab {% if section == 'orders' %}active{% endif %}">
-        <span class="seller-tab-icon">📋</span>
+        <span class="seller-tab-icon">📋{% if shop_unread_msg_total %}<span class="seller-nav-badge seller-nav-badge-tab" title="未读顾客沟通">{{ shop_unread_msg_total }}</span>{% endif %}</span>
         <span class="seller-tab-label">订单</span>
     </a>
     <a href="{% url 'seller_panel_section' 'products' %}" class="seller-tab {% if section == 'products' %}active{% endif %}">
@@ -68,7 +68,7 @@
 {% endblock %}
 
 {% block pre_mobile_js %}
-<script src="{% static 'waimai/seller_panel_fold.js' %}?v=2"></script>
+<script src="{% static 'waimai/seller_panel_fold.js' %}?v=3"></script>
 <script src="{% static 'waimai/seller_unsaved_guard.js' %}?v=1"></script>
 <script src="{% static 'waimai/home_block_editor.js' %}?v=2"></script>
 {% endblock %}

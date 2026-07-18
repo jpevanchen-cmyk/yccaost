@@ -1,4 +1,5 @@
 {% extends 'waimai/base.html' %}
+{% load static %}
 {% block title %}{% if shop_profile %}{{ shop_profile.shop_name }}{% else %}店铺{% endif %} - 野草系统{% endblock %}
 {% block body_class %}shop-page{% if cart_has_lines %} has-cart-bar{% endif %}{% endblock %}
 
@@ -22,7 +23,13 @@
 <div class="msg-err">⚠️ {{ error }}</div>
 {% endif %}
 {% if table_label %}
-<div class="msg-ok">🪑 当前桌台：<strong>{{ table_label }}</strong>（扫桌码 · 堂食通道，加点将计入本桌主单）</div>
+<div class="msg-ok">🪑 当前桌台：<strong>{{ table_label }}</strong>（扫桌码 · 堂食通道，加点将计入本桌主单）
+    {% if table_open_order %}
+    <div style="margin-top:8px;">
+        <a class="btn btn-sm btn-outline" href="{% url 'order_detail' table_open_order.order_id %}">查看本桌当前订单 · {{ table_open_order.get_display_order_no }}</a>
+    </div>
+    {% endif %}
+</div>
 {% elif shop_channel_label %}
 <div class="msg-ok" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
     <span>当前通道：<strong>{{ shop_channel_label }}</strong></span>
@@ -132,4 +139,14 @@
 </div>
 {% endif %}
 {% endif %}
+
+{# 堂食凭证超时提示（批次 A）：不改超时时长，仅在掉出堂食态时白话提醒重新扫码 #}
+<script>
+window.YC_DINE_HINT = {
+    sellerId: "{{ seller_id|escapejs }}",
+    inTableSession: {% if table_session %}true{% else %}false{% endif %},
+    needChannelPick: {% if need_channel_pick %}true{% else %}false{% endif %}
+};
+</script>
+<script src="{% static 'waimai/dine_timeout_hint.js' %}?v=1"></script>
 {% endblock %}

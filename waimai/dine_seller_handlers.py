@@ -1,6 +1,7 @@
 # 卖家面板：堂食营业 + 桌台 + 菜单清单 POST 处理
 
 from django.contrib import messages
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -84,7 +85,15 @@ def handle_dine_post(request, seller_id):
         settings = get_operating_settings(seller_id)
         form = ShopOperatingSettingsForm(request.POST, instance=settings)
         if not form.is_valid():
-            messages.error(request, '营业设置无效，请检查输入')
+            err = next(iter(form.errors.values()), None)
+            msg = err[0] if err else '营业设置无效，请检查输入'
+            messages.error(request, msg)
+            return _seller_redirect('dine', 'operating-form')
+        from .wait_time_helpers import parse_wait_time_rules, replace_wait_time_rules
+
+        wait_time_rules, wait_error = parse_wait_time_rules(request.POST)
+        if wait_error:
+            messages.error(request, wait_error)
             return _seller_redirect('dine', 'operating-form')
 
         data = form.cleaned_data
@@ -108,9 +117,11 @@ def handle_dine_post(request, seller_id):
             if data.get('confirm_share_rules'):
                 settings.share_rules_confirmed = True
 
-        for field in form.Meta.fields:
-            setattr(settings, field, data[field])
-        settings.save()
+        with transaction.atomic():
+            for field in form.Meta.fields:
+                setattr(settings, field, data[field])
+            settings.save()
+            replace_wait_time_rules(settings, wait_time_rules)
         from .audit_helpers import write_audit_log
         write_audit_log(
             action_code='operating',

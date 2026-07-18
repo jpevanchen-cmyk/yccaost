@@ -28,7 +28,7 @@
 {% include 'waimai/seller/_panel_fold_end.html' %}
 
 {% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-settings-form' fold_title='⚙️ 工作台协作设置' %}
-        <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+        <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="save_workbench_settings" value="1">
             {{ workbench_settings_form.as_p }}

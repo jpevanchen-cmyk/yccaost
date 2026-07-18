@@ -23,9 +23,19 @@ _MARGIN = 12
 
 
 def resolve_public_base_url(request: HttpRequest, seller_id: str) -> str:
-    """优先店铺公网网址；未配置则用当前访问地址（本机/局域网开发可用）"""
+    """
+    桌码/桌贴用的网站根地址，优先级：
+    1. 堂食设置「桌码局域网固定地址」（店内扫码推荐）
+    2. 支付设置「店铺公网网址」
+    3. 当前浏览器访问地址（本机测试）
+    """
+    from .operating_helpers import get_operating_settings
     from .payments import get_payment_settings
 
+    operating = get_operating_settings(seller_id)
+    lan = (getattr(operating, 'table_lan_base_url', '') or '').strip().rstrip('/')
+    if lan:
+        return lan
     ps = get_payment_settings(seller_id)
     custom = (ps.public_site_url or '').strip().rstrip('/')
     if custom:
@@ -95,7 +105,8 @@ def build_table_stickers_pdf(
     usable_h = _PAGE_H - 2 * _MARGIN
     cell_w = usable_w / _COLS
     cell_h = usable_h / _ROWS
-    qr_size = min(cell_w - 14, cell_h - 48, 44)
+    # 底部多一行 WiFi 提示，二维码略留空
+    qr_size = min(cell_w - 14, cell_h - 52, 42)
 
     tables_sorted = _sort_tables(tables)
     if not tables_sorted:
@@ -138,6 +149,9 @@ def build_table_stickers_pdf(
         qr_y = y0 + 32
         pdf.image(io.BytesIO(qr_bytes), x=qr_x, y=qr_y, w=qr_size, h=qr_size, type='JPEG')
 
+        pdf.set_font(font, size=7)
+        pdf.set_xy(x0 + 2, y0 + cell_h - 20)
+        pdf.cell(cell_w - 4, 4, '先连店内访客 WiFi → 再扫此码点餐', align='C')
         pdf.set_font(font, size=8)
         pdf.set_xy(x0, y0 + cell_h - 14)
         pdf.cell(cell_w, 5, '微信扫码 · 一桌一单 · 可加点', align='C')

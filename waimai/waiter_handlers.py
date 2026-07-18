@@ -20,6 +20,25 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
 
     operator = getattr(request, 'shop_work_user', None) or request.user
     target = redirect_to or reverse('waiter_home')
+    if 'adjust_wait_time' in request.POST:
+        order_id = request.POST.get('order_id', '').strip()
+        order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
+        from .audit_helpers import audit_order_status
+        from .wait_time_helpers import adjust_order_wait_time
+
+        ok, msg, minutes = adjust_order_wait_time(order, request.POST.get('wait_minutes'))
+        if ok:
+            audit_order_status(
+                order=order,
+                actor=operator,
+                summary=f'调整预计时间 {order.get_display_order_no()}（从现在起约 {minutes} 分钟）',
+                request=request,
+            )
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return redirect(target)
+
     can_dispatch = operator.role == 'seller' or get_delivery_handoff_mode(seller_id) == 'waiter'
     if 'mark_dish_unit' in request.POST:
         order_id = request.POST.get('order_id', '').strip()

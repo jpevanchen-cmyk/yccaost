@@ -116,32 +116,5 @@
 <p class="card-meta">当前没有需要后厨处理的订单。</p>
 {% endif %}
 
-<script>
-(function () {
-    var latestTs = Number("{{ new_order_ts|default:0 }}") || 0;
-    if (!latestTs) return;
-    var key = "yc_kitchen_last_seen_new_order";
-    var lastSeen = Number(localStorage.getItem(key) || "0");
-    if (latestTs > lastSeen) {
-        try {
-            var ctx = new (window.AudioContext || window.webkitAudioContext)();
-            var osc = ctx.createOscillator();
-            var gain = ctx.createGain();
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(880, ctx.currentTime);
-            gain.gain.setValueAtTime(0.001, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start();
-            osc.stop(ctx.currentTime + 0.45);
-        } catch (e) {}
-        localStorage.setItem(key, String(latestTs));
-    }
-    setTimeout(function () {
-        window.location.reload();
-    }, 15000);
-})();
-</script>
+{# 旧提示音和整页刷新已停用；统一提醒由店铺工作台的 order_alert.js 负责。 #}
 {% endblock %}

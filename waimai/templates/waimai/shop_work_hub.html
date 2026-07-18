@@ -1,6 +1,7 @@
 {% extends 'waimai/base.html' %}
 {% load staff_account %}
 {% load yc_time %}
+{% load static %}
 {% block title %}店铺工作台{% endblock %}
 
 {% block page_back %}
@@ -52,6 +53,8 @@
         {% csrf_token %}
         <button type="submit" class="btn btn-outline btn-sm">退出工作台</button>
     </form>
+    {# 新单提醒按钮的放置点：这一排最右端 #}
+    <div id="order-alert-mount" style="margin-left:auto;"></div>
 </div>
 
 <div class="card" style="padding:14px;">
@@ -151,5 +154,19 @@
         <p class="card-meta">暂无本人操作记录。</p>
     {% endif %}
 </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if work_user.role == 'seller' or work_user.role == 'waiter' or work_user.role == 'kitchen' or work_user.role == 'manager' or work_user.role == 'rider' %}
+<script>
+window.YC_ORDER_ALERT = {
+    pollUrl: "{% url 'shop_work_new_orders_json' shop_code=shop_work_code %}",
+    storagePrefix: "yc_work_order_alert",
+    mountSelector: "#order-alert-mount"{% if work_user.role == 'rider' %},
+    itemLabel: "个外卖单待接单，请及时处理！"{% endif %}
+};
+</script>
+<script src="{% static 'waimai/order_alert.js' %}?v=6"></script>
 {% endif %}
 {% endblock %}

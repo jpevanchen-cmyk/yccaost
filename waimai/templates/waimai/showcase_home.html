@@ -33,13 +33,16 @@
 {% endif %}
 
 {% for block in home_blocks %}
-<section class="showcase-block card" id="{% if block.dom_id %}{{ block.dom_id }}{% else %}block-{{ block.block_type }}{% endif %}">
+<section class="showcase-block card{% if block.block_type == 'directory' %} showcase-block-directory{% elif block.block_type == 'order_cta' %} showcase-block-cta{% else %} showcase-block-article{% endif %}" id="{% if block.dom_id %}{{ block.dom_id }}{% else %}block-{{ block.block_type }}{% endif %}">
     {% if block.block_type == 'order_cta' %}
-        <h2 style="margin:0 0 10px;font-size:18px;">{{ block.title|default:"进入店铺" }}</h2>
+        <h2 class="showcase-block-title">{{ block.title|default:"进入店铺" }}</h2>
+        <div class="showcase-block-main">
         {% if block.body %}<p class="card-meta" style="margin-bottom:12px;">{{ block.body }}</p>{% endif %}
         <a class="btn btn-orange btn-block" href="{{ order_url }}">{{ block.title|default:"进入店铺" }}</a>
+        </div>
     {% elif block.block_type == 'directory' %}
-        <h2 style="margin:0 0 10px;font-size:18px;">{{ block.title|default:"店铺名录" }}</h2>
+        <h2 class="showcase-block-title">{{ block.title|default:"店铺名录" }}</h2>
+        <div class="showcase-block-main">
         {% if block.body %}<p class="card-meta" style="margin-bottom:12px;">{{ block.body }}</p>{% endif %}
         <form method="get" action="/" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
             <input class="form-input" type="search" name="q" value="{{ directory_query }}" placeholder="按店名或地址搜索" style="flex:1;min-width:160px;">
@@ -66,23 +69,31 @@
         {% else %}
             <p class="card-meta">{% if directory_query %}没有符合「{{ directory_query }}」的店铺。{% else %}暂无可展示的店铺。{% endif %}</p>
         {% endif %}
+        </div>
     {% else %}
-        <h2 style="margin:0 0 10px;font-size:18px;">{{ block.title }}</h2>
+        <h2 class="showcase-block-title">{{ block.title }}</h2>
+        <div class="showcase-block-main">
         {% if block.display_image_src %}
-        <img src="{{ block.display_image_src }}" alt="" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-bottom:10px;">
+        <img class="showcase-block-img" src="{{ block.display_image_src }}" alt="">
         {% elif block.image_url %}
-        <img src="{{ block.image_url }}" alt="" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-bottom:10px;">
+        <img class="showcase-block-img" src="{{ block.image_url }}" alt="">
         {% endif %}
         {% if block.body %}
-        <div class="showcase-body" style="white-space:pre-wrap;line-height:1.6;">{{ block.body }}</div>
+        <div class="showcase-body-wrap">
+            <div class="showcase-body">{{ block.body }}</div>
+            <span class="showcase-body-more" hidden>点击阅读全文</span>
+        </div>
         {% endif %}
-        {% if block.display_image_src or block.image_url %}
-        <p style="margin-top:10px;">
+        </div>
+        {% if block.display_image_src or block.image_url or block.link_url %}
+        <div class="showcase-block-actions">
+            {% if block.display_image_src or block.image_url %}
             <a class="btn btn-sm btn-outline" href="{% if block.display_image_src %}{{ block.display_image_src }}{% else %}{{ block.image_url }}{% endif %}" target="_blank" rel="noopener">查看原图</a>
-        </p>
-        {% endif %}
-        {% if block.link_url %}
-        <p style="margin-top:10px;"><a class="btn btn-sm btn-outline" href="{{ block.link_url }}" rel="noopener" target="_blank">了解更多</a></p>
+            {% endif %}
+            {% if block.link_url %}
+            <a class="btn btn-sm btn-outline" href="{{ block.link_url }}" rel="noopener" target="_blank">了解更多</a>
+            {% endif %}
+        </div>
         {% endif %}
     {% endif %}
 </section>
@@ -99,8 +110,19 @@
 </div>
 
 <button type="button" class="showcase-back-top" id="showcase-back-top" aria-label="回到顶部" hidden>顶部</button>
+
+{# 长文大阅读区：点正文打开；Esc / 点外面 / 收起 关闭 #}
+<div class="showcase-reader" id="showcase-reader" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="showcase-reader-title">
+    <div class="showcase-reader-panel">
+        <div class="showcase-reader-head">
+            <h2 class="showcase-reader-title" id="showcase-reader-title"></h2>
+            <button type="button" class="showcase-reader-close" id="showcase-reader-close" aria-label="收起全文">收起</button>
+        </div>
+        <div class="showcase-reader-body" id="showcase-reader-body"></div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'waimai/showcase_home.js' %}?v=2"></script>
+<script src="{% static 'waimai/showcase_home.js' %}?v=4"></script>
 {% endblock %}

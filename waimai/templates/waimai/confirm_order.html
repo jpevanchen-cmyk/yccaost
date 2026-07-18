@@ -25,7 +25,20 @@
         {% if table_label %}
         <p class="fulfillment-hint">桌台：{{ table_label }}</p>
         {% endif %}
+        {% if is_guest_checkout %}
+        <p class="fulfillment-hint">您当前为<strong>免登录堂食</strong>，下单后请在店内现场付款。会员价/特价需登录后才可用。</p>
+        {% endif %}
     </div>
+
+    {% if is_guest_checkout %}
+    <div class="fulfillment-block" style="margin-top:12px;">
+        <label for="guest_nickname" style="font-size:14px;display:block;margin-bottom:6px;">称呼（可选，方便店员叫您）</label>
+        <input type="text" name="guest_nickname" id="guest_nickname" form="place-order-form"
+               value="{{ guest_nickname|default:'' }}" maxlength="20"
+               placeholder="不填则按桌号称呼" style="width:100%;max-width:280px;padding:8px 10px;">
+        <p class="card-meta" style="margin:6px 0 0;">不强制填写，有意愿再填即可。</p>
+    </div>
+    {% endif %}
 
     {% for item in cart_items %}
     <div class="line-item">
@@ -97,7 +110,7 @@
         {% elif shop_channel == 'dine_in' %}
         <input type="hidden" name="dine_in_at_shop" value="1">
         {% endif %}
-        <button type="submit" class="btn btn-orange">确认下单</button>
+        <button type="submit" class="btn btn-orange">{% if is_guest_checkout %}确认下单（现场付）{% else %}确认下单{% endif %}</button>
     </form>
 </div>
 {% endblock %}
