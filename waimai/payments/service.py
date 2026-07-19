@@ -1,5 +1,5 @@
 # 支付总线：对外入口（保持原函数名，供页面 / 微信回调调用）
-# 批次 D：通用到账在 core；饮食履约在 dining_bridge；本文件负责编排。
+# 通用到账在 core；饮食履约在饮食插件 dining_bridge；本文件负责编排。
 
 from datetime import timedelta
 
@@ -9,7 +9,7 @@ from ..models import BuyOrder, ShopPaymentSettings
 from ..time_helpers import format_beijing_time
 from .base import PaymentInitResult
 from .core import get_payment_settings, mark_payment_received
-from .dining_bridge import (
+from waimai.plugins.dining.dining_bridge import (
     confirm_dining_order_paid,
     dining_guest_onsite_cash_only,
 )
@@ -21,7 +21,13 @@ IN_STORE_ETA_MINUTES = (10, 15, 20, 30)
 
 
 def confirm_order_paid(order: BuyOrder, payment_method: str, paid_at=None):
-    """订单标记为已支付（饮食接入：通用到账 + 待备货等履约）"""
+    """订单标记为已支付；主体订单不调用饮食履约。"""
+    if order.fulfillment_type == 'order':
+        newly = mark_payment_received(order, payment_method, paid_at=paid_at)
+        if newly:
+            order.order_status = 'awaiting_prep'
+            order.save(update_fields=['order_status', 'updated_at'])
+        return
     confirm_dining_order_paid(order, payment_method, paid_at=paid_at)
 
 
@@ -77,6 +83,15 @@ def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentIni
     if method == 'cash':
         order.payment_method = 'cash'
         update_fields = ['payment_method', 'updated_at']
+        if order.fulfillment_type == 'order':
+            # 主体下单不套用饮食预计出餐；先进入待备货，店家后续确认现金。
+            order.order_status = 'awaiting_prep'
+            update_fields.append('order_status')
+            order.save(update_fields=update_fields)
+            return PaymentInitResult(
+                ok=True,
+                redirect_url=f'/order/{order.order_id}/?cash_pending=1&order=1',
+            )
         # 到店付（堂食/打包）与外卖货到付款：均立即进入待备货，先备货再收款。
         # 外卖货到付款改正：先备货、派单，送达时由骑手收款（不再「确认收款后才备货派单」）。
         order.order_status = 'awaiting_prep'

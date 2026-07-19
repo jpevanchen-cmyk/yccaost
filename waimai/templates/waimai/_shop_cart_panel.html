@@ -67,7 +67,8 @@
         {% else %}
         <p class="card-meta" style="margin:0 0 10px;">
             {% if shop_channel == 'dine_in' %}堂食：不收配送费，请在店内用餐。
-            {% else %}打包自取：不收配送费，请到店取餐。
+            {% elif shop_channel == 'takeaway' %}打包自取：不收配送费，请到店取餐。
+            {% else %}基础下单：不收配送费，店家将按商品说明或沟通约定处理。
             {% endif %}
             {% if shop_profile %}<br>店铺地址：{{ shop_profile.address }}{% endif %}
         </p>

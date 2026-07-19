@@ -175,16 +175,8 @@ def server_settings_home_page(request):
             messages.success(request, f'已保存服务器积木「{label}」')
             return redirect_with_anchor(reverse('server_settings_home_page'), block_dom_id(block))
 
-    from django.db.models import Case, IntegerField, When
-
     blocks = list(
-        page.blocks.annotate(
-            _custom_last=Case(
-                When(block_type=BLOCK_CUSTOM, then=1),
-                default=0,
-                output_field=IntegerField(),
-            )
-        ).order_by('_custom_last', 'sort_order', 'block_type')
+        page.blocks.order_by('sort_order', 'block_type')
     )
     for b in blocks:
         b.spec = get_server_block_spec(b.block_type)

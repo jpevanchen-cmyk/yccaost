@@ -7,6 +7,7 @@
     var pendingUrl = '';
     var pendingOnCancel = null;
     var lastDirtyForm = null;
+    var allowNextUnload = false;
 
     function serializeForm(form) {
         var fd = new FormData(form);
@@ -181,6 +182,7 @@
         }
 
         window.addEventListener('beforeunload', function (e) {
+            if (allowNextUnload) return;
             if (!getDirtyForm()) return;
             e.preventDefault();
             e.returnValue = '';
@@ -207,6 +209,8 @@
     window.ycSellerUnsavedGuard = {
         confirmLeave: confirmLeave,
         isDirty: function () { return !!getDirtyForm(); },
+        // 桌台/虚拟码批量操作是明确提交，不应被误判成离开网页。
+        allowNextUnload: function () { allowNextUnload = true; },
     };
 
     if (document.readyState === 'loading') {

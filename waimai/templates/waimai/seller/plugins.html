@@ -1,0 +1,58 @@
+{% extends 'waimai/seller/base.html' %}
+
+{% block title %}插件试验 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="seller-panel-box" id="plugin-trial-intro">
+    <h2>🧩 插件试验（同仓）</h2>
+    <p class="card-meta">
+        这是「同仓试验，先像插件，再独立成包」：
+        <strong>饮食插件可停用</strong>；桌台/桌码/桌贴、堂食页处理、等待时间、
+        扫桌码入口与游客堂食、饮食支付接入、下单通道规则、堂食超时提示与桌台点选脚本已迁入
+        <code>waimai/plugins/dining/</code>（静态脚本在
+        <code>static/waimai/plugins/dining/</code>）。
+        全天营业时间与营业中/停止在主体「营业状态」。
+        默认开启，不影响现有堂食使用。
+    </p>
+    <ul class="card-meta" style="margin:8px 0 0;padding-left:1.2em;">
+        <li>停用饮食插件 →「堂食营业」及堂食/打包/外卖通道消失；买家回落到主体「下单」通道</li>
+        <li>主体「营业状态」、商品、订单与通用支付仍可使用</li>
+        <li>数据不会删，只是验证「可插可拔」</li>
+        <li>回档：分支 <code>trial/dining-plugin</code> / 主线存档 <code>671487e</code></li>
+    </ul>
+</div>
+
+<div class="seller-panel-box" id="plugin-list">
+    <h2>已注册插件</h2>
+    {% for row in plugin_rows %}
+    <div class="plugin-trial-card" style="border:1px solid #ddd;border-radius:8px;padding:12px 14px;margin:12px 0;">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between;">
+            <div>
+                <strong>{{ row.name }}</strong>
+                <span class="card-meta">（编号 {{ row.id }}）</span>
+                {% if row.enabled %}
+                <span style="color:#2a7;font-size:0.9em;">· 已启用</span>
+                {% else %}
+                <span style="color:#a60;font-size:0.9em;">· 已停用</span>
+                {% endif %}
+            </div>
+            <form method="POST" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="plugin_id" value="{{ row.id }}">
+                {% if row.enabled %}
+                <button type="submit" name="action" value="disable_plugin" class="btn btn-sm btn-outline">停用</button>
+                {% else %}
+                <button type="submit" name="action" value="enable_plugin" class="btn btn-sm">启用</button>
+                {% endif %}
+            </form>
+        </div>
+        <p class="card-meta" style="margin:8px 0 0;">{{ row.description }}</p>
+        {% if row.nav_labels %}
+        <p class="card-meta" style="margin:6px 0 0;">贡献导航：{{ row.nav_labels|join:"、" }}</p>
+        {% endif %}
+    </div>
+    {% empty %}
+    <p class="card-meta">尚未注册任何插件。</p>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -13,7 +13,8 @@
 
 {% if success %}
 <div class="msg-ok">✅ 支付成功！
-    {% if success_fulfillment == 'dine_in' %}请入座用餐，店铺将为您备餐。
+    {% if success_fulfillment == 'order' %}订单已提交，店家将按商品说明或沟通约定处理。
+    {% elif success_fulfillment == 'dine_in' %}请入座用餐，店铺将为您备餐。
     {% elif success_fulfillment == 'takeaway' %}请按约定到店取餐。
     {% else %}店铺将备货并派给本店骑手配送。
     {% endif %}
@@ -50,7 +51,11 @@
 {% if need_channel_pick %}
 <div class="card channel-pick-card" style="padding:16px;margin-bottom:14px;">
     <h2 style="margin:0 0 8px;font-size:18px;">请先选择下单方式</h2>
+    {% if dining_plugin_enabled %}
     <p class="card-meta" style="margin:0 0 12px;">堂食请扫桌上二维码进入；此处可选外卖配送或打包自取。</p>
+    {% else %}
+    <p class="card-meta" style="margin:0 0 12px;">当前店铺未启用饮食插件，可使用主体提供的基础「下单」通道。</p>
+    {% endif %}
     <div class="channel-pick-grid" style="display:flex;flex-wrap:wrap;gap:10px;">
         {% for opt in channel_options %}
         <form method="post" style="margin:0;flex:1 1 140px;">
@@ -140,7 +145,8 @@
 {% endif %}
 {% endif %}
 
-{# 堂食凭证超时提示（批次 A）：不改超时时长，仅在掉出堂食态时白话提醒重新扫码 #}
+{% if dining_plugin_enabled %}
+{# 堂食凭证超时提示：仅饮食插件启用时加载 #}
 <script>
 window.YC_DINE_HINT = {
     sellerId: "{{ seller_id|escapejs }}",
@@ -148,5 +154,6 @@ window.YC_DINE_HINT = {
     needChannelPick: {% if need_channel_pick %}true{% else %}false{% endif %}
 };
 </script>
-<script src="{% static 'waimai/dine_timeout_hint.js' %}?v=1"></script>
+<script src="{% static 'waimai/plugins/dining/dine_timeout_hint.js' %}?v=2"></script>
+{% endif %}
 {% endblock %}

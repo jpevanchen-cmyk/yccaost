@@ -578,6 +578,7 @@ class BuyOrder(models.Model):
         ('card', '信用卡/借记卡'),
     ]
     FULFILLMENT_TYPE_CHOICES = [
+        ('order', '下单'),
         ('delivery', '外卖'),
         ('dine_in', '堂食'),
         ('takeaway', '打包'),
@@ -644,7 +645,7 @@ class BuyOrder(models.Model):
     fulfillment_type = models.CharField(
         max_length=16,
         choices=FULFILLMENT_TYPE_CHOICES,
-        default='delivery',
+        default='order',
         db_index=True,
         verbose_name='取餐方式',
     )
@@ -814,6 +815,10 @@ class BuyOrder(models.Model):
     def is_in_store(self):
         """是否到店服务（堂食或打包，不收配送费、不派骑手）"""
         return self.fulfillment_type in ('dine_in', 'takeaway')
+
+    def is_basic_order(self):
+        """是否主体提供的基础「下单」通道。"""
+        return self.fulfillment_type == 'order'
 
     def is_dine_in(self):
         """是否堂食（在店内用餐）"""

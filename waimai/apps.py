@@ -12,6 +12,10 @@ class WaimaiConfig(AppConfig):
 
         from .models import BuyOrder
         from .order_notify_helpers import on_buy_order_created
+        from .plugin_runtime.bootstrap import bootstrap_builtin_plugins
+
+        # 同仓内置插件（饮食等）装入注册表
+        bootstrap_builtin_plugins()
 
         # 新订单邮件通知：新建订单后触发（dispatch_uid 防止重复注册）
         post_save.connect(

@@ -99,6 +99,12 @@ class ShopOperatingSettings(models.Model):
     delivery_default_wait_minutes = models.PositiveSmallIntegerField(
         default=30, verbose_name='外卖默认等待时间（分钟）',
     )
+    # 同仓插件试验：饮食插件店铺级开关（默认开，兼容现有店）
+    plugin_dining_enabled = models.BooleanField(
+        default=True,
+        verbose_name='启用饮食插件（试验）',
+        help_text='关闭后卖家后台隐藏「堂食营业」入口；业务数据不删，只是先像插件一样可停用。',
+    )
     active_menu_profile = models.ForeignKey(
         'MenuProfile', on_delete=models.SET_NULL,
         blank=True, null=True, related_name='+', verbose_name='当前菜单清单',

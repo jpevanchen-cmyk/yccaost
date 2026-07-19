@@ -113,12 +113,12 @@ def subtotal_from_dish_items(dish_items):
 
 
 def parse_fulfillment_type(value):
-    """解析取餐方式：delivery / dine_in / takeaway（兼容旧值 pickup → 打包）"""
+    """解析履约方式：主体下单 + 饮食三通道（兼容旧值 pickup → 打包）"""
     if value == 'pickup':
         return 'takeaway'
-    if value in ('dine_in', 'takeaway'):
+    if value in ('delivery', 'dine_in', 'takeaway'):
         return value
-    return 'delivery'
+    return 'order'
 
 
 def build_order_pricing(seller_id, subtotal, distance_km, fulfillment_type):
@@ -130,6 +130,11 @@ def build_order_pricing(seller_id, subtotal, distance_km, fulfillment_type):
     from decimal import Decimal
     from .delivery_helpers import build_delivery_fee_breakdown
 
+    if fulfillment_type == 'order':
+        return Decimal('0.00'), {
+            'lines': ['基础下单通道，不收配送费'],
+            'fulfillment': 'order',
+        }
     if fulfillment_type in ('dine_in', 'takeaway'):
         label = '堂食' if fulfillment_type == 'dine_in' else '打包'
         return Decimal('0.00'), {
@@ -145,6 +150,8 @@ def build_order_pricing(seller_id, subtotal, distance_km, fulfillment_type):
 
 def store_delivery_address(shop_profile, fulfillment_type):
     """堂食 / 打包订单写入的地址说明（含店铺地址）"""
+    if fulfillment_type == 'order':
+        return '【下单】由店家按商品说明或沟通约定处理'
     label = '堂食' if fulfillment_type == 'dine_in' else '打包'
     if shop_profile and shop_profile.address:
         return f'【{label}】{shop_profile.address}'
@@ -158,7 +165,9 @@ def pickup_delivery_address(shop_profile):
 
 def build_order_timeline(order):
     """组装订单时间线，供详情页展示"""
-    if order.is_dine_in():
+    if order.is_basic_order():
+        ready_label = '已备货'
+    elif order.is_dine_in():
         ready_label = '已出餐'
     elif order.is_takeaway():
         ready_label = '已备好待取'
@@ -170,7 +179,9 @@ def build_order_timeline(order):
         ('开始备货', order.preparing_at),
     ]
     if order.estimated_ready_at:
-        if order.is_dine_in():
+        if order.is_basic_order():
+            rows.append(('预计完成', order.estimated_ready_at))
+        elif order.is_dine_in():
             rows.append(('预计出餐', order.estimated_ready_at))
         elif order.is_takeaway():
             rows.append(('预计可取餐', order.estimated_ready_at))

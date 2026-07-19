@@ -142,7 +142,7 @@ def count_server_custom_blocks(page) -> int:
 
 
 def _next_custom_sort_order(page) -> int:
-    """新自定义块永远排在现有块之后（预设块约 20～60，自定义从 900 起）"""
+    """新自定义块默认排在现有块之后（可再在后台改小数字插到前面）"""
     agg = page.blocks.aggregate(m=Max('sort_order'))
     return max(900, (agg['m'] or 0) + 10)
 
@@ -357,8 +357,8 @@ def build_shop_home_view_context(page, request=None) -> dict:
         .exclude(block_type__in=SERVER_ONLY_BLOCK_TYPES | SHOP_LEGACY_BLOCK_TYPES)
         .order_by('sort_order', 'block_type')
     )
-    # 自定义块排在预设块之后展示（同排序时）
-    blocks.sort(key=lambda b: (1 if b.block_type == BLOCK_CUSTOM else 0, b.sort_order, str(b.block_type)))
+    # 所有积木（含自定义）统一按排序数字比大小；数字越小越靠前
+    blocks.sort(key=lambda b: (b.sort_order, str(b.block_type)))
     _attach_block_meta(blocks, get_shop_block_spec)
 
     # 凡勾选「进吸顶导航」的启用块都进导航（含自定义；进入店铺块默认不勾，避免与顶栏「下单」重复）
@@ -399,7 +399,8 @@ def build_server_home_view_context(request=None) -> dict:
 
     page = ensure_server_home_page()
     blocks = list(page.blocks.filter(is_enabled=True).order_by('sort_order', 'block_type'))
-    blocks.sort(key=lambda b: (1 if b.block_type == BLOCK_CUSTOM else 0, b.sort_order, str(b.block_type)))
+    # 所有积木（含自定义）统一按排序数字比大小；数字越小越靠前
+    blocks.sort(key=lambda b: (b.sort_order, str(b.block_type)))
     _attach_block_meta(blocks, get_server_block_spec)
 
     q = ''

@@ -24,6 +24,7 @@ from .forms import (
     ShopOperatingSettingsForm,
     ShopPaymentSettingsForm,
     ShopRegistrationForm,
+    ShopStatusSettingsForm,
 )
 from .models import BuyOrder, DeliveryOrder, Dish, MenuProfile, ShopProfile, TableSession, User
 from .menu_helpers import (
@@ -34,18 +35,19 @@ from .menu_helpers import (
     validate_dish_purchase,
 )
 from .operating_helpers import check_order_admission, get_operating_settings
-from .table_helpers import (
+from waimai.plugins.dining.table_helpers import (
     build_table_scan_path,
     build_virtual_scan_path,
     get_open_order_for_session,
-    get_table_by_token,
-    get_virtual_by_token,
-    open_table_main_session,
-    open_virtual_session,
     virtual_code_is_busy,
 )
-from .table_bulk_helpers import sort_shop_tables, sort_virtual_codes
-from .dine_seller_handlers import handle_dine_post
+from waimai.plugins.dining.table_bulk_helpers import sort_shop_tables, sort_virtual_codes
+from waimai.plugins.dining.seller_handlers import handle_dine_post
+from waimai.plugins.dining.buyer_entry import (
+    dine_table_entry,  # noqa: F401  # urls 仍从 views 引用
+    get_buyer_table_session,
+)
+from .operating_seller_handlers import handle_operating_post
 from .product_seller_handlers import handle_products_post
 from .product_helpers import (
     build_dish_tier_options,
@@ -55,7 +57,6 @@ from .product_helpers import (
 )
 from .order_helpers import (
     build_cart_items,
-    build_order_pricing,
     build_order_timeline,
     cart_count_positive,
     cart_has_lines,
@@ -68,6 +69,7 @@ from .order_helpers import (
     set_shop_cart,
     parse_cart_line_key,
 )
+from .channel_helpers import build_order_pricing
 from .payments import (
     build_pay_page_context,
     handle_wechat_notify,
@@ -681,20 +683,6 @@ def _shop_page_dishes(seller_id):
     return dishes, using_menu
 
 
-def _table_session_key(seller_id):
-    return f'table_session_{seller_id}'
-
-
-def _get_buyer_table_session(request, seller_id):
-    """买家当前绑定的桌台会话"""
-    raw = request.session.get(_table_session_key(seller_id))
-    if not raw:
-        return None
-    return TableSession.objects.filter(
-        session_id=raw, seller_id=seller_id, status='open',
-    ).select_related('shop_table', 'virtual_code').first()
-
-
 def _merge_cart_into_order(order, cart_items, seller_id, distance_km, fulfillment_type):
     """桌码主单：待支付单上合并加点"""
     from decimal import Decimal
@@ -741,13 +729,14 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
     """店铺页统一渲染（含菜单过滤、桌台与下单通道）"""
     from .channel_helpers import (
         channel_template_flags,
+        dining_plugin_enabled,
         list_homepage_channels,
         resolve_shop_channel,
     )
 
     dishes, using_menu = _shop_page_dishes(seller_id)
     menu_items_map = get_active_menu_items_map(seller_id) if using_menu else {}
-    table_session = _get_buyer_table_session(request, seller_id)
+    table_session = get_buyer_table_session(request, seller_id)
     shop_channel = resolve_shop_channel(request, seller_id, table_session)
     need_channel_pick = (not table_session) and (not shop_channel)
     # 本桌进行中的订单：游客/买家回店后可一点打开详情（结账翻台后不再显示）
@@ -775,6 +764,7 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         'table_label': table_session.display_label() if table_session else '',
         'table_open_order': table_open_order,
         'need_channel_pick': need_channel_pick,
+        'dining_plugin_enabled': dining_plugin_enabled(seller_id),
         'channel_options': list_homepage_channels(seller_id) if (need_channel_pick or not table_session) else [],
         'error': error or request.GET.get('error', ''),
         **channel_template_flags(shop_channel),
@@ -803,7 +793,7 @@ def shop_page(request):
 
     if request.method == 'POST':
         action = request.POST.get('action', '')
-        table_sess = _get_buyer_table_session(request, seller_id)
+        table_sess = get_buyer_table_session(request, seller_id)
 
         if action == 'set_channel':
             # 批次 C：换通道时清空购物车，避免外卖菜带进打包
@@ -973,39 +963,6 @@ def shop_page(request):
     })
 
 
-def dine_table_entry(request):
-    """扫桌码/虚拟码入口：建立桌台会话后进入店铺点菜"""
-    seller_id = (request.GET.get('seller_id') or '').strip()
-    t_token = (request.GET.get('t') or '').strip()
-    v_token = (request.GET.get('v') or '').strip()
-    if not seller_id:
-        return redirect('directory')
-
-    device_key = request.session.session_key or ''
-
-    if t_token:
-        table = get_table_by_token(seller_id, t_token)
-        if not table:
-            return redirect(f'/shop/?seller_id={seller_id}&error=桌码无效或已停用')
-        session, err = open_table_main_session(table, device_key)
-    elif v_token:
-        code = get_virtual_by_token(seller_id, v_token)
-        if not code:
-            return redirect(f'/shop/?seller_id={seller_id}&error=虚拟桌码无效或已停用')
-        session, err = open_virtual_session(code, device_key)
-    else:
-        return redirect(f'/shop/?seller_id={seller_id}')
-
-    if err:
-        return redirect(f'/shop/?seller_id={seller_id}&error={err}')
-    if not session:
-        return redirect(f'/shop/?seller_id={seller_id}&error=无法开台')
-
-    request.session[_table_session_key(seller_id)] = str(session.session_id)
-    request.session.modified = True
-    return redirect(f'/shop/?seller_id={seller_id}')
-
-
 def my_deliveries(request):
     """旧地址：统一引导到店铺工作台骑手视角"""
     work_redirect = _redirect_to_shop_work(request, 'rider')
@@ -1137,15 +1094,36 @@ def seller_panel_section(request, section):
     if section in ('riders', 'waiters', 'kitchen'):
         return redirect('seller_panel_section', section='workbench')
 
-    valid = ('orders', 'products', 'dine', 'workbench', 'delivery', 'payment', 'audit', 'homepage')
+    valid = (
+        'orders', 'products', 'operating', 'dine', 'workbench', 'delivery',
+        'payment', 'audit', 'homepage', 'plugins',
+    )
     if section not in valid:
         return redirect('seller_panel_section', section='orders')
 
     seller_id = request.user.username
 
+    # 插件认领的分区：未启用则不许进（第一刀：堂食营业）
+    from .plugin_runtime.registry import (
+        is_plugin_enabled,
+        plugin_owns_seller_section,
+    )
+
+    owner_plugin = plugin_owns_seller_section(section)
+    if owner_plugin and not is_plugin_enabled(owner_plugin, seller_id):
+        from django.contrib import messages
+
+        messages.warning(
+            request,
+            '该功能由插件提供，当前店铺已停用对应插件。可在「插件试验」中重新启用。',
+        )
+        return redirect('seller_panel_section', section='plugins')
+
     if request.method == 'POST':
         response = None
-        if section == 'dine':
+        if section == 'operating':
+            response = handle_operating_post(request, seller_id)
+        elif section == 'dine':
             response = handle_dine_post(request, seller_id)
         elif section == 'products':
             response = handle_products_post(request, seller_id)
@@ -1155,6 +1133,25 @@ def seller_panel_section(request, section):
         elif section == 'homepage':
             from .home_page_handlers import handle_home_page_post
             response = handle_home_page_post(request, seller_id)
+        elif section == 'plugins':
+            from django.contrib import messages
+
+            from .plugin_runtime.registry import set_plugin_enabled
+
+            action = (request.POST.get('action') or '').strip()
+            plugin_id = (request.POST.get('plugin_id') or '').strip()
+            if action == 'enable_plugin' and plugin_id:
+                ok, msg = set_plugin_enabled(plugin_id, seller_id, True)
+                (messages.success if ok else messages.error)(request, msg)
+            elif action == 'disable_plugin' and plugin_id:
+                ok, msg = set_plugin_enabled(plugin_id, seller_id, False)
+                (messages.success if ok else messages.error)(request, msg)
+            from .scroll_helpers import redirect_with_anchor
+
+            return redirect_with_anchor(
+                reverse('seller_panel_section', kwargs={'section': 'plugins'}),
+                'plugin-list',
+            )
         elif section == 'audit':
             response = None
         else:
@@ -1164,6 +1161,7 @@ def seller_panel_section(request, section):
 
     shop_profile = ShopProfile.objects.filter(seller_id=seller_id).first()
     from .order_message_helpers import shop_unread_message_summary
+    from .plugin_runtime.registry import collect_seller_nav_items
 
     unread_summary = shop_unread_message_summary(seller_id)
     context = {
@@ -1172,6 +1170,8 @@ def seller_panel_section(request, section):
         'shop_profile': shop_profile,
         # 大标签「订单管理」红点：全店未读顾客沟通总数（各分区都带上）
         'shop_unread_msg_total': unread_summary['total'],
+        # 插件试验：导航由核心 + 已启用插件拼装
+        'seller_nav_items': collect_seller_nav_items(seller_id),
     }
 
     if section == 'orders':
@@ -1222,6 +1222,14 @@ def seller_panel_section(request, section):
         context['selected_profile'] = selected
         context['active_profile'] = active_profile
         context['edit_dish_id'] = request.GET.get('edit', '').strip()
+    elif section == 'operating':
+        operating = get_operating_settings(seller_id)
+        context['operating'] = operating
+        context['status_form'] = ShopStatusSettingsForm(instance=operating)
+        # 营业中 = 未打烊且未暂停
+        context['is_shop_open'] = (
+            (not operating.closed_for_today) and (not operating.pause_new_orders)
+        )
     elif section == 'dine':
         from .models import ShopTable, VirtualTableCode
         operating = get_operating_settings(seller_id)
@@ -1358,8 +1366,6 @@ def seller_panel_section(request, section):
             context['runtime_log_lines'] = read_tech_log_tail('runtime.log', 150)
             context['error_payment_log_lines'] = read_tech_log_tail('error_payment.log', 150)
     elif section == 'homepage':
-        from django.db.models import Case, IntegerField, When
-
         from .home_page_helpers import (
             BLOCK_CUSTOM,
             MAX_SHOP_CUSTOM_BLOCKS,
@@ -1372,17 +1378,10 @@ def seller_panel_section(request, section):
         )
 
         page = ensure_home_page_for_seller(seller_id, shop_profile)
-        # 预设块在前，自定义块永远排在最后
+        # 所有积木（含自定义）统一按排序数字比大小
         blocks = list(
             page.blocks.exclude(block_type__in=SERVER_ONLY_BLOCK_TYPES | SHOP_LEGACY_BLOCK_TYPES)
-            .annotate(
-                _custom_last=Case(
-                    When(block_type=BLOCK_CUSTOM, then=1),
-                    default=0,
-                    output_field=IntegerField(),
-                )
-            )
-            .order_by('_custom_last', 'sort_order', 'block_type')
+            .order_by('sort_order', 'block_type')
         )
         for b in blocks:
             b.spec = get_shop_block_spec(b.block_type)
@@ -1409,6 +1408,19 @@ def seller_panel_section(request, section):
         context['showcase_preview_url'] = '/'
         if shop_profile and (shop_profile.shop_code or '').strip():
             context['showcase_preview_url'] = f"/s/{shop_profile.shop_code.strip()}/home/"
+    elif section == 'plugins':
+        from .plugin_runtime.registry import is_plugin_enabled, list_plugins
+
+        plugin_rows = []
+        for p in list_plugins():
+            plugin_rows.append({
+                'id': p.id,
+                'name': p.name,
+                'description': p.description,
+                'enabled': is_plugin_enabled(p.id, seller_id),
+                'nav_labels': [i.label for i in p.seller_nav_items()],
+            })
+        context['plugin_rows'] = plugin_rows
 
     return render(request, f'waimai/seller/{section}.html', context)
 
@@ -1442,7 +1454,7 @@ def place_order(request):
         return redirect(f'/shop/?seller_id={seller_id}')
 
     shop_profile = ShopProfile.objects.filter(seller_id=seller_id).first()
-    table_sess = _get_buyer_table_session(request, seller_id)
+    table_sess = get_buyer_table_session(request, seller_id)
     fulfillment_type, ch_err = validate_place_order_channel(
         request, seller_id, request.POST.get('fulfillment_type'), table_sess,
     )
@@ -1581,7 +1593,7 @@ def pay_order(request, order_id):
     from .guest_order_helpers import buyer_or_guest_can_access_order
 
     order = get_object_or_404(BuyOrder, order_id=order_id)
-    table_sess = _get_buyer_table_session(request, order.seller_id)
+    table_sess = get_buyer_table_session(request, order.seller_id)
     if not buyer_or_guest_can_access_order(request, order, table_sess):
         if request.user.is_authenticated:
             return redirect('order_history')
@@ -1634,7 +1646,7 @@ def pay_order_status(request, order_id):
     from .guest_order_helpers import buyer_or_guest_can_access_order
 
     order = get_object_or_404(BuyOrder, order_id=order_id)
-    table_sess = _get_buyer_table_session(request, order.seller_id)
+    table_sess = get_buyer_table_session(request, order.seller_id)
     if not buyer_or_guest_can_access_order(request, order, table_sess):
         return JsonResponse({'paid': False}, status=403)
     if order.payment_status == 'paid':
@@ -1731,7 +1743,7 @@ def order_detail(request, order_id):
     )
 
     # 堂食游客：凭进行中的桌台会话查看本单（结账翻台后会话关闭即不可见）
-    table_sess = _get_buyer_table_session(request, order.seller_id)
+    table_sess = get_buyer_table_session(request, order.seller_id)
     is_guest_viewer = guest_can_access_order(request, order, table_sess)
 
     user = _order_page_viewer(request)

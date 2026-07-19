@@ -347,8 +347,30 @@ class ShopPaymentSettingsForm(forms.ModelForm):
         return cleaned
 
 
+class ShopStatusSettingsForm(forms.ModelForm):
+    """营业状态（主体）：只设全天营业时间；营业中/停止用页面按钮切换。"""
+
+    class Meta:
+        model = ShopOperatingSettings
+        fields = [
+            'business_open', 'business_close',
+        ]
+        widgets = {
+            'business_open': forms.TimeInput(attrs={'type': 'time'}),
+            'business_close': forms.TimeInput(attrs={'type': 'time'}),
+        }
+        labels = {
+            'business_open': '全天营业开始',
+            'business_close': '全天营业结束',
+        }
+        help_texts = {
+            'business_open': '各业态通用的全天营业窗。',
+            'business_close': '到点后按规则不再接新单（仍可用下方按钮停止营业）。',
+        }
+
+
 class ShopOperatingSettingsForm(forms.ModelForm):
-    """堂食营业与拼桌设置"""
+    """饮食插件：通道开关、分时段、等待、拼桌、桌码局域网等"""
 
     acknowledge_table_rules = forms.BooleanField(
         required=False, label='已阅读并理解「桌码主单」硬规则',
@@ -376,11 +398,9 @@ class ShopOperatingSettingsForm(forms.ModelForm):
     class Meta:
         model = ShopOperatingSettings
         fields = [
-            'business_open', 'business_close',
+            'dine_channel_enabled', 'takeaway_channel_enabled', 'delivery_channel_enabled',
             'dine_open', 'dine_close',
             'delivery_open', 'delivery_close',
-            'dine_channel_enabled', 'takeaway_channel_enabled', 'delivery_channel_enabled',
-            'closed_for_today', 'pause_new_orders',
             'dine_default_wait_minutes', 'takeaway_default_wait_minutes',
             'delivery_default_wait_minutes',
             'share_table_enabled', 'share_table_mode',
@@ -388,8 +408,6 @@ class ShopOperatingSettingsForm(forms.ModelForm):
             'table_lan_base_url',
         ]
         widgets = {
-            'business_open': forms.TimeInput(attrs={'type': 'time'}),
-            'business_close': forms.TimeInput(attrs={'type': 'time'}),
             'dine_open': forms.TimeInput(attrs={'type': 'time'}),
             'dine_close': forms.TimeInput(attrs={'type': 'time'}),
             'delivery_open': forms.TimeInput(attrs={'type': 'time'}),
@@ -398,17 +416,13 @@ class ShopOperatingSettingsForm(forms.ModelForm):
             'table_lan_base_url': forms.HiddenInput(),
         }
         labels = {
-            'business_open': '全天营业开始',
-            'business_close': '全天营业结束',
+            'dine_channel_enabled': '当前允许堂食接单（扫桌码等现场入口）',
+            'takeaway_channel_enabled': '当前允许打包接单',
+            'delivery_channel_enabled': '当前允许外卖接单',
             'dine_open': '堂食接单开始（可留空；打包暂共用此时段）',
             'dine_close': '堂食接单结束（可留空）',
             'delivery_open': '外卖接单开始（可留空）',
             'delivery_close': '外卖接单结束（可留空）',
-            'dine_channel_enabled': '当前允许堂食接单（扫桌码等现场入口）',
-            'takeaway_channel_enabled': '当前允许打包接单',
-            'delivery_channel_enabled': '当前允许外卖接单',
-            'closed_for_today': '本日打烊',
-            'pause_new_orders': '暂停接单',
             'dine_default_wait_minutes': '堂食普通默认等待时间（分钟）',
             'takeaway_default_wait_minutes': '打包普通默认等待时间（分钟）',
             'delivery_default_wait_minutes': '外卖普通默认等待时间（分钟）',

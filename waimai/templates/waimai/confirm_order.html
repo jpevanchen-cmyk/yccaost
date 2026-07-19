@@ -19,8 +19,10 @@
         <p class="fulfillment-hint">外卖配送上门，配送费按店铺规则计算。</p>
         {% elif shop_channel == 'dine_in' %}
         <p class="fulfillment-hint">在店内用餐，<strong>不收配送费</strong>。</p>
-        {% else %}
+        {% elif shop_channel == 'takeaway' %}
         <p class="fulfillment-hint">打包自取带走，<strong>不收配送费</strong>。</p>
+        {% else %}
+        <p class="fulfillment-hint">基础下单，店家将按商品说明或沟通约定处理。</p>
         {% endif %}
         {% if table_label %}
         <p class="fulfillment-hint">桌台：{{ table_label }}</p>
@@ -81,9 +83,15 @@
     </div>
     {% else %}
     <div class="card" style="margin:12px 0;padding:12px;background:#f0faf0;">
-        <strong style="font-size:14px;">{% if shop_channel == 'dine_in' %}🍽 堂食说明{% else %}🥡 打包说明{% endif %}</strong>
+        <strong style="font-size:14px;">
+            {% if shop_channel == 'dine_in' %}🍽 堂食说明
+            {% elif shop_channel == 'takeaway' %}🥡 打包说明
+            {% else %}📦 下单说明{% endif %}
+        </strong>
         <div class="fee-line">不收配送费</div>
-        {% if shop_profile %}
+        {% if shop_channel == 'order' %}
+        <div class="fee-line">店家将按商品说明或沟通约定处理。</div>
+        {% elif shop_profile %}
         <div class="fee-line">店铺地址：{{ shop_profile.address }}</div>
         {% endif %}
     </div>

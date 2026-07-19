@@ -152,8 +152,8 @@ def _channel_window(settings: ShopOperatingSettings, channel: str):
 
 def check_order_admission(seller_id: str, fulfillment_type: str) -> tuple[bool, str]:
     """
-    新单准入（A.11.1）：须同时满足全天营业、渠道时段、渠道开关、未打烊、未暂停。
-    fulfillment_type: delivery / dine_in / takeaway
+    新单准入：主体「下单」只认营业时间与状态；
+    饮食三通道还须满足插件内的通道开关与分时段。
     """
     from .channel_helpers import channel_label, channel_switch_enabled
 
@@ -166,6 +166,9 @@ def check_order_admission(seller_id: str, fulfillment_type: str) -> tuple[bool, 
         return False, '店铺本日已打烊，暂不接新单'
     if not _in_time_window(now_t, settings.business_open, settings.business_close):
         return False, '当前不在营业时间内'
+
+    if fulfillment_type == 'order':
+        return True, ''
 
     # 通道开关与时段：统一查表，不按通道复制三套 if
     window_key = {
