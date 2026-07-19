@@ -48,12 +48,18 @@ def dining_guest_onsite_cash_only(order) -> bool:
 def build_dining_cash_option(settings, order):
     """按堂食/打包/外卖拼现金选项；不允许则返回 None。"""
     from waimai.payments.base import PayMethodOption
+    from waimai.plugins.fulfillment.ownership import fulfillment_plugin_enabled
 
     guest_onsite_only = dining_guest_onsite_cash_only(order)
+    is_delivery = bool(
+        order is not None and getattr(order, 'fulfillment_type', '') == 'delivery'
+    )
+    # 外卖货到付款依赖履约插件 + 店铺开关
     delivery_cod_off = bool(
-        order is not None
-        and getattr(order, 'fulfillment_type', '') == 'delivery'
-        and not getattr(settings, 'enable_cod', True)
+        is_delivery and (
+            not fulfillment_plugin_enabled(getattr(order, 'seller_id', '') or '')
+            or not getattr(settings, 'enable_cod', True)
+        )
     )
     if not (settings.enable_cash or guest_onsite_only) or delivery_cod_off:
         return None

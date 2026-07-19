@@ -24,12 +24,26 @@ admin.site.unregister(Group)
 
 @admin.register(User)
 class CustomUserAdmin(DefaultUserAdmin):
-    list_display = ['username', 'role', 'employer_seller_id', 'is_experience', 'is_permanent', 'is_server_owner', 'is_active', 'date_joined']
-    list_filter = ['role', 'is_active', 'is_experience', 'is_permanent', 'is_server_owner']
+    list_display = [
+        'username', 'role', 'staff_account_type', 'staff_job_title',
+        'employer_seller_id', 'is_experience', 'is_permanent',
+        'is_server_owner', 'is_active', 'date_joined',
+    ]
+    list_filter = [
+        'role', 'staff_account_type', 'is_active',
+        'is_experience', 'is_permanent', 'is_server_owner',
+    ]
     fieldsets = DefaultUserAdmin.fieldsets + (
         ('用户身份', {
-            'fields': ('role', 'employer_seller_id', 'perm_cancel_order', 'is_experience', 'is_permanent', 'is_server_owner'),
-            'description': '「服务器管理者」可进「服务器设置」。体验相关标记仅在体验机模式下有意义，与管理者权限无关。「允许取消订单」为店长权限勾选项。',
+            'fields': (
+                'role', 'employer_seller_id', 'staff_account_type',
+                'staff_job_title', 'staff_permissions', 'perm_cancel_order',
+                'is_experience', 'is_permanent', 'is_server_owner',
+            ),
+            'description': (
+                '店铺子账号统一使用“店铺员工”，再填写管理职务/普通员工、'
+                '职务名称与权限清单。“允许取消订单”旧字段仅作兼容同步。'
+            ),
         }),
     )
 

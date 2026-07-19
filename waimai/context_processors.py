@@ -5,7 +5,10 @@ def nav_shop_work(request):
     """工作台站点标记、店码、工作台登录用户（与生态 user 分开）"""
     from django.urls import reverse
 
-    from .session_guard import HEARTBEAT_TIMEOUT_SECONDS, IDLE_TIMEOUT_SECONDS
+    from .session_guard import (
+        IDLE_TIMEOUT_SECONDS,
+        SESSION_HEARTBEAT_INTERVAL_SECONDS,
+    )
     from .shop_work_auth import get_shop_work_user, path_is_shop_work
     from .staff_account_helpers import shop_code_from_request
 
@@ -36,7 +39,7 @@ def nav_shop_work(request):
         'shop_work_logout_url': logout_url,
         'session_guard_enabled': session_guard_enabled,
         'session_guard_channel': session_channel,
-        'session_heartbeat_seconds': max(30, HEARTBEAT_TIMEOUT_SECONDS // 5),
+        'session_heartbeat_seconds': SESSION_HEARTBEAT_INTERVAL_SECONDS,
         'session_idle_seconds': IDLE_TIMEOUT_SECONDS,
         'session_heartbeat_url': reverse('session_heartbeat'),
         'session_beacon_url': reverse('session_beacon_logout'),

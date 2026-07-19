@@ -6,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}野草系统{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=40">
+    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=42">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -15,7 +15,7 @@
             <button type="button" class="nav-toggle" id="nav-toggle" aria-label="打开菜单">☰</button>
             <a class="site-brand" href="/">{% if site_brand_image_url %}<img src="{{ site_brand_image_url }}" alt="" style="height:22px;vertical-align:middle;margin-right:4px;">{% endif %}{{ site_brand_name|default:"🌿 野草系统" }}</a>
             {% if on_shop_work_site and shop_work_user %}
-            <div class="site-user" title="{{ shop_work_user.username }}">工作台 · {{ shop_work_user.get_role_display }}</div>
+            <div class="site-user" title="{{ shop_work_user.username }}">工作台 · {{ shop_work_user|staff_title }}</div>
             {% elif user.is_authenticated and user.role == 'buyer' %}
             <div class="site-user" title="{{ user.username }}">{{ user.get_role_display }}</div>
             {% elif user.is_authenticated and user.role == 'seller' %}
@@ -31,11 +31,13 @@
             <div class="nav-section-title">导航</div>
             <a href="/">🌿 {{ site_nav_label|default:"店铺名录" }}</a>
             {% if user.is_authenticated and user.role == 'buyer' %}
+                <a href="{% url 'buyer_center' %}">👤 我的</a>
                 <a href="/order-history/">📜 我的订单</a>
             {% endif %}
             {% if user.is_authenticated and user.role == 'seller' %}
                 <a href="/seller-panel/">📦 管理店铺</a>
                 <a href="/shop/?seller_id={{ user.username }}">👀 预览店铺</a>
+                <a href="{% url 'account_password_change' %}">🔐 修改密码</a>
             {% endif %}
             {% if show_server_settings_link or show_owner_console_link %}
                 <a href="{% url 'server_settings' %}">⚙️ 服务器设置</a>
@@ -98,7 +100,7 @@
     {% endif %}
 
     {% block pre_mobile_js %}{% endblock %}
-    <script src="{% static 'waimai/mobile.js' %}?v=8"></script>
+    <script src="{% static 'waimai/mobile.js' %}?v=10"></script>
     {% if session_guard_enabled %}
     <script>
     window.YC_SESSION_GUARD = {
@@ -111,7 +113,7 @@
         idleSeconds: {{ session_idle_seconds|default:900 }}
     };
     </script>
-    <script src="{% static 'waimai/session_guard.js' %}?v=2"></script>
+    <script src="{% static 'waimai/session_guard.js' %}?v=5"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
 </body>

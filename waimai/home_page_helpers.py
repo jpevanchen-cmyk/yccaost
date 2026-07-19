@@ -229,6 +229,10 @@ def ensure_home_page_for_seller(seller_id: str, shop_profile=None):
     # 旧默认文案 → 新默认（仅仍为旧字样时改，店主已改过的不动）
     page.blocks.filter(block_type=BLOCK_ORDER_CTA, title='开始点餐').update(title='进入店铺')
     page.blocks.filter(block_type=BLOCK_ORDER_CTA, nav_label='点餐').update(nav_label='店铺')
+    page.blocks.filter(
+        block_type=BLOCK_ORDER_CTA,
+        body='浏览菜单、加入购物车并下单',
+    ).update(body='浏览商品、加入购物车并下单')
     return page
 
 
@@ -266,7 +270,7 @@ def _default_shop_content(block_type: str, shop_profile) -> tuple[str, str]:
     if block_type == BLOCK_NOTICE:
         return '公告', ''
     if block_type == BLOCK_ORDER_CTA:
-        return '进入店铺', '浏览菜单、加入购物车并下单'
+        return '进入店铺', '浏览商品、加入购物车并下单'
     return '', ''
 
 

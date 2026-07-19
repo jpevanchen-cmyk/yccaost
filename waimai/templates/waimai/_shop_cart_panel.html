@@ -6,7 +6,7 @@
             {% if item.tier_label %}<span class="cart-tier-tag">{{ item.tier_label }}</span>{% endif %}
             · ¥{{ item.subtotal }}</div>
         {% if item.quantity == 0 %}
-        <div class="cart-zero-hint">当前 0 份，点 + 可加回，或点删除移出购物车</div>
+        <div class="cart-zero-hint">当前 0 {{ product_shell.unit_label|default:"件" }}，点 + 可加回，或点删除移出购物车</div>
         {% endif %}
         <div class="cart-item-controls">
             <form method="POST" style="display:inline;margin:0;" data-scroll-anchor="cart">

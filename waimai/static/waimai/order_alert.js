@@ -116,14 +116,19 @@
   // ---- 界面元素 ----
   var banner, bannerText, enableBtn, statusText;
 
+  // 开关按钮颜色：关=灰，开=绿（公共样式，工作台与订单管理共用）
   function setButtonState() {
     if (!enableBtn) return;
     if (enabled) {
       enableBtn.textContent = '🔕 新单提醒：开（点此关闭）';
       enableBtn.classList.add('is-on');
+      enableBtn.classList.remove('is-off');
+      enableBtn.setAttribute('aria-pressed', 'true');
     } else {
       enableBtn.textContent = '🔔 新单提醒：关（点此开启）';
+      enableBtn.classList.add('is-off');
       enableBtn.classList.remove('is-on');
+      enableBtn.setAttribute('aria-pressed', 'false');
     }
   }
 
@@ -132,7 +137,8 @@
     bar.className = 'order-alert-bar';
     enableBtn = document.createElement('button');
     enableBtn.type = 'button';
-    enableBtn.className = 'btn btn-orange order-alert-enable';
+    enableBtn.className = 'btn order-alert-enable is-off';
+    enableBtn.setAttribute('aria-pressed', 'false');
     statusText = document.createElement('span');
     statusText.className = 'order-alert-status';
     bar.appendChild(enableBtn);

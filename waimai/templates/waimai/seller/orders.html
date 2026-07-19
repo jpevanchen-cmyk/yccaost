@@ -47,7 +47,7 @@
         <div class="seller-order-search-row">
             <label class="seller-order-search-q">
                 <span class="seller-order-search-label">搜索</span>
-                <input type="search" name="q" value="{{ order_search.q }}" placeholder="订单号、买家、桌号、地址、菜名、备注…">
+                <input type="search" name="q" value="{{ order_search.q }}" placeholder="{{ order_search_placeholder }}">
             </label>
             <button type="submit" class="btn btn-sm">搜索</button>
         </div>
@@ -68,12 +68,18 @@
                     {% endfor %}
                 </select>
             </label>
-            <label>取餐方式
+            <label>履约方式
                 <select name="fulfillment_type" onchange="document.getElementById('order-search-form').submit()">
                     <option value="">全部</option>
                     {% for val, label in fulfillment_type_choices %}
                     <option value="{{ val }}" {% if order_search.fulfillment_type == val %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
+                </select>
+            </label>
+            <label>现金异常
+                <select name="cash_issue" onchange="document.getElementById('order-search-form').submit()">
+                    <option value="">全部</option>
+                    <option value="abnormal" {% if order_search.cash_issue == 'abnormal' %}selected{% endif %}>只看少收/争议单</option>
                 </select>
             </label>
             <label>时间范围
@@ -99,7 +105,7 @@
                 <div class="seller-order-amount">¥{{ order.total_amount }}</div>
             </div>
             <div class="seller-order-badges">
-                <span class="badge badge-order-prep">{{ order.get_fulfillment_display_short }}</span>
+                <span class="badge badge-order-prep">{{ order.order_shell.fulfillment_label }}</span>
                 {% if order.payment_status == 'paid' %}
                 <span class="badge badge-pay-paid">{{ order.get_payment_status_display }}</span>
                 {% elif order.payment_status == 'uncollected' %}
@@ -109,18 +115,24 @@
                 {% else %}
                 <span class="badge badge-default">{{ order.get_payment_status_display }}</span>
                 {% endif %}
+                {% if order.cash_shortfall_status %}
+                <span class="badge badge-pay-uncollected">{{ order.get_cash_shortfall_status_display }}</span>
+                {% endif %}
                 <span class="badge badge-order-prep">{{ order.get_order_status_display }}</span>
             </div>
             <div class="seller-order-meta">
                 买家：<strong>{{ order.get_buyer_display_name }}</strong>{% if order.is_guest_order %} <span class="card-meta">（游客）</span>{% endif %}<br>
-                {% if order.table_label %}桌台：<strong>{{ order.table_label }}</strong>{% if order.order_kind != 'normal' %} · {{ order.get_order_kind_display }}{% endif %}<br>{% endif %}
-                {% if order.is_in_store %}
-                地点：{{ order.delivery_address }}<br>
-                {% else %}
-                地址：{{ order.delivery_address }}<br>
-                距离：{{ order.distance_km }} km<br>
-                {% endif %}
+                {% if order.order_shell.show_table_label %}{{ order.order_shell.table_label_caption }}：<strong>{{ order.order_shell.table_label }}</strong>{% if order.order_kind != 'normal' %} · {{ order.get_order_kind_display }}{% endif %}<br>{% endif %}
+                {{ order.order_shell.list_place_prefix }}：{{ order.delivery_address }}<br>
+                {% if order.order_shell.show_distance %}距离：{{ order.distance_km }} km<br>{% endif %}
                 {% if order.payment_method %}支付：{{ order.get_payment_method_display }}{% endif %}
+                {% if order.is_delivery_cod and order.cash_collected_amount %}
+                <br>现金对账：应收 ¥{{ order.total_amount }} · 实收 ¥{{ order.cash_collected_amount }}
+                    {% if order.cash_shortfall_amount %} · <strong style="color:#c62828;">少收 ¥{{ order.cash_shortfall_amount }}</strong>{% endif %}
+                    {% if order.cash_shortfall_reason %}<br>少收原因：{{ order.cash_shortfall_reason }}{% endif %}
+                    {% if order.cash_exception_note %}<br>异常/处理备注：{{ order.cash_exception_note }}{% endif %}
+                    <br>入金：{% if order.cash_remitted_at %}已确认{% else %}未确认{% endif %}
+                {% endif %}
             </div>
             <p style="margin:8px 0 0;">
                 <a href="{% url 'order_detail' order.order_id %}">
@@ -132,7 +144,7 @@
             </p>
             <div class="seller-order-actions">
                 {% if order.estimated_ready_at and order.order_status != 'completed' and order.order_status != 'cancelled' %}
-                <span class="seller-dispatch-info">{{ order.get_estimated_ready_label }}</span>
+                <span class="seller-dispatch-info">{{ order.order_shell.estimated_ready_label }}</span>
                 {% endif %}
                 {% if order.fulfillment_type == 'delivery' and order.delivery_order %}
                 <span class="seller-dispatch-info">配送骑手：{{ order.delivery_order.rider_id }}</span>
@@ -157,5 +169,5 @@ window.YC_ORDER_ALERT = {
 };
 </script>
 <script src="{% static 'waimai/seller_order_shortcuts.js' %}?v=1"></script>
-<script src="{% static 'waimai/order_alert.js' %}?v=7"></script>
+<script src="{% static 'waimai/order_alert.js' %}?v=8"></script>
 {% endblock %}

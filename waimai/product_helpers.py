@@ -135,6 +135,9 @@ def validate_tier_purchase(
 ) -> tuple[bool, str]:
     """校验某一档位能否购买指定数量"""
     cart = cart or {}
+    from .product_shell_helpers import product_unit_label
+
+    unit = product_unit_label(seller_id)
     price = resolve_tier_price(dish, tier)
     if price is None:
         return False, f'「{dish.name}」未开放{TIER_LABELS.get(tier, tier)}'
@@ -158,14 +161,14 @@ def validate_tier_purchase(
             )
             in_cart = count_tier_in_cart(cart, seller_id, dish.dish_id, PRICE_TIER_MEMBER)
             if bought + in_cart + quantity > dish.member_daily_limit:
-                return False, f'「{dish.name}」会员价今日限购 {dish.member_daily_limit} 份'
+                return False, f'「{dish.name}」会员价今日限购 {dish.member_daily_limit} {unit}'
         if dish.member_total_limit:
             bought = count_tier_purchases(
                 buyer_id, seller_id, dish.dish_id, PRICE_TIER_MEMBER,
             )
             in_cart = count_tier_in_cart(cart, seller_id, dish.dish_id, PRICE_TIER_MEMBER)
             if bought + in_cart + quantity > dish.member_total_limit:
-                return False, f'「{dish.name}」会员价累计限购 {dish.member_total_limit} 份'
+                return False, f'「{dish.name}」会员价累计限购 {dish.member_total_limit} {unit}'
 
     if tier == PRICE_TIER_SPECIAL:
         remain = special_pool_remaining(buyer_id, seller_id, cart)
@@ -177,19 +180,22 @@ def validate_tier_purchase(
             )
             in_cart = count_tier_in_cart(cart, seller_id, dish.dish_id, PRICE_TIER_SPECIAL)
             if bought + in_cart + quantity > dish.special_per_dish_limit:
-                return False, f'「{dish.name}」特价限购 {dish.special_per_dish_limit} 份'
+                return False, f'「{dish.name}」特价限购 {dish.special_per_dish_limit} {unit}'
 
-    # 菜单清单可售上限（仍按菜品计，不区分档位）
-    from .menu_helpers import get_menu_item_for_dish, menu_item_allows_tier
-    menu_item = get_menu_item_for_dish(seller_id, dish.dish_id)
-    if tier in (PRICE_TIER_MEMBER, PRICE_TIER_SPECIAL) and not menu_item_allows_tier(
-        menu_item, tier, seller_id,
-    ):
-        return False, f'「{dish.name}」当前菜单未开放{TIER_LABELS.get(tier, tier)}'
-    if menu_item and menu_item.sales_cap is not None:
-        if menu_item.sold_count + quantity > menu_item.sales_cap:
-            remain = max(0, menu_item.sales_cap - menu_item.sold_count)
-            return False, f'「{dish.name}」本日清单仅剩 {remain} 份'
+    # 菜单清单是饮食插件能力；停用插件后不可继续暗中限制主体商品。
+    from .plugin_runtime.registry import is_plugin_enabled
+    if is_plugin_enabled('dining', seller_id):
+        from .menu_helpers import get_menu_item_for_dish, menu_item_allows_tier
+
+        menu_item = get_menu_item_for_dish(seller_id, dish.dish_id)
+        if tier in (PRICE_TIER_MEMBER, PRICE_TIER_SPECIAL) and not menu_item_allows_tier(
+            menu_item, tier, seller_id,
+        ):
+            return False, f'「{dish.name}」当前菜单未开放{TIER_LABELS.get(tier, tier)}'
+        if menu_item and menu_item.sales_cap is not None:
+            if menu_item.sold_count + quantity > menu_item.sales_cap:
+                remain = max(0, menu_item.sales_cap - menu_item.sold_count)
+                return False, f'「{dish.name}」本日清单仅剩 {remain} {unit}'
 
     return True, ''
 
@@ -199,6 +205,9 @@ def build_tier_purchase_hints(dish: Dish, tier: str, seller_id: str, menu_item=N
     根据商品管理与全店规则，生成客人可见的购买条件说明（与下单校验一致，勿手写重复）。
     """
     hints: list[str] = []
+    from .product_shell_helpers import product_unit_label
+
+    unit = product_unit_label(seller_id)
     if tier == PRICE_TIER_GENERAL:
         return hints
 
@@ -207,13 +216,19 @@ def build_tier_purchase_hints(dish: Dish, tier: str, seller_id: str, menu_item=N
 
     if tier == PRICE_TIER_MEMBER:
         if dish.member_daily_limit:
-            hints.append(format_dish_limit_hint('member_daily_limit', dish.member_daily_limit))
+            hints.append(format_dish_limit_hint(
+                'member_daily_limit', dish.member_daily_limit, unit,
+            ))
         if dish.member_total_limit:
-            hints.append(format_dish_limit_hint('member_total_limit', dish.member_total_limit))
+            hints.append(format_dish_limit_hint(
+                'member_total_limit', dish.member_total_limit, unit,
+            ))
 
     if tier == PRICE_TIER_SPECIAL:
         if dish.special_per_dish_limit:
-            hints.append(format_dish_limit_hint('special_per_dish_limit', dish.special_per_dish_limit))
+            hints.append(format_dish_limit_hint(
+                'special_per_dish_limit', dish.special_per_dish_limit, unit,
+            ))
         settings = get_operating_settings(seller_id)
         if settings.special_max_per_user:
             hints.append(format_shop_special_limit_hint(
@@ -246,15 +261,17 @@ def build_dish_tier_options(
 ) -> list[dict]:
     """点菜页：该菜有哪些档位可选"""
     from .menu_helpers import get_menu_item_for_dish, menu_item_allows_tier
+    from .plugin_runtime.registry import is_plugin_enabled
 
     options = []
     buyer_id = buyer.username if buyer and buyer.is_authenticated else ''
     special_exhausted = buyer_special_pool_exhausted(buyer_id, seller_id, cart)
-    if menu_item is None:
+    dining_enabled = is_plugin_enabled('dining', seller_id)
+    if dining_enabled and menu_item is None:
         menu_item = get_menu_item_for_dish(seller_id, dish.dish_id)
 
     for tier in (PRICE_TIER_GENERAL, PRICE_TIER_MEMBER, PRICE_TIER_SPECIAL):
-        if not menu_item_allows_tier(menu_item, tier, seller_id):
+        if dining_enabled and not menu_item_allows_tier(menu_item, tier, seller_id):
             continue
         price = resolve_tier_price(dish, tier)
         if price is None:

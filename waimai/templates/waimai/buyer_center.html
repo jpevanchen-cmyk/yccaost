@@ -1,0 +1,68 @@
+{% extends 'waimai/base.html' %}
+{% load yc_time %}
+{% block title %}我的 - 野草系统{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/directory/" back_label="返回店铺名录" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">👤 我的</h1>
+
+<div class="card" style="margin-bottom:14px;">
+    <h2 style="margin-top:0;">基本信息</h2>
+    <p>账号：<strong>{{ user.username }}</strong></p>
+    <p class="card-meta">身份：{{ user.get_role_display }} · 注册于 {{ user.date_joined|beijing:"Y-m-d H:i" }}</p>
+    <a class="btn btn-outline btn-sm" href="{% url 'account_password_change' %}">修改密码</a>
+</div>
+
+<h2>当前订单</h2>
+{% if current_order_rows %}
+    {% for row in current_order_rows %}
+    {% with order=row.order %}
+    <div class="card">
+        <div class="order-card-top">
+            <div>
+                <div class="order-card-id">订单号：{{ order.get_display_order_no }}</div>
+                <div class="card-meta">{{ row.shop_name }} · {{ order.created_at|beijing:"m-d H:i" }}</div>
+            </div>
+            <div class="order-card-amount">¥{{ order.total_amount }}</div>
+        </div>
+        <p>
+            <span class="badge badge-order-prep">{{ order.get_order_status_display }}</span>
+            <span class="badge badge-default">{{ order.get_payment_status_display }}</span>
+            {% if order.cash_shortfall_status == 'buyer_pending' %}
+            <span class="badge badge-pay-uncollected">请确认实付金额</span>
+            {% endif %}
+        </p>
+        <a class="btn btn-outline btn-sm" href="{% url 'order_detail' order.order_id %}">
+            查看当前订单{% if row.unread_msg_count %} · {{ row.unread_msg_count }} 条新消息{% endif %}
+        </a>
+    </div>
+    {% endwith %}
+    {% endfor %}
+{% else %}
+<p class="card-meta">当前没有进行中的订单。</p>
+{% endif %}
+
+<h2 style="margin-top:20px;">历史订单</h2>
+{% if history_order_rows %}
+    {% for row in history_order_rows %}
+    {% with order=row.order %}
+    <div class="card">
+        <div class="order-card-top">
+            <div>
+                <div class="order-card-id">订单号：{{ order.get_display_order_no }}</div>
+                <div class="card-meta">{{ row.shop_name }} · {{ order.created_at|beijing:"m-d H:i" }}</div>
+            </div>
+            <div class="order-card-amount">¥{{ order.total_amount }}</div>
+        </div>
+        <p><span class="badge badge-default">{{ order.get_order_status_display }}</span></p>
+        <a class="btn btn-outline btn-sm" href="{% url 'order_detail' order.order_id %}">订单详情</a>
+    </div>
+    {% endwith %}
+    {% endfor %}
+{% else %}
+<p class="card-meta">还没有历史订单。</p>
+{% endif %}
+{% endblock %}

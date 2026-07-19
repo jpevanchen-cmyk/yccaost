@@ -20,6 +20,20 @@ from .product_helpers import parse_decimal_field, parse_optional_int
 from .scroll_helpers import redirect_with_anchor
 
 
+_DINING_MENU_ACTIONS = {
+    'create_menu_profile',
+    'toggle_menu_item_listed',
+    'toggle_menu_item_member',
+    'toggle_menu_item_special',
+    'save_menu_item_cap',
+    'add_dish_to_profile',
+    'activate_menu_profile',
+    'delete_menu_profile',
+    'copy_menu_profile',
+    'rename_menu_profile',
+}
+
+
 def _products_redirect(anchor=None, query=None):
     url = reverse('seller_panel_section', kwargs={'section': 'products'})
     if query:
@@ -94,6 +108,13 @@ def _apply_new_dish_special_defaults(dish):
 
 def handle_products_post(request, seller_id):
     """商品上架管理分区 POST"""
+    from .plugin_runtime.registry import is_plugin_enabled
+
+    if not is_plugin_enabled('dining', seller_id) and any(
+        action in request.POST for action in _DINING_MENU_ACTIONS
+    ):
+        messages.error(request, '菜单清单由饮食插件提供；当前插件已停用')
+        return _products_redirect('product-list')
 
     if 'save_special_pool' in request.POST:
         settings = get_operating_settings(seller_id)

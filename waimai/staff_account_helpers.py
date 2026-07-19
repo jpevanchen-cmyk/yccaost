@@ -7,11 +7,11 @@ from urllib.parse import urlsplit, urlunsplit
 
 from django.contrib.auth import authenticate
 from django import forms
+from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 
 from .models import StaffAttendanceLog, User
-from .shop_work_helpers import SHOP_STAFF_ROLES
 
 STAFF_USERNAME_SEP = '::'
 STAFF_WORK_ON_DUTY = 'on_duty'
@@ -38,7 +38,223 @@ STAFF_ROLE_LABELS = {
     'kitchen': '后厨',
     'rider': '骑手',
     'manager': '店长',
+    'staff': '店铺员工',
 }
+STAFF_ROLE = 'staff'
+LEGACY_STAFF_ROLES = ('waiter', 'kitchen', 'rider', 'manager')
+ALL_STAFF_ROLES = (STAFF_ROLE,) + LEGACY_STAFF_ROLES
+
+PERM_CANCEL_ORDER = 'orders.cancel'
+PERM_ORDERS_VIEW = 'orders.view'
+PERM_ORDERS_UPDATE_STATUS = 'orders.update_status'
+PERM_ORDERS_CONFIRM_PAYMENT = 'orders.confirm_payment'
+PERM_ORDERS_CONTACT = 'orders.contact'
+PERM_DINING_WAITER = 'dining.waiter'
+PERM_DINING_KITCHEN = 'dining.kitchen'
+# 配送属于履约能力；由履约插件贡献权限与页签（编号不绑死饮食）。
+PERM_DINING_RIDER = 'fulfillment.delivery'
+PERM_FULFILLMENT_CASH_MANAGE = 'fulfillment.cash_manage'
+
+# 主体通用订单台相关权限（促成交易闭环，不依赖业态插件）
+CORE_ORDER_DESK_PERMISSIONS = (
+    PERM_ORDERS_VIEW,
+    PERM_ORDERS_UPDATE_STATUS,
+    PERM_ORDERS_CONFIRM_PAYMENT,
+    PERM_ORDERS_CONTACT,
+)
+
+CORE_STAFF_PERMISSION_DEFINITIONS = [
+    {
+        'code': PERM_ORDERS_VIEW,
+        'label': '仅看订单',
+        'help_text': '可打开「订单处理」查看本店基础订单，不能改状态或收款',
+    },
+    {
+        'code': PERM_ORDERS_UPDATE_STATUS,
+        'label': '可改订单状态',
+        'help_text': '可推进基础订单：开始处理 → 可交付 → 完成',
+    },
+    {
+        'code': PERM_ORDERS_CONFIRM_PAYMENT,
+        'label': '可确认收款',
+        'help_text': '可确认现金等到店收款；网上支付仍由系统自动到账',
+    },
+    {
+        'code': PERM_ORDERS_CONTACT,
+        'label': '可联系顾客',
+        'help_text': '可查看联系信息，并在订单沟通里留言',
+    },
+    {
+        'code': PERM_CANCEL_ORDER,
+        'label': '允许取消订单',
+        'help_text': '满足沟通门槛后，可在工作台取消本店订单',
+    },
+]
+
+
+def shop_staff_query():
+    """统一店铺子账号查询条件（兼容迁移前旧四岗位）。"""
+    return Q(role__in=ALL_STAFF_ROLES)
+
+
+def staff_permission_query(permission_code: str):
+    """按稳定权限编号筛选账号；同时兼容迁移前旧岗位。"""
+    legacy_roles = {
+        PERM_DINING_WAITER: ('waiter', 'manager'),
+        PERM_DINING_KITCHEN: ('kitchen',),
+        PERM_DINING_RIDER: ('rider',),
+        PERM_CANCEL_ORDER: (),
+    }
+    query = Q(role=STAFF_ROLE, staff_permissions__icontains=permission_code)
+    old_roles = legacy_roles.get(permission_code, ())
+    if old_roles:
+        query |= Q(role__in=old_roles)
+    if permission_code == PERM_CANCEL_ORDER:
+        query |= Q(role__in=ALL_STAFF_ROLES, perm_cancel_order=True)
+    return query
+
+
+def is_shop_staff_account(user) -> bool:
+    """是否店铺员工子账号（不含店主）。"""
+    return bool(user and getattr(user, 'role', '') in ALL_STAFF_ROLES)
+
+
+def staff_permission_codes(user) -> set[str]:
+    """读取权限清单；旧账号在迁移前也能按原岗位正常工作。"""
+    codes = set(getattr(user, 'staff_permissions', None) or [])
+    role = getattr(user, 'role', '')
+    # 旧四岗位：补饮食权限；同时给主体订单台基础能力，关插件后仍能干活。
+    legacy = {
+        'manager': {
+            PERM_DINING_WAITER,
+            PERM_CANCEL_ORDER,
+            PERM_FULFILLMENT_CASH_MANAGE,
+            *CORE_ORDER_DESK_PERMISSIONS,
+        },
+        'waiter': {
+            PERM_DINING_WAITER,
+            *CORE_ORDER_DESK_PERMISSIONS,
+        },
+        'kitchen': {
+            PERM_DINING_KITCHEN,
+            PERM_ORDERS_VIEW,
+            PERM_ORDERS_UPDATE_STATUS,
+        },
+        'rider': {
+            PERM_DINING_RIDER,
+            PERM_ORDERS_VIEW,
+            PERM_ORDERS_CONTACT,
+        },
+    }
+    codes.update(legacy.get(role, set()))
+    if getattr(user, 'perm_cancel_order', False):
+        codes.add(PERM_CANCEL_ORDER)
+    # 已有饮食前台权限的新壳账号：默认可做主体订单台（关插件后不空转）
+    if PERM_DINING_WAITER in codes:
+        codes.update(CORE_ORDER_DESK_PERMISSIONS)
+    elif PERM_DINING_KITCHEN in codes:
+        codes.update({PERM_ORDERS_VIEW, PERM_ORDERS_UPDATE_STATUS})
+    elif PERM_DINING_RIDER in codes:
+        codes.update({PERM_ORDERS_VIEW, PERM_ORDERS_CONTACT})
+    return codes
+
+
+def staff_has_permission(user, permission_code: str) -> bool:
+    """店主拥有全部店务权限；员工按权限清单判断。"""
+    if not user or not getattr(user, 'is_active', False):
+        return False
+    if getattr(user, 'role', '') == 'seller':
+        return True
+    return is_shop_staff_account(user) and permission_code in staff_permission_codes(user)
+
+
+def staff_has_any_order_desk_permission(user) -> bool:
+    """是否可看到主体「订单处理」台（任一细权限即可）。"""
+    if not user or not getattr(user, 'is_active', False):
+        return False
+    if getattr(user, 'role', '') == 'seller':
+        return True
+    codes = staff_permission_codes(user)
+    return any(code in codes for code in CORE_ORDER_DESK_PERMISSIONS)
+
+
+def staff_job_title(user) -> str:
+    """页面显示职务名；旧账号自动回落原岗位名。"""
+    title = (getattr(user, 'staff_job_title', '') or '').strip()
+    if title:
+        return title
+    return STAFF_ROLE_LABELS.get(getattr(user, 'role', ''), '员工')
+
+
+def staff_account_type_label(user) -> str:
+    """页面显示两大类子账号。"""
+    value = (getattr(user, 'staff_account_type', '') or '').strip()
+    if not value and getattr(user, 'role', '') == 'manager':
+        value = 'management'
+    return '管理职务' if value == 'management' else '普通员工'
+
+
+def attendance_account_type_label(log) -> str:
+    """考勤快照里的两大类中文名（兼容旧流水）。"""
+    value = (getattr(log, 'account_type_snapshot', '') or '').strip()
+    if not value and getattr(log, 'role_snapshot', '') == 'manager':
+        value = 'management'
+    return '管理职务' if value == 'management' else '普通员工'
+
+
+def get_shop_staff_users(seller_id: str, *, active_only: bool = False):
+    """本店全部子账号，不再按写死岗位拆查询。"""
+    qs = User.objects.filter(shop_staff_query(), employer_seller_id=seller_id)
+    if active_only:
+        qs = qs.filter(is_active=True)
+    return qs.order_by('staff_account_type', 'date_joined', 'username')
+
+
+def get_staff_permission_definitions(seller_id: str) -> list[dict]:
+    """主体权限 + 当前已启用插件提供的权限。"""
+    definitions = list(CORE_STAFF_PERMISSION_DEFINITIONS)
+    from .plugin_runtime.registry import is_plugin_enabled, list_plugins
+
+    for plugin in list_plugins():
+        if not is_plugin_enabled(plugin.id, seller_id):
+            continue
+        definitions.extend(plugin.staff_permission_definitions(seller_id) or [])
+    seen = set()
+    return [
+        item for item in definitions
+        if item.get('code') and not (item['code'] in seen or seen.add(item['code']))
+    ]
+
+
+def get_staff_account_presets(seller_id: str, account_type: str) -> list[dict]:
+    """主体默认模板 + 当前已启用插件提供的模板。"""
+    presets = []
+    if account_type == 'management':
+        presets.append({
+            'code': 'core.manager',
+            'label': '店长（可改名）',
+            'account_type': 'management',
+            'job_title': '店长',
+            'permissions': [
+                *CORE_ORDER_DESK_PERMISSIONS,
+                PERM_CANCEL_ORDER,
+            ],
+        })
+    elif account_type == 'employee':
+        presets.append({
+            'code': 'core.order_clerk',
+            'label': '店员·通用接单（可改名）',
+            'account_type': 'employee',
+            'job_title': '店员',
+            'permissions': list(CORE_ORDER_DESK_PERMISSIONS),
+        })
+    from .plugin_runtime.registry import is_plugin_enabled, list_plugins
+
+    for plugin in list_plugins():
+        if not is_plugin_enabled(plugin.id, seller_id):
+            continue
+        presets.extend(plugin.staff_account_presets(seller_id) or [])
+    return [item for item in presets if item.get('account_type') == account_type]
 
 
 def staff_internal_username(seller_id: str, display_name: str) -> str:
@@ -81,13 +297,13 @@ def authenticate_shop_work_user(request, seller_id: str, login_name: str, passwo
     # 员工（新规则：带店铺前缀）
     internal = staff_internal_username(seller_id, login_name)
     user = authenticate(request, username=internal, password=password)
-    if user and user.is_active and user.role in SHOP_STAFF_ROLES:
+    if user and user.is_active and is_shop_staff_account(user):
         if (user.employer_seller_id or '').strip() == seller_id:
             return user
 
     # 兼容尚未迁移的旧工牌账号（裸用户名）
     user = authenticate(request, username=login_name, password=password)
-    if user and user.is_active and user.role in SHOP_STAFF_ROLES:
+    if user and user.is_active and is_shop_staff_account(user):
         if (user.employer_seller_id or '').strip() == seller_id:
             return user
 
@@ -135,20 +351,24 @@ def attendance_status_options():
 
 
 class AttendanceFilterForm(forms.Form):
-    """考勤组合筛选：期间 + 岗位 + 名字"""
+    """考勤组合筛选：期间 + 职务 + 名字"""
 
     date_from = forms.DateField(required=False, label='开始日期', widget=forms.DateInput(attrs={'type': 'date'}))
     date_to = forms.DateField(required=False, label='结束日期', widget=forms.DateInput(attrs={'type': 'date'}))
-    role = forms.ChoiceField(required=False, label='岗位')
+    role = forms.ChoiceField(required=False, label='职务')
     name = forms.CharField(required=False, label='名字')
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, seller_id: str = '', **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['role'].choices = [('', '全部岗位')] + [
-            ('manager', '店长'),
-            ('waiter', '服务员'),
-            ('kitchen', '后厨'),
-            ('rider', '骑手'),
+        titles = []
+        if seller_id:
+            titles = sorted({
+                staff_job_title(user)
+                for user in get_shop_staff_users(seller_id)
+                if staff_job_title(user)
+            })
+        self.fields['role'].choices = [('', '全部职务')] + [
+            (title, title) for title in titles
         ]
         self.fields['name'].widget.attrs.update({'placeholder': '员工名字'})
 
@@ -195,7 +415,7 @@ def _normalize_staff_work_status(status: str) -> str:
 
 def create_attendance_log(user, action: str, *, source: str, operator_username: str = '', note: str = '') -> None:
     """写入一条员工考勤流水"""
-    if not user or getattr(user, 'role', '') not in SHOP_STAFF_ROLES:
+    if not is_shop_staff_account(user):
         return
     StaffAttendanceLog.objects.create(
         user=user,
@@ -203,6 +423,8 @@ def create_attendance_log(user, action: str, *, source: str, operator_username: 
         username_snapshot=user.username,
         display_name_snapshot=staff_display_username(user.username),
         role_snapshot=user.role,
+        account_type_snapshot=(getattr(user, 'staff_account_type', '') or '').strip(),
+        job_title_snapshot=staff_job_title(user),
         action=_normalize_staff_work_status(action),
         source=(source or ATTENDANCE_SOURCE_SYSTEM).strip(),
         operator_username=(operator_username or '').strip(),
@@ -218,7 +440,7 @@ def set_staff_work_status(user, status: str, *, source: str = ATTENDANCE_SOURCE_
     - off_duty：下班，不接单
     """
     role = getattr(user, 'role', '')
-    if not user or role not in SHOP_STAFF_ROLES:
+    if not is_shop_staff_account(user):
         return False
     target = _normalize_staff_work_status(status)
     changed = _normalize_staff_work_status(user.staff_work_status) != target
@@ -233,6 +455,11 @@ def set_staff_work_status(user, status: str, *, source: str = ATTENDANCE_SOURCE_
             operator_username=operator_username,
             note=note,
         )
+    # 配送员一进入上班状态，就主动询问待派单池；自动派单关闭时不会领取。
+    if target == STAFF_WORK_ON_DUTY:
+        from .dispatch_helpers import maybe_refill_dispatch_after_rider_available
+
+        maybe_refill_dispatch_after_rider_available(user)
     return changed
 
 
@@ -254,7 +481,7 @@ def handle_staff_work_status_post(request, user, *, redirect_to: str):
     from .shop_work_auth import clear_shop_work_session
 
     role = getattr(user, 'role', '')
-    if not user or role not in SHOP_STAFF_ROLES:
+    if not is_shop_staff_account(user):
         return None
     action = (request.POST.get('staff_work_status_action') or '').strip()
     if not action:
@@ -318,7 +545,14 @@ def query_attendance_logs(seller_id: str, retention_value: str, filters: dict | 
         qs = qs.filter(changed_at__date__lte=end)
     role = (data.get('role') or '').strip()
     if role:
-        qs = qs.filter(role_snapshot=role)
+        legacy_roles = [
+            key for key, label in STAFF_ROLE_LABELS.items()
+            if label == role
+        ]
+        qs = qs.filter(
+            Q(job_title_snapshot=role)
+            | Q(job_title_snapshot='', role_snapshot__in=legacy_roles)
+        )
     name = (data.get('name') or '').strip()
     if name:
         qs = qs.filter(display_name_snapshot__icontains=name)
@@ -341,7 +575,8 @@ def build_staff_status_rows(staff_users, attendance_logs) -> list[dict]:
         last_today = today_logs[0] if today_logs else None
         rows.append({
             'user': user,
-            'role_label': user.get_role_display(),
+            'role_label': staff_job_title(user),
+            'account_type_label': staff_account_type_label(user),
             'display_name': staff_display_username(user.username),
             'status_label': staff_status_label(user),
             'first_on_duty_today': first_on_duty.changed_at if first_on_duty else None,
@@ -357,12 +592,13 @@ def export_attendance_csv(logs, *, seller_id: str) -> HttpResponse:
     response['Content-Disposition'] = f'attachment; filename="{seller_id}-staff-attendance.csv"'
     response.write('\ufeff')
     writer = csv.writer(response)
-    writer.writerow(['时间', '员工姓名', '岗位', '动作', '来源', '操作人账号', '备注'])
+    writer.writerow(['时间', '员工姓名', '账号类别', '职务', '动作', '来源', '操作人账号', '备注'])
     for log in logs:
         writer.writerow([
             timezone.localtime(log.changed_at).strftime('%Y-%m-%d %H:%M:%S'),
             log.display_name_snapshot,
-            staff_role_label(log.role_snapshot),
+            attendance_account_type_label(log),
+            log.job_title_snapshot or staff_role_label(log.role_snapshot),
             ATTENDANCE_STATUS_LABELS.get(log.action, log.action),
             attendance_source_label(log.source),
             log.operator_username,
@@ -385,7 +621,7 @@ def handle_manager_staff_status_post(request, seller_id: str, *, section: str = 
         User,
         username=username,
         employer_seller_id=seller_id,
-        role__in=SHOP_STAFF_ROLES,
+        role__in=ALL_STAFF_ROLES,
     )
     set_staff_work_status(
         user,
@@ -493,7 +729,7 @@ def handle_staff_cancel_perm_post(request, seller_id: str, *, section='workbench
         User,
         username=username,
         employer_seller_id=seller_id,
-        role__in=SHOP_STAFF_ROLES,
+        role__in=ALL_STAFF_ROLES,
     )
     enabled = request.POST.get('perm_cancel_order') == '1'
     user.perm_cancel_order = enabled
@@ -514,5 +750,127 @@ def handle_staff_cancel_perm_post(request, seller_id: str, *, section='workbench
         target_id=user.username,
         summary=f'{"授权" if enabled else "收回"}取消订单权限：{display}',
         request=request,
+    )
+    return redirect('seller_panel_section', section=section)
+
+
+def handle_create_staff_account_post(request, seller_id: str, *, section='workbench'):
+    """目标态：统一创建管理职务或普通员工子账号。"""
+    if 'create_staff_account' not in request.POST:
+        return None
+    from django.contrib import messages
+    from django.shortcuts import redirect
+
+    from .forms import CreateStaffAccountForm
+
+    account_type = (request.POST.get('account_type') or '').strip()
+    form = CreateStaffAccountForm(
+        request.POST,
+        seller_id=seller_id,
+        account_type=account_type,
+    )
+    if form.is_valid():
+        user = form.save()
+        messages.success(
+            request,
+            f'已创建{staff_account_type_label(user)}：{staff_job_title(user)}'
+            f'（{staff_display_username(user.username)}）',
+        )
+        from .audit_helpers import write_audit_log
+
+        write_audit_log(
+            action_code='other',
+            action_label='创建员工子账号',
+            seller_id=seller_id,
+            actor=request.user,
+            target_type='staff',
+            target_id=user.username,
+            summary=f'创建{staff_account_type_label(user)}：{staff_job_title(user)}',
+            request=request,
+        )
+    else:
+        first_error = next(
+            (str(error) for errors in form.errors.values() for error in errors),
+            '请检查填写内容',
+        )
+        messages.error(request, f'创建失败：{first_error}')
+    return redirect('seller_panel_section', section=section)
+
+
+def handle_edit_staff_account_post(request, seller_id: str, *, section='workbench'):
+    """目标态：修改子账号类别、职务名称与权限。"""
+    if 'edit_staff_account' not in request.POST:
+        return None
+    from django.contrib import messages
+    from django.shortcuts import get_object_or_404, redirect
+
+    from .forms import EditStaffAccountForm
+
+    username = (request.POST.get('staff_username') or '').strip()
+    user = get_object_or_404(
+        User,
+        username=username,
+        employer_seller_id=seller_id,
+        role__in=ALL_STAFF_ROLES,
+    )
+    old_title = staff_job_title(user)
+    form = EditStaffAccountForm(
+        request.POST,
+        seller_id=seller_id,
+        user=user,
+    )
+    if form.is_valid():
+        form.save()
+        messages.success(request, f'已保存 {staff_display_username(user.username)} 的职务与权限')
+        from .audit_helpers import write_audit_log
+
+        write_audit_log(
+            action_code='other',
+            action_label='员工职务权限变更',
+            seller_id=seller_id,
+            actor=request.user,
+            target_type='staff',
+            target_id=user.username,
+            summary=f'{old_title} → {staff_job_title(user)}；权限已更新',
+            request=request,
+        )
+    else:
+        messages.error(request, '保存失败，请检查职务名称与权限')
+    return redirect('seller_panel_section', section=section)
+
+
+def handle_toggle_staff_account_post(request, seller_id: str, *, section='workbench'):
+    """目标态：统一启用或停用任意店铺子账号。"""
+    if 'toggle_staff_account' not in request.POST:
+        return None
+    from django.contrib import messages
+    from django.shortcuts import get_object_or_404, redirect
+
+    username = (request.POST.get('staff_username') or '').strip()
+    user = get_object_or_404(
+        User,
+        username=username,
+        employer_seller_id=seller_id,
+        role__in=ALL_STAFF_ROLES,
+    )
+    user.is_active = not user.is_active
+    update_fields = ['is_active']
+    if not user.is_active:
+        user.staff_work_status = STAFF_WORK_OFF_DUTY
+        user.staff_work_status_updated_at = timezone.now()
+        update_fields.extend(['staff_work_status', 'staff_work_status_updated_at'])
+    user.save(update_fields=update_fields)
+    if not user.is_active:
+        create_attendance_log(
+            user,
+            STAFF_WORK_OFF_DUTY,
+            source=ATTENDANCE_SOURCE_MANAGER,
+            operator_username=request.user.username,
+            note='老板停用账号',
+        )
+    state_word = '启用' if user.is_active else '停用'
+    messages.success(
+        request,
+        f'已{state_word}{staff_job_title(user)} {staff_display_username(user.username)}',
     )
     return redirect('seller_panel_section', section=section)

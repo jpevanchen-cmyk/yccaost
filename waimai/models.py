@@ -42,10 +42,11 @@ class User(AbstractUser):
     ROLE_CHOICES = [
         ('buyer', '买家'),
         ('seller', '卖家'),
-        ('rider', '骑手'),
-        ('waiter', '服务员'),
-        ('kitchen', '后厨'),
-        ('manager', '店长'),
+        ('staff', '店铺员工'),
+    ]
+    STAFF_ACCOUNT_TYPE_CHOICES = [
+        ('management', '管理职务'),
+        ('employee', '普通员工'),
     ]
     STAFF_WORK_STATUS_CHOICES = [
         ('on_duty', '上班'),
@@ -57,6 +58,25 @@ class User(AbstractUser):
     # 专属骑手所属店铺（卖家用户名）
     employer_seller_id = models.CharField(
         max_length=64, blank=True, null=True, db_index=True, verbose_name='所属店铺ID'
+    )
+    staff_account_type = models.CharField(
+        max_length=16,
+        blank=True,
+        default='',
+        choices=STAFF_ACCOUNT_TYPE_CHOICES,
+        verbose_name='子账号类别',
+    )
+    staff_job_title = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name='职务名称',
+    )
+    staff_permissions = models.JSONField(
+        blank=True,
+        default=list,
+        verbose_name='员工权限清单',
+        help_text='保存主体或插件提供的稳定权限编号',
     )
     staff_work_status = models.CharField(
         max_length=16,
@@ -78,6 +98,14 @@ class User(AbstractUser):
     is_permanent = models.BooleanField(default=False, db_index=True, verbose_name='正式保留账号')
     # 服务器管理者：可进「服务器设置」（由超级管理员或命令指定；与体验机官方小店无关）
     is_server_owner = models.BooleanField(default=False, db_index=True, verbose_name='服务器管理者')
+    # 同账号只允许一处在线：新登录写入当前会话编号，旧设备下次请求时退出。
+    active_session_key = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='当前有效登录会话',
+    )
 
     class Meta:
         db_table = 'user'
@@ -85,6 +113,9 @@ class User(AbstractUser):
         verbose_name_plural = '用户'
 
     def __str__(self):
+        if self.role == 'staff':
+            title = (self.staff_job_title or '').strip() or '店铺员工'
+            return f"{self.username} ({title})"
         return f"{self.username} ({self.get_role_display()})"
 
 
@@ -315,6 +346,12 @@ class StaffAttendanceLog(models.Model):
     username_snapshot = models.CharField(max_length=128, verbose_name='员工账号快照')
     display_name_snapshot = models.CharField(max_length=64, verbose_name='员工姓名快照')
     role_snapshot = models.CharField(max_length=16, verbose_name='岗位快照')
+    account_type_snapshot = models.CharField(
+        max_length=16, blank=True, default='', verbose_name='子账号类别快照'
+    )
+    job_title_snapshot = models.CharField(
+        max_length=64, blank=True, default='', verbose_name='职务名称快照'
+    )
     action = models.CharField(max_length=16, choices=ACTION_CHOICES, db_index=True, verbose_name='状态动作')
     source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default='self', verbose_name='操作来源')
     operator_username = models.CharField(max_length=128, blank=True, default='', verbose_name='操作人账号')
@@ -438,7 +475,8 @@ class ShopHomeBlock(models.Model):
 
 
 # ============================================
-# 店铺配送费配置
+# 店铺配送费配置（逻辑归属履约插件；表暂留主体）
+# 见 waimai.plugins.fulfillment.ownership
 # ============================================
 class ShopDeliverySettings(models.Model):
     seller_id = models.CharField(max_length=64, primary_key=True, verbose_name='店铺账号ID')
@@ -682,6 +720,44 @@ class BuyOrder(models.Model):
     cash_remitted_by = models.CharField(
         max_length=64, blank=True, default='', verbose_name='入金确认人'
     )
+    CASH_SHORTFALL_STATUS_CHOICES = [
+        ('', '无异常'),
+        ('buyer_pending', '待买家确认少付'),
+        ('buyer_confirmed', '买家已确认少付'),
+        ('buyer_rejected', '买家拒绝确认'),
+        ('exception', '已电话上报异常'),
+        ('resolved_full', '已补足现金'),
+        ('manager_approved', '管理人员已兜底结单'),
+    ]
+    cash_shortfall_status = models.CharField(
+        max_length=24,
+        choices=CASH_SHORTFALL_STATUS_CHOICES,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='货到付款少收状态',
+    )
+    cash_shortfall_reason = models.CharField(
+        max_length=500, blank=True, default='', verbose_name='货到付款少收原因'
+    )
+    cash_shortfall_buyer_responded_at = models.DateTimeField(
+        blank=True, null=True, verbose_name='买家确认少收时间'
+    )
+    cash_exception_note = models.CharField(
+        max_length=500, blank=True, default='', verbose_name='现金异常电话沟通备注'
+    )
+    cash_exception_marked_by = models.CharField(
+        max_length=64, blank=True, default='', verbose_name='现金异常标记人'
+    )
+    cash_exception_marked_at = models.DateTimeField(
+        blank=True, null=True, verbose_name='现金异常标记时间'
+    )
+    cash_exception_resolved_by = models.CharField(
+        max_length=64, blank=True, default='', verbose_name='现金异常处理人'
+    )
+    cash_exception_resolved_at = models.DateTimeField(
+        blank=True, null=True, verbose_name='现金异常处理时间'
+    )
 
     class Meta:
         db_table = 'buy_order'
@@ -755,12 +831,8 @@ class BuyOrder(models.Model):
         return self.total_amount - self.get_subtotal()
 
     def is_cash_awaiting_confirm(self):
-        """外卖货到付款：先备货派单，送达时由骑手收款（尚未收款）"""
-        return (
-            self.fulfillment_type == 'delivery'
-            and self.payment_status == 'pending_payment'
-            and self.payment_method == 'cash'
-        )
+        """兼容旧调用；统一使用“货到付款等待配送员收款”的判断。"""
+        return self.is_cod_awaiting_collection()
 
     def is_delivery_cod(self):
         """是否外卖 · 现金货到付款单"""
@@ -776,6 +848,23 @@ class BuyOrder(models.Model):
             self.payment_method == 'cash'
             and self.cash_collected_at is not None
             and self.cash_remitted_at is None
+        )
+
+    def cash_shortfall_amount(self):
+        """货到付款少收金额；没有少收时为 0。"""
+        if self.cash_collected_amount is None:
+            return None
+        diff = self.total_amount - self.cash_collected_amount
+        return diff if diff > 0 else 0
+
+    def cash_shortfall_waiting_buyer(self):
+        """是否正在等买家当面确认少付。"""
+        return self.cash_shortfall_status == 'buyer_pending'
+
+    def cash_exception_unresolved(self):
+        """是否为尚未正常结清的现金异常。"""
+        return self.cash_shortfall_status in (
+            'buyer_pending', 'buyer_rejected', 'exception',
         )
 
     def is_awaiting_in_store_order_confirm(self):
@@ -797,7 +886,10 @@ class BuyOrder(models.Model):
         )
 
     def can_complete_in_store_order(self):
-        """到店单是否允许正常结束（须已收款）"""
+        """手动完成到店单：须已备好且已收款。
+
+        按份交付全部完成时可由服务流程自动结单，这是另一条有意保留的便捷路径。
+        """
         return (
             self.is_in_store()
             and self.order_status == 'ready_pickup'
@@ -838,6 +930,10 @@ class BuyOrder(models.Model):
 
     def get_cash_payment_hint(self):
         """现金单给买家看的说明"""
+        if self.is_basic_order():
+            if self.payment_status == 'pending_payment' and self.payment_method == 'cash':
+                return '基础下单：请按订单约定与店家完成现金付款。有事可在订单沟通里留言。'
+            return '基础下单：请按订单约定付款。'
         if self.is_awaiting_in_store_order_confirm():
             if self.is_dine_in():
                 return '堂食订单已提交，店家将为您备餐并告知预计出餐时间；用餐时到店付现金即可。有事可在订单沟通里留言。'
@@ -862,10 +958,12 @@ class BuyOrder(models.Model):
         return '外卖货到付款：店家会先备货并派骑手，骑手送达时向您收现金（也可当面扫码付）。'
 
     def get_estimated_ready_label(self):
-        """预计出餐/取餐时间的展示文案（北京时间）"""
+        """预计完成/出餐/取餐时间的展示文案（北京时间）"""
         if not self.estimated_ready_at:
             return ''
         t = format_beijing_time(self.estimated_ready_at)
+        if self.is_basic_order():
+            return f'预计 {t} 可完成'
         if self.is_dine_in():
             return f'预计 {t} 可出餐'
         if self.is_takeaway():
@@ -950,6 +1048,7 @@ class PaymentRecord(models.Model):
 
 
 class DeliveryOrder(models.Model):
+    """配送单（逻辑归属履约插件；表暂留主体）。见 plugins.fulfillment.ownership"""
     STATUS_CHOICES = [
         ('waiting', '待派单'),
         ('accepted', '待取餐'),
@@ -989,6 +1088,77 @@ class DeliveryOrder(models.Model):
 
     def trigger_payout(self):
         pass
+
+
+class CashRemittanceRequest(models.Model):
+    """配送员交回货到付款现金的申请单。"""
+
+    STATUS_CHOICES = [
+        ('pending', '待确认'),
+        ('confirmed', '已确认'),
+        ('rejected', '已退回'),
+    ]
+
+    request_id = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False, verbose_name='交款申请ID'
+    )
+    seller_id = models.CharField(max_length=64, db_index=True, verbose_name='店铺ID')
+    rider_id = models.CharField(max_length=64, db_index=True, verbose_name='配送员ID')
+    total_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, verbose_name='申请交款金额（元）'
+    )
+    order_count = models.PositiveIntegerField(default=0, verbose_name='包含订单数')
+    note = models.CharField(max_length=500, blank=True, default='', verbose_name='配送员交款备注')
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default='pending',
+        db_index=True, verbose_name='交款申请状态',
+    )
+    reviewed_by = models.CharField(
+        max_length=64, blank=True, default='', verbose_name='确认/退回人'
+    )
+    review_note = models.CharField(
+        max_length=500, blank=True, default='', verbose_name='确认/退回说明'
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True, verbose_name='处理时间')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='申请时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'cash_remittance_request'
+        ordering = ['-created_at']
+        verbose_name = '配送员现金交款申请'
+        verbose_name_plural = '配送员现金交款申请'
+
+
+class CashRemittanceItem(models.Model):
+    """交款申请内的订单明细；保留历史，退回后可重新申请。"""
+
+    item_id = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False, verbose_name='交款明细ID'
+    )
+    request = models.ForeignKey(
+        CashRemittanceRequest,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name='交款申请',
+    )
+    order = models.ForeignKey(
+        BuyOrder,
+        on_delete=models.PROTECT,
+        related_name='cash_remittance_items',
+        verbose_name='现金订单',
+    )
+    amount = models.DecimalField(max_digits=8, decimal_places=2, verbose_name='本单实收（元）')
+
+    class Meta:
+        db_table = 'cash_remittance_item'
+        verbose_name = '配送员现金交款明细'
+        verbose_name_plural = '配送员现金交款明细'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['request', 'order'], name='uniq_cash_remittance_request_order'
+            ),
+        ]
 
 
 class OrderWaiterStatusLog(models.Model):

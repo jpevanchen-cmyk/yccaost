@@ -8,6 +8,9 @@ from django.views.decorators.http import require_POST
 
 # 约 5 分钟无报平安 → 会话失效（与 settings.SESSION_COOKIE_AGE 对齐）
 HEARTBEAT_TIMEOUT_SECONDS = 5 * 60
+# 前端多久「报一次平安」。调小可更快察觉被别的设备顶下线（近似即时）；
+# 与上面的掉线超时解耦：只影响灵敏度，不影响「5 分钟无心跳才判掉线」的兜底。
+SESSION_HEARTBEAT_INTERVAL_SECONDS = 5
 # 超过 15 分钟无操作 → 退出
 IDLE_TIMEOUT_SECONDS = 15 * 60
 
@@ -53,10 +56,12 @@ def force_logout_all_channels(request) -> None:
 def logout_work_channel(request) -> None:
     """仅清工作台登录"""
     from .shop_work_auth import clear_shop_work_session, get_shop_work_user
-    from .staff_account_helpers import deactivate_staff_on_logout
+    from .staff_account_helpers import deactivate_staff_on_logout, is_shop_staff_account
 
     work_user = get_shop_work_user(request)
-    if work_user and work_user.role in ('waiter', 'kitchen', 'rider', 'manager'):
+    from .single_login_helpers import release_single_login
+    release_single_login(request, work_user)
+    if is_shop_staff_account(work_user):
         deactivate_staff_on_logout(work_user)
     clear_shop_work_session(request)
 
@@ -67,6 +72,8 @@ def logout_eco_channel(request) -> None:
 
     if not getattr(request.user, 'is_authenticated', False):
         return
+    from .single_login_helpers import release_single_login
+    release_single_login(request, request.user)
     snap = snapshot_shop_work_session(request)
     ecosystem_logout(request)
     restore_shop_work_session(request, snap)
@@ -90,9 +97,22 @@ def session_heartbeat(request):
 
     channel = (request.POST.get('channel') or 'all').strip()
     has_eco = getattr(request.user, 'is_authenticated', False)
-    has_work = get_shop_work_user(request) is not None
+    work_user = get_shop_work_user(request)
+    has_work = work_user is not None
     if not has_eco and not has_work:
         return JsonResponse({'ok': False, 'reason': 'not_logged_in'}, status=401)
+
+    # 同账号被别的设备重新登录：本设备心跳时明确告知，前端弹提示后退出。
+    from .single_login_helpers import single_login_is_current
+
+    if has_eco and not single_login_is_current(request, request.user):
+        logout_eco_channel(request)
+        return JsonResponse({'ok': False, 'reason': 'session_replaced', 'logout': True})
+    if has_work and not single_login_is_current(request, work_user):
+        from .shop_work_auth import clear_shop_work_session
+
+        clear_shop_work_session(request)
+        return JsonResponse({'ok': False, 'reason': 'session_replaced', 'logout': True})
 
     if idle_expired(request):
         logout_by_channel(request, channel)

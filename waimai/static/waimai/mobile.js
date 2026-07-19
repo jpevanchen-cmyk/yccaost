@@ -126,12 +126,12 @@
         }
     }
 
-    // 所有 POST 表单：提交前记住滚动位置（全站通用）
-    document.querySelectorAll('form').forEach(function (form) {
-        if (!form.method || form.method.toLowerCase() !== 'post') return;
-        form.addEventListener('submit', function () {
-            saveScrollBeforeSubmit(form);
-        });
+    // 所有普通 POST：提交前记住滚动位置；无刷新购物车不需要记位置
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form || !form.method || form.method.toLowerCase() !== 'post') return;
+        if (isAsyncCartForm(form)) return;
+        saveScrollBeforeSubmit(form);
     });
 
     ensureBodyScrollable();
@@ -175,8 +175,6 @@
 
     // 店铺页购物车抽屉
     var cartDrawer = document.getElementById('cart-drawer');
-    var cartOpenBtns = document.querySelectorAll('[data-cart-open]');
-    var cartCloseBtns = document.querySelectorAll('[data-cart-close]');
 
     function lockPageBehindCart() {
         cartScrollY = getEffectiveScrollY();
@@ -200,31 +198,109 @@
         unlockPageBehindCart();
     }
 
-    cartOpenBtns.forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
+    // 用统一点击监听，购物车外壳被无刷新替换后仍然有效
+    document.addEventListener('click', function (e) {
+        var openBtn = e.target.closest ? e.target.closest('[data-cart-open]') : null;
+        if (openBtn) {
             e.preventDefault();
+            cartDrawer = document.getElementById('cart-drawer');
             openCart();
-        });
-    });
-
-    cartCloseBtns.forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
+            return;
+        }
+        var closeBtn = e.target.closest ? e.target.closest('[data-cart-close]') : null;
+        if (closeBtn) {
             e.preventDefault();
             e.stopPropagation();
             closeCart();
-        });
+        }
     });
 
-    var cartBackdrop = document.querySelector('.cart-drawer-backdrop');
-    if (cartBackdrop) {
-        cartBackdrop.addEventListener('click', function (e) {
+    document.addEventListener('touchmove', function (e) {
+        if (e.target.closest && e.target.closest('.cart-drawer-backdrop')) {
             e.preventDefault();
-            closeCart();
-        });
-        cartBackdrop.addEventListener('touchmove', function (e) {
-            e.preventDefault();
-        }, { passive: false });
+        }
+    }, { passive: false });
+
+    function cartAction(form) {
+        var input = form && form.querySelector('input[name="action"]');
+        return input ? input.value : '';
     }
+
+    function isAsyncCartForm(form) {
+        var action = cartAction(form);
+        return !!document.getElementById('shop-cart-shell')
+            && ['add_to_cart', 'decrease_from_cart', 'remove_from_cart'].indexOf(action) !== -1;
+    }
+
+    function preserveCheckoutFields() {
+        var values = {};
+        document.querySelectorAll('#shop-cart-shell [name="delivery_address"], #shop-cart-shell [name="distance_km"]:checked').forEach(function (field) {
+            if (!(field.name in values) || field.closest('.cart-drawer')) {
+                values[field.name] = field.value;
+            }
+        });
+        return values;
+    }
+
+    function restoreCheckoutFields(values) {
+        Object.keys(values || {}).forEach(function (name) {
+            document.querySelectorAll('#shop-cart-shell [name="' + name + '"]').forEach(function (field) {
+                if (field.type === 'radio') {
+                    field.checked = field.value === values[name];
+                } else {
+                    field.value = values[name];
+                }
+            });
+        });
+    }
+
+    // 加购、减数量、删除：只替换购物车，不刷新整页
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!isAsyncCartForm(form)) return;
+        e.preventDefault();
+
+        var submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
+        var drawerWasOpen = !!(document.getElementById('cart-drawer')
+            && document.getElementById('cart-drawer').classList.contains('is-open'));
+        var checkoutValues = preserveCheckoutFields();
+
+        // 注意：表单里有 name="action" 隐藏域，会把 form.action 覆盖成输入框对象，
+        // 必须用 getAttribute 或当前网址，不能直接读 form.action。
+        var postUrl = form.getAttribute('action') || window.location.href;
+
+        fetch(postUrl, {
+            method: 'POST',
+            body: new FormData(form),
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'YecaoCart' }
+        })
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok || !data.ok) {
+                        throw new Error(data.message || '购物车操作失败，请稍后再试');
+                    }
+                    return data;
+                });
+            })
+            .then(function (data) {
+                var shell = document.getElementById('shop-cart-shell');
+                if (!shell) return;
+                shell.innerHTML = data.cart_shell_html;
+                restoreCheckoutFields(checkoutValues);
+                cartDrawer = document.getElementById('cart-drawer');
+                if (drawerWasOpen && cartDrawer) {
+                    openCart();
+                } else if (drawerWasOpen) {
+                    unlockPageBehindCart();
+                }
+            })
+            .catch(function (err) {
+                window.alert(err.message || '购物车操作失败，请稍后再试');
+                if (submitBtn) submitBtn.disabled = false;
+            });
+    });
 
     restoreScrollPosition(function () {
         if (window.location.hash === '#cart' && cartDrawer) {

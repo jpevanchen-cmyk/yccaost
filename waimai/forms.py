@@ -275,29 +275,184 @@ class CreateManagerForm(UserCreationForm):
         return user
 
 
-class ShopDeliverySettingsForm(forms.ModelForm):
-    """店铺配送费配置表单"""
+class CreateStaffAccountForm(UserCreationForm):
+    """目标态子账号：两大类 + 自填职务名 + 可扩展权限。"""
 
-    class Meta:
-        model = ShopDeliverySettings
-        fields = [
-            'min_delivery_fee',
-            'per_km_rate_0_3',
-            'multiplier_3_6',
-            'multiplier_6_9',
-            'max_distance_km',
-            'free_delivery_threshold',
-            'discount_percent',
+    account_type = forms.ChoiceField(
+        choices=User.STAFF_ACCOUNT_TYPE_CHOICES,
+        label='子账号类别',
+    )
+    preset = forms.ChoiceField(
+        required=False,
+        label='预置模板（可选）',
+        help_text='插件可提供常用模板；职务名称与权限仍可自行调整',
+    )
+    job_title = forms.CharField(
+        max_length=64,
+        required=False,
+        label='职务名称',
+        help_text='例如：经理、值班主管、收银员；由店主自行填写',
+    )
+    permissions = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label='允许做什么',
+    )
+
+    class Meta(UserCreationForm.Meta):
+        model = User
+        fields = ('username', 'password1', 'password2')
+
+    def __init__(self, *args, seller_id=None, account_type=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .staff_account_helpers import (
+            get_staff_account_presets,
+            get_staff_permission_definitions,
+        )
+
+        self.seller_id = (seller_id or '').strip()
+        self.fixed_account_type = (account_type or '').strip()
+        self.permission_definitions = get_staff_permission_definitions(self.seller_id)
+        self.presets = get_staff_account_presets(
+            self.seller_id,
+            self.fixed_account_type or 'employee',
+        )
+        self.fields['username'].label = '员工登录名'
+        self.fields['username'].help_text = '只在本店不能重复；别的店可以使用同名'
+        self.fields['permissions'].choices = [
+            (item['code'], f"{item['label']}：{item.get('help_text', '')}".rstrip('：'))
+            for item in self.permission_definitions
         ]
-        labels = {
-            'min_delivery_fee': '最低配送费（元）',
-            'per_km_rate_0_3': '3公里内单价（元/公里）',
-            'multiplier_3_6': '3～6公里倍数',
-            'multiplier_6_9': '6～9公里倍数',
-            'max_distance_km': '最远配送距离（公里）',
-            'free_delivery_threshold': '满额免运门槛（元，可留空）',
-            'discount_percent': '按订单金额减免上限（%）',
-        }
+        self.fields['preset'].choices = [('', '不套模板，自行填写')] + [
+            (item['code'], item['label']) for item in self.presets
+        ]
+        if self.fixed_account_type:
+            self.fields['account_type'].initial = self.fixed_account_type
+            self.fields['account_type'].widget = forms.HiddenInput()
+        if self.fixed_account_type == 'management':
+            self.fields['job_title'].initial = '店长'
+            self.fields['permissions'].initial = [
+                'orders.view',
+                'orders.update_status',
+                'orders.confirm_payment',
+                'orders.contact',
+                'orders.cancel',
+            ]
+
+    def clean_username(self):
+        from .staff_account_helpers import STAFF_USERNAME_SEP, staff_username_taken
+
+        name = (self.cleaned_data.get('username') or '').strip()
+        if not name:
+            raise forms.ValidationError('请输入员工登录名')
+        if STAFF_USERNAME_SEP in name:
+            raise forms.ValidationError('登录名不能包含 ::')
+        if not self.seller_id:
+            raise forms.ValidationError('店铺信息无效')
+        if staff_username_taken(self.seller_id, name):
+            raise forms.ValidationError('本店已有该员工登录名')
+        return name
+
+    def clean(self):
+        cleaned = super().clean()
+        account_type = self.fixed_account_type or (cleaned.get('account_type') or '').strip()
+        preset_code = (cleaned.get('preset') or '').strip()
+        preset = next((item for item in self.presets if item['code'] == preset_code), None)
+        if preset:
+            if not (cleaned.get('job_title') or '').strip():
+                cleaned['job_title'] = preset['job_title']
+            selected = set(cleaned.get('permissions') or [])
+            selected.update(preset.get('permissions') or [])
+            cleaned['permissions'] = list(selected)
+        if account_type not in ('management', 'employee'):
+            self.add_error('account_type', '请选择子账号类别')
+        if not (cleaned.get('job_title') or '').strip():
+            self.add_error('job_title', '请填写职务名称，或选择一个预置模板')
+        cleaned['account_type'] = account_type
+        return cleaned
+
+    def save(self, commit=True):
+        from .staff_account_helpers import PERM_CANCEL_ORDER, staff_internal_username
+
+        user = super().save(commit=False)
+        user.username = staff_internal_username(self.seller_id, self.cleaned_data['username'])
+        user.role = 'staff'
+        user.employer_seller_id = self.seller_id
+        user.staff_account_type = self.cleaned_data['account_type']
+        user.staff_job_title = (self.cleaned_data.get('job_title') or '').strip()
+        user.staff_permissions = sorted(set(self.cleaned_data.get('permissions') or []))
+        user.perm_cancel_order = PERM_CANCEL_ORDER in user.staff_permissions
+        if commit:
+            user.save()
+            from .experience_helpers import inherit_experience_from_employer
+
+            inherit_experience_from_employer(user, self.seller_id)
+        return user
+
+
+class EditStaffAccountForm(forms.Form):
+    """编辑子账号类别、职务名与权限；停用插件的旧权限会保留。"""
+
+    account_type = forms.ChoiceField(
+        choices=User.STAFF_ACCOUNT_TYPE_CHOICES,
+        label='子账号类别',
+    )
+    job_title = forms.CharField(max_length=64, label='职务名称')
+    permissions = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label='允许做什么',
+    )
+
+    def __init__(self, *args, seller_id=None, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .staff_account_helpers import (
+            get_staff_permission_definitions,
+            staff_account_type_label,
+            staff_job_title,
+            staff_permission_codes,
+        )
+
+        self.seller_id = (seller_id or '').strip()
+        self.user = user
+        self.permission_definitions = get_staff_permission_definitions(self.seller_id)
+        self.available_codes = {item['code'] for item in self.permission_definitions}
+        self.fields['permissions'].choices = [
+            (item['code'], item['label']) for item in self.permission_definitions
+        ]
+        if user and not self.is_bound:
+            account_type = (getattr(user, 'staff_account_type', '') or '').strip()
+            if not account_type:
+                account_type = 'management' if staff_account_type_label(user) == '管理职务' else 'employee'
+            self.initial.update({
+                'account_type': account_type,
+                'job_title': staff_job_title(user),
+                'permissions': sorted(staff_permission_codes(user) & self.available_codes),
+            })
+
+    def save(self):
+        from .staff_account_helpers import PERM_CANCEL_ORDER, staff_permission_codes
+
+        selected = set(self.cleaned_data.get('permissions') or [])
+        unavailable = staff_permission_codes(self.user) - self.available_codes
+        permissions = sorted(selected | unavailable)
+        self.user.role = 'staff'
+        self.user.staff_account_type = self.cleaned_data['account_type']
+        self.user.staff_job_title = (self.cleaned_data.get('job_title') or '').strip()
+        self.user.staff_permissions = permissions
+        self.user.perm_cancel_order = PERM_CANCEL_ORDER in permissions
+        self.user.save(update_fields=[
+            'role',
+            'staff_account_type',
+            'staff_job_title',
+            'staff_permissions',
+            'perm_cancel_order',
+        ])
+        return self.user
+
+
+# 配送费表单已迁入履约插件；此处保留同名导出，兼容旧 import
+from waimai.plugins.fulfillment.forms import ShopDeliverySettingsForm  # noqa: E402,F401
 
 
 class ShopPaymentSettingsForm(forms.ModelForm):

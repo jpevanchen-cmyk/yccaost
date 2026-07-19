@@ -79,7 +79,13 @@ def clear_shop_work_session(request) -> None:
 
 def is_shop_staff_role(user) -> bool:
     """是否为店铺子账户身份（不含店主）"""
-    return bool(user and getattr(user, 'is_authenticated', False) and user.role in SHOP_STAFF_ROLES)
+    from .staff_account_helpers import is_shop_staff_account
+
+    return bool(
+        user
+        and getattr(user, 'is_authenticated', False)
+        and is_shop_staff_account(user)
+    )
 
 
 def path_is_shop_work(path: str) -> bool:

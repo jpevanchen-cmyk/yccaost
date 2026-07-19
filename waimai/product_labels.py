@@ -39,9 +39,9 @@ def format_quantity_hint(label: str, quantity: int, unit: str = '份') -> str:
     return f'{label} {quantity} {unit}'
 
 
-def format_dish_limit_hint(field_key: str, quantity: int) -> str:
+def format_dish_limit_hint(field_key: str, quantity: int, unit: str = '份') -> str:
     """用商品管理同款标签拼限购说明"""
-    return format_quantity_hint(dish_limit_label(field_key), quantity)
+    return format_quantity_hint(dish_limit_label(field_key), quantity, unit)
 
 
 def format_shop_special_limit_hint(field_key: str, quantity: int) -> str:

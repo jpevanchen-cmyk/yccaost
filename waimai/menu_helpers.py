@@ -188,6 +188,10 @@ def validate_dish_purchase(
 
 def increment_menu_sold_counts(seller_id: str, cart_items):
     """下单成功后增加菜单清单已售计数"""
+    from .plugin_runtime.registry import is_plugin_enabled
+
+    if not is_plugin_enabled('dining', seller_id):
+        return
     profile = get_active_menu_profile(seller_id)
     if not profile:
         return

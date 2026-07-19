@@ -34,3 +34,26 @@ class Plugin:
         from .registry import is_plugin_enabled
 
         return is_plugin_enabled(self.id, seller_id)
+
+    def contribute_order_shell(self, order) -> dict:
+        """
+        向主体订单壳补充业态展示字段（文案、桌台等）。
+        未实现则返回空字典；仅覆盖本业态相关订单。
+        """
+        return {}
+
+    def contribute_product_shell(self, seller_id: str) -> dict:
+        """向主体商品壳补充业态目录、名称与帮助文案。"""
+        return {}
+
+    def contribute_workbench_shell(self, seller_id: str) -> dict:
+        """向主体工作台壳补充业态岗名、桌台与服务用语。"""
+        return {}
+
+    def staff_permission_definitions(self, seller_id: str) -> list[dict]:
+        """向子账号管理页贡献可勾选的业态权限。"""
+        return []
+
+    def staff_account_presets(self, seller_id: str) -> list[dict]:
+        """向子账号管理页贡献可选的职务预置模板。"""
+        return []

@@ -16,7 +16,7 @@
 {% endif %}
 
 <p class="card-meta" style="margin:0 0 10px;">
-    工作台 · {{ work_user.get_role_display }} {{ work_user.username|staff_display }}
+    工作台 · {{ work_user|staff_title }} {{ work_user.username|staff_display }}
     · 本页仅用于联系客人、沟通与取消，不是店铺管理后台。
 </p>
 
@@ -41,8 +41,10 @@
         {% if order.buyer_id %}
         <button type="button" class="btn btn-outline btn-sm" id="copy-guest-id-btn" style="margin-top:8px;">复制买家账号</button>
         <p class="card-meta" id="copy-guest-id-hint" style="margin:8px 0 0;display:none;">已复制</p>
+        {% elif workbench_shell.show_table_on_board and order.table_label %}
+        <p class="card-meta" style="margin:8px 0 0;">{{ workbench_shell.table_caption }}：{{ order.table_label }} · 请按现场标识当面确认</p>
         {% elif order.table_label %}
-        <p class="card-meta" style="margin:8px 0 0;">桌台：{{ order.table_label }} · 请按桌号/取餐号当面确认</p>
+        <p class="card-meta" style="margin:8px 0 0;">{{ workbench_shell.table_caption }}：{{ order.table_label }} · 请当面确认</p>
         {% endif %}
     </div>
 </details>
@@ -104,7 +106,7 @@
 {% endif %}
 
 <details class="detail-collapse">
-    <summary>🍱 本单菜品</summary>
+    <summary>🍱 本单{{ workbench_shell.item_label }}</summary>
     <div class="detail-collapse-body">
         {% for item in dish_lines %}
         <div class="line-item">
@@ -112,7 +114,7 @@
             <span>¥{{ item.line_total }}</span>
         </div>
         {% empty %}
-        <p class="pending-text">暂无菜品明细</p>
+        <p class="pending-text">暂无{{ workbench_shell.item_label }}明细</p>
         {% endfor %}
     </div>
 </details>

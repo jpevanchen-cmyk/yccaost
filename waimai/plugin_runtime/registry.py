@@ -15,13 +15,18 @@ _CORE_SELLER_NAV: list[SellerNavItem] = [
     # 营业状态属店铺经营基础（A.15.10）；堂食由饮食插件提供（order=40）
     SellerNavItem('operating', '营业状态', '🕐', '营业', order=35),
     SellerNavItem('workbench', '员工工作台', '👥', '工作台', order=50),
-    # 配送费规则暂仍挂核心（以后迁履约插件）；试验阶段保持可见
-    SellerNavItem('delivery', '配送费规则', '🚚', '配送费', order=60),
+    # 配送费规则已迁履约插件贡献
     SellerNavItem('payment', '支付设置', '💳', '支付', order=70),
     SellerNavItem('audit', '操作留痕', '📝', '留痕', order=80),
     # 插件试验面板：看得到、关得掉
     SellerNavItem('plugins', '插件试验', '🧩', '插件', order=200),
 ]
+
+# 店铺级开关：默认开，兼容现店
+_TOGGLEABLE_PLUGINS = {
+    'dining': ('plugin_dining_enabled', '饮食插件'),
+    'fulfillment': ('plugin_fulfillment_enabled', '履约配送插件'),
+}
 
 
 def register_plugin(plugin: Plugin) -> None:
@@ -41,28 +46,29 @@ def list_plugins() -> list[Plugin]:
 
 def is_plugin_enabled(plugin_id: str, seller_id: str) -> bool:
     """
-    读店铺开关。饮食插件默认开（兼容现店）；其它未知名默认关。
+    读店铺开关。饮食 / 履约默认开（兼容现店）；其它未知名有注册即视为开。
     """
-    if plugin_id == 'dining':
+    field = _TOGGLEABLE_PLUGINS.get(plugin_id)
+    if field:
         from ..operating_helpers import get_operating_settings
 
         settings = get_operating_settings(seller_id)
-        return bool(getattr(settings, 'plugin_dining_enabled', True))
-    # 尚未做店铺级开关的插件：有注册即视为开（试验）
+        return bool(getattr(settings, field[0], True))
     return plugin_id in _REGISTRY
 
 
 def set_plugin_enabled(plugin_id: str, seller_id: str, enabled: bool) -> tuple[bool, str]:
-    """改店铺插件开关；目前仅支持饮食插件。"""
-    if plugin_id != 'dining':
+    """改店铺插件开关；支持饮食与履约配送。"""
+    field = _TOGGLEABLE_PLUGINS.get(plugin_id)
+    if not field:
         return False, '该插件尚不支持在本页开关'
     from ..operating_helpers import get_operating_settings
 
     settings = get_operating_settings(seller_id)
-    settings.plugin_dining_enabled = bool(enabled)
-    settings.save(update_fields=['plugin_dining_enabled'])
+    setattr(settings, field[0], bool(enabled))
+    settings.save(update_fields=[field[0]])
     state = '已启用' if enabled else '已停用'
-    return True, f'饮食插件{state}'
+    return True, f'{field[1]}{state}'
 
 
 def collect_seller_nav_items(seller_id: str) -> list[SellerNavItem]:

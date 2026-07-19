@@ -1,7 +1,7 @@
 /**
  * 登录会话守护：
  * 1. 关页尽量拦截提示（站内跳转不拦）
- * 2. 真正离开时尽量发退出（站内跳转不发）
+ * 2. 关闭单个标签不主动退出，避免同一设备其它标签被误踢
  * 3. 约 5 分钟无报平安则失效（心跳 + 服务端会话寿命）
  * 4. 超过 15 分钟无操作则退出
  */
@@ -18,7 +18,7 @@
     var leaving = false;
     var lastActivity = Date.now();
     var warnOnLeave = true;
-    var allowUnloadLogout = true;
+    var allowUnloadLogout = false;
     var unloadBeaconSent = false;
 
     function getCookie(name) {
@@ -70,6 +70,10 @@
                     leaving = true;
                     warnOnLeave = false;
                     allowUnloadLogout = false;
+                    // 被其它设备顶下线：明确弹窗告知，方便察觉是否被人登录。
+                    if (data.reason === 'session_replaced') {
+                        try { alert('您的账号刚在另一台设备登录，本设备已自动退出。\n如果不是您本人操作，请尽快修改密码。'); } catch (e) { /* 忽略 */ }
+                    }
                     window.location.reload();
                 }
             })

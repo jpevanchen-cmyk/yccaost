@@ -53,7 +53,7 @@ def write_audit_log(
                 role = getattr(actor, 'role', '')
                 if role == 'seller':
                     seller_id = actor.username
-                elif role in ('waiter', 'kitchen', 'rider', 'manager'):
+                elif role in ('staff', 'waiter', 'kitchen', 'rider', 'manager'):
                     seller_id = getattr(actor, 'employer_seller_id', '') or ''
 
         if not action_label:

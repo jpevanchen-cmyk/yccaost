@@ -17,9 +17,6 @@ from .delivery_helpers import build_delivery_fee_breakdown, calc_order_delivery_
 from .dispatch_helpers import dispatch_buy_order, get_shop_riders
 from .forms import (
     BuyerRegistrationForm,
-    CreateKitchenForm,
-    CreateRiderForm,
-    CreateWaiterForm,
     ShopDeliverySettingsForm,
     ShopOperatingSettingsForm,
     ShopPaymentSettingsForm,
@@ -105,6 +102,8 @@ class CustomLoginView(LoginView):
             return self.form_invalid(form)
 
         response = super().form_valid(form)
+        from .single_login_helpers import claim_single_login
+        claim_single_login(self.request, self.request.user)
         from .audit_helpers import write_audit_log
 
         user = self.request.user
@@ -149,6 +148,8 @@ class EcosystemLogoutView(LogoutView):
         user = request.user if getattr(request.user, 'is_authenticated', False) else None
         self._shop_work_snap = snapshot_shop_work_session(request)
         if user:
+            from .single_login_helpers import release_single_login
+            release_single_login(request, user)
             write_audit_log(
                 action_code='logout',
                 summary='野草生态退出',
@@ -165,7 +166,11 @@ def shop_work_logout(request, shop_code=None):
     from .audit_helpers import write_audit_log
     from .shop_work_auth import clear_shop_work_session, get_shop_work_user
     from .shop_work_helpers import build_shop_work_path
-    from .staff_account_helpers import deactivate_staff_on_logout, shop_code_from_request
+    from .staff_account_helpers import (
+        deactivate_staff_on_logout,
+        is_shop_staff_account,
+        shop_code_from_request,
+    )
 
     if request.method != 'POST':
         code = (shop_code or '').strip() or shop_code_from_request(request)
@@ -176,13 +181,15 @@ def shop_work_logout(request, shop_code=None):
     work_user = get_shop_work_user(request)
     code = (shop_code or '').strip() or shop_code_from_request(request)
     if work_user:
+        from .single_login_helpers import release_single_login
+        release_single_login(request, work_user)
         write_audit_log(
             action_code='logout',
             summary='店铺工作台退出',
             actor=work_user,
             request=request,
         )
-    if work_user and work_user.role in ('waiter', 'kitchen', 'rider', 'manager'):
+    if is_shop_staff_account(work_user):
         deactivate_staff_on_logout(work_user)
     clear_shop_work_session(request)
     messages.success(request, '已退出店铺工作台')
@@ -320,13 +327,64 @@ def shop_work(request, shop_code):
         work_user = None
 
     if work_user and user_belongs_to_shop(work_user, seller_id):
+        from .workbench_shell_helpers import build_workbench_shell
+
+        from .staff_account_helpers import (
+            PERM_DINING_RIDER,
+            is_shop_staff_account,
+            staff_has_any_order_desk_permission,
+            staff_job_title,
+            staff_has_permission,
+        )
+
+        workbench_shell = build_workbench_shell(seller_id)
+        enabled_views = [
+            view for view in workbench_shell.get('enabled_views', [])
+            if view in WORK_VIEWS
+        ]
+        # 无订单台权限的员工不显示「订单处理」Tab
+        if (
+            'orders' in enabled_views
+            and work_user.role != 'seller'
+            and not staff_has_any_order_desk_permission(work_user)
+        ):
+            enabled_views = [view for view in enabled_views if view != 'orders']
+
         current_view = (request.GET.get('view') or default_work_view(work_user)).strip()
-        if current_view not in WORK_VIEWS:
-            current_view = default_work_view(work_user)
+        if current_view not in enabled_views:
+            current_view = enabled_views[0] if enabled_views else ''
+        from .workbench_sort_helpers import resolve_workbench_sort
+
+        work_order_sort = resolve_workbench_sort(request)
+
+        def _work_url(view_name: str, sort_mode: str = work_order_sort) -> str:
+            url = build_shop_work_path(code, view=view_name)
+            joiner = '&' if '?' in url else '?'
+            return f'{url}{joiner}sort={sort_mode}'
+
         perms = work_permissions(work_user)
+        perms = {
+            view: bool(perms.get(view) and view in enabled_views)
+            for view in WORK_VIEWS
+        }
+        can_open_orders = (
+            work_user.role == 'seller'
+            or staff_has_any_order_desk_permission(work_user)
+        ) and 'orders' in enabled_views
+        # 订单台只读员工也能收到“有新单”提醒；提醒本身不授予操作权限。
+        can_use_order_alert = bool(
+            work_user.role == 'seller'
+            or perms.get(current_view)
+            or (current_view == 'orders' and can_open_orders)
+        )
 
         if request.method == 'POST':
-            if not perms.get(current_view):
+            is_status_action = 'staff_work_status_action' in request.POST
+            if current_view == 'orders':
+                if not is_status_action and not can_open_orders:
+                    messages.error(request, '您没有权限执行此操作')
+                    return redirect(build_shop_work_path(code, view=current_view))
+            elif not is_status_action and not perms.get(current_view):
                 messages.error(request, '您没有权限执行此操作')
                 return redirect(build_shop_work_path(code, view=current_view))
             response = handle_shop_work_post(
@@ -335,27 +393,43 @@ def shop_work(request, shop_code):
             if response:
                 return response
 
-        form_action = build_shop_work_path(code, view=current_view)
+        form_action = _work_url(current_view)
+
         context = {
             'shop_profile': shop_profile,
             'current_view': current_view,
+            'enabled_work_views': enabled_views,
             'form_action': form_action,
-            'tab_waiter_url': build_shop_work_path(code, view='waiter'),
-            'tab_kitchen_url': build_shop_work_path(code, view='kitchen'),
-            'tab_rider_url': build_shop_work_path(code, view='rider'),
+            'tab_orders_url': _work_url('orders'),
+            'tab_waiter_url': _work_url('waiter'),
+            'tab_kitchen_url': _work_url('kitchen'),
+            'tab_rider_url': _work_url('rider'),
+            'work_order_sort': work_order_sort,
+            'sort_newest_url': _work_url(current_view, 'newest'),
+            'sort_oldest_url': _work_url(current_view, 'oldest'),
+            'can_operate_orders': perms.get('orders', False),
+            'can_open_orders': can_open_orders,
             'can_operate_waiter': perms['waiter'],
             'can_operate_kitchen': perms['kitchen'],
             'can_operate_rider': perms['rider'],
-            'show_rider_extras': work_user.role == 'rider',
+            'can_use_order_alert': can_use_order_alert,
+            'show_rider_extras': staff_has_permission(work_user, PERM_DINING_RIDER),
+            'is_work_staff': is_shop_staff_account(work_user),
+            'work_user_title': (
+                staff_job_title(work_user)
+                if is_shop_staff_account(work_user)
+                else work_user.get_role_display()
+            ),
             'shop_work_code': code,
             'shop_work_logout_url': reverse('shop_work_logout', kwargs={'shop_code': code}),
             'dispatch_role': get_delivery_dispatch_role(seller_id),
             'work_user': work_user,
+            'workbench_shell': workbench_shell,
         }
         context.update(build_shop_work_daily_history(seller_id, work_user))
         from .audit_helpers import query_audit_logs, write_audit_log
         # 服务方仅看本人操作记录（A.12）
-        if work_user.role in ('waiter', 'kitchen', 'rider', 'manager'):
+        if is_shop_staff_account(work_user):
             if (request.GET.get('my_audit') or '').strip() == '1':
                 write_audit_log(
                     action_code='view_audit',
@@ -370,23 +444,41 @@ def shop_work(request, shop_code):
                 limit=30,
             ))
             context['show_my_audit'] = (request.GET.get('my_audit') or '').strip() == '1'
-        if current_view == 'waiter':
+        if current_view == 'orders':
+            from .order_desk_helpers import build_order_desk_context
+
+            context.update(build_order_desk_context(
+                seller_id, work_user=work_user, sort_mode=work_order_sort,
+            ))
+        elif current_view == 'waiter':
+            from .dispatch_helpers import operator_can_manual_dispatch
+
             context.update(build_waiter_board_context(
                 seller_id,
-                allow_dispatch=(work_user.role == 'seller' or get_delivery_dispatch_role(seller_id) == 'waiter'),
+                allow_dispatch=operator_can_manual_dispatch(work_user, seller_id, 'waiter'),
+                sort_mode=work_order_sort,
             ))
         elif current_view == 'kitchen':
+            from .dispatch_helpers import operator_can_manual_dispatch
+
             context.update(build_kitchen_board_context(
                 seller_id,
-                allow_dispatch=(work_user.role == 'seller' or get_delivery_dispatch_role(seller_id) == 'kitchen'),
+                allow_dispatch=operator_can_manual_dispatch(work_user, seller_id, 'kitchen'),
+                sort_mode=work_order_sort,
             ))
-        else:
-            context.update(build_rider_board_context(work_user, seller_id))
+        elif current_view == 'rider':
+            context.update(build_rider_board_context(
+                work_user, seller_id, sort_mode=work_order_sort,
+            ))
         return render(request, 'waimai/shop_work_hub.html', context)
 
     if request.method == 'POST':
         from .audit_helpers import write_audit_log
-        from .staff_account_helpers import activate_staff_on_login, authenticate_shop_work_user
+        from .staff_account_helpers import (
+            activate_staff_on_login,
+            authenticate_shop_work_user,
+            is_shop_staff_account,
+        )
 
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
@@ -398,9 +490,11 @@ def shop_work(request, shop_code):
             if not ok:
                 messages.error(request, msg)
                 return render(request, 'waimai/shop_work_login.html', {'shop_profile': shop_profile})
-            if user.role in ('waiter', 'kitchen', 'rider', 'manager'):
+            if is_shop_staff_account(user):
                 activate_staff_on_login(user)
             establish_shop_work_session(request, user, seller_id=seller_id, shop_code=code)
+            from .single_login_helpers import claim_single_login
+            claim_single_login(request, user)
             touch_online_user(user)
             write_audit_log(
                 action_code='login',
@@ -444,11 +538,23 @@ def shop_work_new_orders_json(request, shop_code):
     ):
         return JsonResponse({'ok': False, 'count': 0, 'latest_ts': 0}, status=403)
 
-    # 按角色分别计数：骑手看「待派单」的外卖单；其它岗位看「待备货」的新单
-    if getattr(work_user, 'role', '') == 'rider':
-        qs = DeliveryOrder.objects.filter(
-            buy_order__seller_id=seller_id, delivery_status='waiting',
-        )
+    # 骑手页签只提醒外卖待接单；纯配送员工亦然。其它页签/角色看全店待备货新单。
+    from .shop_work_helpers import work_permissions
+
+    permissions = work_permissions(work_user)
+    view = (request.GET.get('view') or '').strip()
+    if view not in ('orders', 'waiter', 'kitchen', 'rider'):
+        return JsonResponse({'ok': False, 'count': 0, 'latest_ts': 0}, status=400)
+    from .staff_account_helpers import staff_has_any_order_desk_permission
+
+    can_read_orders = view == 'orders' and staff_has_any_order_desk_permission(work_user)
+    if work_user.role != 'seller' and not permissions.get(view) and not can_read_orders:
+        return JsonResponse({'ok': False, 'count': 0, 'latest_ts': 0}, status=403)
+    count_delivery = permissions.get('rider') and view == 'rider'
+    if count_delivery:
+        from .dispatch_helpers import query_pending_dispatch_orders
+
+        qs = query_pending_dispatch_orders(seller_id)
     else:
         from .order_alert_helpers import query_shop_new_orders
 
@@ -482,7 +588,6 @@ def shop_work_order(request, shop_code, order_id):
     )
     from .shop_work_auth import get_shop_work_user
     from .shop_work_helpers import (
-        SHOP_STAFF_ROLES,
         build_shop_work_order_path,
         build_shop_work_path,
         get_shop_profile_by_code,
@@ -509,14 +614,18 @@ def shop_work_order(request, shop_code, order_id):
 
     can_chat = viewer_can_use_order_chat(work_user, order)
     can_shop_cancel = shop_can_cancel_order(work_user, order)
-    # 联系客人：店主或任意本店员工均可（取消权限另判）
-    show_contact = work_user.role == 'seller' or work_user.role in SHOP_STAFF_ROLES
+    from .staff_account_helpers import PERM_ORDERS_CONTACT, staff_has_permission
+
+    # 店主天然通过公共权限函数；员工须勾选“可联系顾客”。
+    show_contact = staff_has_permission(work_user, PERM_ORDERS_CONTACT)
+    if not show_contact:
+        can_chat = False
 
     self_url = build_shop_work_order_path(code, order.order_id)
 
     if request.method == 'POST' and 'send_order_message' in request.POST:
         if not can_chat:
-            messages.error(request, '您不能在此订单留言')
+            messages.error(request, '您没有联系顾客或留言的权限')
         else:
             ok, msg = post_order_message(order, work_user, request.POST.get('message_body', ''))
             if ok:
@@ -536,6 +645,8 @@ def shop_work_order(request, shop_code, order_id):
     if can_chat:
         mark_order_messages_read(order, work_user)
 
+    from .workbench_shell_helpers import build_workbench_shell
+
     return render(request, 'waimai/shop_work_order.html', {
         'shop_profile': shop_profile,
         'shop_work_code': code,
@@ -547,8 +658,9 @@ def shop_work_order(request, shop_code, order_id):
         'show_contact_guest': show_contact,
         'can_shop_cancel': can_shop_cancel,
         'shop_has_chat_history': shop_has_cancel_communication(order),
-        'back_url': build_shop_work_path(code, view='waiter'),
+        'back_url': build_shop_work_path(code, view='orders'),
         'shop_work_logout_url': reverse('shop_work_logout', kwargs={'shop_code': code}),
+        'workbench_shell': build_workbench_shell(seller_id),
     })
 
 
@@ -560,8 +672,10 @@ def waiter_pay_order(request, order_id):
     from .waiter_helpers import ensure_waiter_employer, sync_waiter_service_status
     from .shop_work_helpers import resolve_waiter_return_url
 
+    from .staff_account_helpers import PERM_DINING_WAITER, staff_has_permission
+
     work_user = get_shop_work_user(request)
-    if not work_user or work_user.role not in ('waiter', 'seller'):
+    if not work_user or not staff_has_permission(work_user, PERM_DINING_WAITER):
         # 无工作台登录时，引导回工作台入口（若能解析店码）
         return _redirect_to_shop_work(request, 'waiter') or redirect('directory')
     seller_id = work_user.username if work_user.role == 'seller' else ensure_waiter_employer(work_user)
@@ -621,8 +735,10 @@ def waiter_pay_order_status(request, order_id):
     from .shop_work_auth import get_shop_work_user
     from .waiter_helpers import ensure_waiter_employer, sync_waiter_service_status
 
+    from .staff_account_helpers import PERM_DINING_WAITER, staff_has_permission
+
     work_user = get_shop_work_user(request)
-    if not work_user or work_user.role not in ('waiter', 'seller'):
+    if not work_user or not staff_has_permission(work_user, PERM_DINING_WAITER):
         return JsonResponse({'paid': False})
     seller_id = work_user.username if work_user.role == 'seller' else ensure_waiter_employer(work_user)
     if not seller_id:
@@ -677,9 +793,50 @@ def _shop_cart_context(cart, seller_id):
     }
 
 
+def _shop_cart_json(request, cart, seller_id, shop_profile):
+    """无刷新购物车操作成功后，返回可整体替换的购物车外壳。"""
+    from django.template.loader import render_to_string
+
+    from .channel_helpers import channel_template_flags, resolve_shop_channel
+    from .plugins.dining.buyer_entry import get_buyer_table_session
+    from .product_shell_helpers import build_product_shell
+
+    table_session = get_buyer_table_session(request, seller_id)
+    shop_channel = resolve_shop_channel(request, seller_id, table_session)
+    ctx = {
+        'seller_id': seller_id,
+        'shop_profile': shop_profile,
+        'product_shell': build_product_shell(seller_id),
+        **channel_template_flags(shop_channel),
+        **_shop_cart_context(cart, seller_id),
+    }
+    return JsonResponse({
+        'ok': True,
+        'cart_count': ctx['cart_count'],
+        'cart_total': str(ctx['cart_total']),
+        'cart_shell_html': render_to_string(
+            'waimai/_shop_cart_shell.html', ctx, request=request,
+        ),
+    })
+
+
+def _is_cart_fetch(request) -> bool:
+    """是否为店铺页的无刷新购物车请求。"""
+    return request.headers.get('X-Requested-With') == 'YecaoCart'
+
+
+def _shop_cart_error(request, message: str):
+    """无刷新请求返回白话错误；普通提交继续由原页面显示。"""
+    if _is_cart_fetch(request):
+        return JsonResponse({'ok': False, 'message': message}, status=400)
+    return None
+
+
 def _shop_page_dishes(seller_id):
-    """店铺页菜品列表（含菜单清单过滤）"""
-    dishes, using_menu = get_shop_dishes_for_sale(seller_id)
+    """店铺页商品列表；业态插件可接管目录过滤。"""
+    from .product_shell_helpers import get_shop_products_for_sale
+
+    dishes, using_menu = get_shop_products_for_sale(seller_id)
     return dishes, using_menu
 
 
@@ -734,6 +891,9 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         resolve_shop_channel,
     )
 
+    from .product_shell_helpers import build_product_shell
+
+    product_shell = build_product_shell(seller_id)
     dishes, using_menu = _shop_page_dishes(seller_id)
     menu_items_map = get_active_menu_items_map(seller_id) if using_menu else {}
     table_session = get_buyer_table_session(request, seller_id)
@@ -760,6 +920,7 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         'seller_id': seller_id,
         'shop_profile': shop_profile,
         'using_menu': using_menu,
+        'product_shell': product_shell,
         'table_session': table_session,
         'table_label': table_session.display_label() if table_session else '',
         'table_open_order': table_open_order,
@@ -825,23 +986,42 @@ def shop_page(request):
             cart = normalize_cart_keys(cart)
             ft, ch_err = require_shop_channel(request, seller_id, table_sess)
             if ch_err:
+                fetch_error = _shop_cart_error(request, ch_err)
+                if fetch_error:
+                    return fetch_error
                 return _shop_render(request, seller_id, cart, shop_profile, error=ch_err)
             ok_admit, admit_msg = check_order_admission(seller_id, ft)
             if not ok_admit:
+                fetch_error = _shop_cart_error(request, admit_msg)
+                if fetch_error:
+                    return fetch_error
                 return _shop_render(request, seller_id, cart, shop_profile, error=admit_msg)
             try:
                 dish = Dish.objects.get(dish_id=dish_id, seller_id=seller_id, is_active=True)
             except Dish.DoesNotExist:
-                return _shop_render(request, seller_id, cart, shop_profile, error='菜品不存在或已下架')
-            if not dish_visible_on_shop(seller_id, dish_id):
+                fetch_error = _shop_cart_error(request, '商品不存在或已下架')
+                if fetch_error:
+                    return fetch_error
+                return _shop_render(request, seller_id, cart, shop_profile, error='商品不存在或已下架')
+            from .plugin_runtime.registry import is_plugin_enabled
+
+            if is_plugin_enabled('dining', seller_id) and not dish_visible_on_shop(seller_id, dish_id):
+                fetch_error = _shop_cart_error(request, '该菜品不在当前使用中的菜单清单里')
+                if fetch_error:
+                    return fetch_error
                 return _shop_render(request, seller_id, cart, shop_profile, error='该菜品不在当前使用中的菜单清单里')
             line_key = cart_line_key(dish_id, tier)
             qty = cart.get(line_key, 0) + 1
             ok, msg = validate_tier_purchase(dish, tier, request.user, seller_id, qty, cart)
             if not ok:
+                fetch_error = _shop_cart_error(request, msg)
+                if fetch_error:
+                    return fetch_error
                 return _shop_render(request, seller_id, cart, shop_profile, error=msg)
             cart[line_key] = qty
             set_shop_cart(request.session, seller_id, cart)
+            if _is_cart_fetch(request):
+                return _shop_cart_json(request, cart, seller_id, shop_profile)
             if request.POST.get('stay_in_cart'):
                 return _shop_cart_redirect(seller_id, keep_cart_open=True)
             return _shop_cart_redirect(seller_id, dish_id=dish_id, price_tier=tier)
@@ -856,6 +1036,8 @@ def shop_page(request):
                 if cart[line_key] < 0:
                     cart[line_key] = 0
             set_shop_cart(request.session, seller_id, cart)
+            if _is_cart_fetch(request):
+                return _shop_cart_json(request, cart, seller_id, shop_profile)
             return _shop_cart_redirect(seller_id, keep_cart_open=True)
 
         if action == 'remove_from_cart':
@@ -865,6 +1047,8 @@ def shop_page(request):
             cart = normalize_cart_keys(cart)
             cart.pop(line_key, None)
             set_shop_cart(request.session, seller_id, cart)
+            if _is_cart_fetch(request):
+                return _shop_cart_json(request, cart, seller_id, shop_profile)
             return _shop_cart_redirect(seller_id, keep_cart_open=True)
 
         if action == 'update_cart':
@@ -974,9 +1158,10 @@ def my_deliveries(request):
 def rider_delivery_history(request):
     """骑手配送记录：仅工作台骑手会话可看"""
     from .shop_work_auth import get_shop_work_user
+    from .staff_account_helpers import PERM_DINING_RIDER, staff_has_permission
 
     work_user = get_shop_work_user(request)
-    if not work_user or work_user.role != 'rider':
+    if not work_user or not staff_has_permission(work_user, PERM_DINING_RIDER):
         work_redirect = _redirect_to_shop_work(request, 'rider')
         if work_redirect:
             return work_redirect
@@ -1024,6 +1209,8 @@ def register(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
+            from .single_login_helpers import claim_single_login
+            claim_single_login(request, user)
             touch_online_user(user)
             return redirect('directory')
     else:
@@ -1041,6 +1228,8 @@ def shop_register(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
+            from .single_login_helpers import claim_single_login
+            claim_single_login(request, user)
             touch_online_user(user)
             return redirect('seller_panel')
     else:
@@ -1190,12 +1379,21 @@ def seller_panel_section(request, section):
         unread_map = unread_map_for_orders(orders, side='shop')
         for o in orders:
             o.unread_msg_count = unread_map.get(o.order_id, 0)
+        from .order_shell_helpers import (
+            build_order_shell,
+            fulfillment_filter_choices,
+            order_search_placeholder,
+        )
+
+        for o in orders:
+            o.order_shell = build_order_shell(o)
         context['orders'] = orders
         context['order_search'] = order_search
+        context['order_search_placeholder'] = order_search_placeholder(seller_id)
         context['order_date_range_choices'] = ORDER_DATE_RANGE_CHOICES
         context['order_status_choices'] = BuyOrder.ORDER_STATUS_CHOICES
         context['payment_status_choices'] = BuyOrder.PAYMENT_STATUS_CHOICES
-        context['fulfillment_type_choices'] = BuyOrder.FULFILLMENT_TYPE_CHOICES
+        context['fulfillment_type_choices'] = fulfillment_filter_choices(seller_id)
         from .order_alert_helpers import list_shop_new_order_links
 
         new_order_links = list_shop_new_order_links(seller_id)
@@ -1205,19 +1403,26 @@ def seller_panel_section(request, section):
         context['shop_unread_msg_orders'] = unread_summary['orders']
     elif section == 'products':
         from .menu_helpers import find_menu_profile_by_pick_id, get_active_menu_profile
+        from .product_shell_helpers import build_product_shell
         from .sales_helpers import get_dish_sales_rankings
         operating = get_operating_settings(seller_id)
+        product_shell = build_product_shell(seller_id)
         context['operating'] = operating
+        context['product_shell'] = product_shell
         context['dishes'] = Dish.objects.filter(seller_id=seller_id).order_by('sort_order', 'name')
         context['sales_rankings'] = get_dish_sales_rankings(seller_id)
-        profiles = list(MenuProfile.objects.filter(
-            seller_id=seller_id,
-        ).prefetch_related('items__dish').order_by('-updated_at'))
-        active_profile = get_active_menu_profile(seller_id)
-        pick_id = request.GET.get('profile', '').strip()
-        selected = find_menu_profile_by_pick_id(seller_id, pick_id) if pick_id else None
-        if not selected:
-            selected = active_profile or (profiles[0] if profiles else None)
+        profiles = []
+        active_profile = None
+        selected = None
+        if product_shell['show_menu_catalog']:
+            profiles = list(MenuProfile.objects.filter(
+                seller_id=seller_id,
+            ).prefetch_related('items__dish').order_by('-updated_at'))
+            active_profile = get_active_menu_profile(seller_id)
+            pick_id = request.GET.get('profile', '').strip()
+            selected = find_menu_profile_by_pick_id(seller_id, pick_id) if pick_id else None
+            if not selected:
+                selected = active_profile or (profiles[0] if profiles else None)
         context['menu_profiles'] = profiles
         context['selected_profile'] = selected
         context['active_profile'] = active_profile
@@ -1253,39 +1458,61 @@ def seller_panel_section(request, section):
     elif section == 'workbench':
         import base64
 
-        from .forms import CreateKitchenForm, CreateManagerForm, CreateRiderForm, CreateWaiterForm, ShopWorkbenchSettingsForm
-        from .kitchen_helpers import get_shop_kitchens
-        from .manager_handlers import get_shop_managers
+        from .forms import (
+            CreateStaffAccountForm,
+            EditStaffAccountForm,
+            ShopWorkbenchSettingsForm,
+        )
         from .staff_account_helpers import (
             AttendanceFilterForm,
             attendance_status_options,
             build_mobile_share_url,
             build_staff_status_rows,
+            get_shop_staff_users,
             query_attendance_logs,
-            staff_role_label,
+            staff_account_type_label,
+            staff_job_title,
+            staff_permission_codes,
         )
-        from .waiter_helpers import get_shop_waiters
         from .workbench_qr import build_work_login_qr_png
 
         operating = get_operating_settings(seller_id)
-        context['workbench_settings_form'] = ShopWorkbenchSettingsForm(instance=operating)
-        context['managers'] = get_shop_managers(seller_id)
-        context['manager_form'] = CreateManagerForm(seller_id=seller_id)
-        context['waiters'] = get_shop_waiters(seller_id)
-        context['waiter_form'] = CreateWaiterForm(seller_id=seller_id)
-        context['kitchens'] = get_shop_kitchens(seller_id)
-        context['kitchen_form'] = CreateKitchenForm(seller_id=seller_id)
-        context['riders'] = get_shop_riders(seller_id, active_only=False)
-        context['rider_form'] = CreateRiderForm(seller_id=seller_id)
-        attendance_filter_form = AttendanceFilterForm(request.GET or None)
-        attendance_filters = attendance_filter_form.cleaned_data if attendance_filter_form.is_valid() else {}
-        staff_users = (
-            list(context['managers'])
-            + list(context['waiters'])
-            + list(context['kitchens'])
-            + list(context['riders'])
+        workbench_form = ShopWorkbenchSettingsForm(instance=operating)
+        from .plugins.fulfillment.ownership import fulfillment_plugin_enabled
+        if not fulfillment_plugin_enabled(seller_id):
+            for fname in ('delivery_handoff_mode', 'auto_dispatch_enabled'):
+                workbench_form.fields.pop(fname, None)
+        context['workbench_settings_form'] = workbench_form
+        context['management_staff_form'] = CreateStaffAccountForm(
+            seller_id=seller_id,
+            account_type='management',
         )
-        staff_users.sort(key=lambda user: (staff_role_label(user.role), user.date_joined, user.username))
+        context['employee_staff_form'] = CreateStaffAccountForm(
+            seller_id=seller_id,
+            account_type='employee',
+        )
+        attendance_filter_form = AttendanceFilterForm(request.GET or None, seller_id=seller_id)
+        attendance_filters = attendance_filter_form.cleaned_data if attendance_filter_form.is_valid() else {}
+        staff_users = list(get_shop_staff_users(seller_id))
+        staff_users.sort(key=lambda user: (
+            staff_account_type_label(user),
+            staff_job_title(user),
+            user.date_joined,
+            user.username,
+        ))
+        staff_account_rows = []
+        for staff_user in staff_users:
+            staff_account_rows.append({
+                'user': staff_user,
+                'account_type_label': staff_account_type_label(staff_user),
+                'job_title': staff_job_title(staff_user),
+                'permission_codes': sorted(staff_permission_codes(staff_user)),
+                'edit_form': EditStaffAccountForm(
+                    seller_id=seller_id,
+                    user=staff_user,
+                ),
+            })
+        context['staff_account_rows'] = staff_account_rows
         attendance_logs = list(query_attendance_logs(
             seller_id,
             operating.attendance_retention_days,
@@ -1314,19 +1541,31 @@ def seller_panel_section(request, section):
         context['work_mobile_url'] = work_mobile_url
         context['work_mobile_qr_data_url'] = work_mobile_qr_data_url
     elif section == 'delivery':
+        from .plugins.fulfillment.ownership import fulfillment_plugin_enabled
+        if not fulfillment_plugin_enabled(seller_id):
+            messages.error(request, '履约配送插件未启用，请先在「插件」里打开')
+            return redirect('seller_panel_section', section='plugins')
         context['settings_form'] = ShopDeliverySettingsForm(
             instance=get_delivery_settings(seller_id)
         )
     elif section == 'payment':
         from .experience_helpers import experience_site_enabled, seller_blocked_from_real_wechat
         from .payments import get_payment_settings
+        from .plugin_runtime.registry import is_plugin_enabled
         from .rider_cash_helpers import rider_cash_summary
-        context['payment_form'] = ShopPaymentSettingsForm(
+
+        fulfillment_on = is_plugin_enabled('fulfillment', seller_id)
+        payment_form = ShopPaymentSettingsForm(
             instance=get_payment_settings(seller_id)
         )
+        # 履约关闭时不展示「外卖货到付款」开关（能力归属履约）
+        if not fulfillment_on and 'enable_cod' in payment_form.fields:
+            del payment_form.fields['enable_cod']
+        context['payment_form'] = payment_form
         context['experience_block_wechat'] = seller_blocked_from_real_wechat(seller_id)
         context['experience_site'] = experience_site_enabled()
-        context['rider_cash'] = rider_cash_summary(seller_id)
+        context['show_rider_cash'] = fulfillment_on
+        context['rider_cash'] = rider_cash_summary(seller_id) if fulfillment_on else None
     elif section == 'audit':
         from .audit_helpers import (
             can_view_tech_logs,
@@ -1695,6 +1934,84 @@ def order_history(request):
     return render(request, 'waimai/order_history.html', {'order_rows': order_rows})
 
 
+@login_required
+def buyer_center(request):
+    """买家中心：基本信息、当前订单与历史订单。"""
+    if request.user.role != 'buyer':
+        return redirect('directory')
+
+    from .order_message_helpers import unread_map_for_orders
+
+    orders = list(
+        BuyOrder.objects.filter(buyer_id=request.user.username)
+        .select_related('delivery_order')
+        .order_by('-created_at')
+    )
+    seller_ids = {o.seller_id for o in orders}
+    shop_names = {
+        s.seller_id: s.shop_name
+        for s in ShopProfile.objects.filter(seller_id__in=seller_ids)
+    }
+    unread_map = unread_map_for_orders(orders, side='buyer')
+
+    def _row(order):
+        return {
+            'order': order,
+            'shop_name': shop_names.get(order.seller_id, order.seller_id),
+            'unread_msg_count': unread_map.get(order.order_id, 0),
+        }
+
+    current_rows = [
+        _row(order) for order in orders
+        if order.order_status not in ('completed', 'cancelled')
+    ]
+    history_rows = [
+        _row(order) for order in orders
+        if order.order_status in ('completed', 'cancelled')
+    ]
+    return render(request, 'waimai/buyer_center.html', {
+        'current_order_rows': current_rows,
+        'history_order_rows': history_rows,
+    })
+
+
+def account_password_change(request):
+    """买家、店主、工作台员工共用的修改本人密码入口。"""
+    from django.contrib.auth import update_session_auth_hash
+    from django.contrib.auth.forms import PasswordChangeForm
+
+    from .shop_work_auth import get_shop_work_user
+
+    eco_user = request.user if getattr(request.user, 'is_authenticated', False) else None
+    work_user = get_shop_work_user(request)
+    account_user = eco_user or work_user
+    if account_user is None:
+        messages.error(request, '请先登录后再修改密码')
+        return redirect('login')
+
+    form = PasswordChangeForm(account_user, request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        changed_user = form.save()
+        if eco_user and eco_user.pk == changed_user.pk:
+            update_session_auth_hash(request, changed_user)
+        from .single_login_helpers import claim_single_login
+        claim_single_login(request, changed_user)
+        messages.success(request, '密码已修改，请使用新密码登录')
+        if changed_user.role == 'buyer':
+            return redirect('buyer_center')
+        if changed_user.role == 'seller':
+            return redirect('seller_panel')
+        from .shop_work_helpers import build_shop_work_path, get_shop_code_for_user
+
+        code = get_shop_code_for_user(changed_user)
+        return redirect(build_shop_work_path(code)) if code else redirect('directory')
+
+    return render(request, 'waimai/account_password_change.html', {
+        'form': form,
+        'account_user': account_user,
+    })
+
+
 def _order_page_viewer(request):
     """
     生态订单详情页身份（仅买家 / 卖家后台 / 骑手）。
@@ -1771,6 +2088,33 @@ def order_detail(request, order_id):
     )
     can_shop_cancel = bool(user) and shop_can_cancel_order(user, order)
 
+    if request.method == 'POST' and 'cash_shortfall_response' in request.POST:
+        if not user or user.role != 'buyer':
+            messages.error(request, '只有本订单买家可以确认实付金额')
+        else:
+            from .payments import buyer_respond_cash_shortfall
+
+            response = (request.POST.get('cash_shortfall_response') or '').strip()
+            ok, msg = buyer_respond_cash_shortfall(
+                order, user.username, accept=(response == 'accept'),
+            )
+            if ok:
+                messages.success(request, msg)
+                from .audit_helpers import audit_order_status
+
+                audit_order_status(
+                    order=order,
+                    actor=user,
+                    summary=(
+                        f'买家{"确认" if response == "accept" else "拒绝"}'
+                        f'实付金额 {order.get_display_order_no()}'
+                    ),
+                    request=request,
+                )
+            else:
+                messages.error(request, msg)
+        return redirect('order_detail', order_id=order.order_id)
+
     if request.method == 'POST' and 'send_order_message' in request.POST:
         if not can_chat:
             messages.error(request, '您不能在此订单留言')
@@ -1824,8 +2168,22 @@ def order_detail(request, order_id):
 
     order_messages = list(order.messages.order_by('created_at')) if can_chat else []
 
+    from .order_shell_helpers import build_order_shell
+
+    order_shell = build_order_shell(order)
+    # 游客详情页：堂食现金提示按查看角色微调（结账后不可见本机订单）
+    if viewer_role == 'guest' and order.is_dine_in() and request.GET.get('cash_pending'):
+        order_shell = {
+            **order_shell,
+            'cash_pending_banner': (
+                '已选择<strong>堂食 · 到店付现金</strong>。订单已提交，店家将为您备餐并告知预计出餐时间。'
+                '结账后本机将不再保留本桌订单查看（有问题请以店内小票为准）。'
+            ),
+        }
+
     return render(request, 'waimai/order_detail.html', {
         'order': order,
+        'order_shell': order_shell,
         'shop_profile': shop_profile,
         'timeline': build_order_timeline(order),
         'dish_lines': dish_items_with_line_totals(order.dish_items),

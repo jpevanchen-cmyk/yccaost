@@ -12,7 +12,7 @@
 
 {% if not can_operate %}
 <p class="card-meta" style="margin-bottom:12px;padding:10px;background:#fff8e1;border-radius:8px;">
-    👀 当前为<strong>只读预览</strong>：您可查看服务员视角订单概况，操作请使用本岗位账号登录。
+    {{ workbench_shell.waiter_readonly_hint|safe }}
 </p>
 {% endif %}
 
@@ -28,8 +28,8 @@
             {% endif %}
         </div>
         <p class="delivery-card-meta">
-            {% if order.table_label %}桌台：<strong>{{ order.table_label }}</strong><br>{% endif %}
-            {% if row.rider_id %}骑手：<strong>{{ row.rider_id }}</strong>{% if row.delivery_status %} · {{ row.delivery_status }}{% endif %}<br>{% endif %}
+            {% if workbench_shell.show_table_on_board and order.table_label %}{{ workbench_shell.table_caption }}：<strong>{{ order.table_label }}</strong><br>{% endif %}
+            {% if row.rider_id %}{{ workbench_shell.rider_role_word }}：<strong>{{ row.rider_id }}</strong>{% if row.delivery_status %} · {{ row.delivery_status }}{% endif %}<br>{% endif %}
             金额：<strong style="color:var(--yc-orange);">¥{{ order.total_amount }}</strong>
             · {{ order.get_payment_status_display }}
             · {{ order.created_at|beijing:"m-d H:i" }}
@@ -44,7 +44,7 @@
         {% endif %}
 
         <div class="detail-collapse-body" style="margin:10px 0;">
-            <p class="card-meta" style="margin-bottom:8px;"><strong>🍱 菜品（按份{{ row.serve_label }}）</strong></p>
+            <p class="card-meta" style="margin-bottom:8px;"><strong>🍱 {{ workbench_shell.item_label }}（按{{ workbench_shell.unit_label }}{{ row.serve_label }}）</strong></p>
             {% for dish in row.dish_groups %}
             <div class="line-item" style="flex-wrap:wrap;gap:8px;padding:10px 0;border-bottom:1px solid #eee;">
                 <div style="flex:1;min-width:140px;">
@@ -59,7 +59,7 @@
                         <input type="hidden" name="mark_dish_unit" value="1">
                         <input type="hidden" name="order_id" value="{{ order.order_id }}">
                         <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
-                        <button type="submit" class="btn btn-sm btn-orange">+1 份{{ row.serve_label }}</button>
+                        <button type="submit" class="btn btn-sm btn-orange">+1 {{ workbench_shell.unit_label }}{{ row.serve_label }}</button>
                     </form>
                     {% endif %}
                     {% if dish.served_qty > 0 %}
@@ -68,7 +68,7 @@
                         <input type="hidden" name="undo_dish_unit" value="1">
                         <input type="hidden" name="order_id" value="{{ order.order_id }}">
                         <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
-                        <button type="submit" class="btn btn-sm btn-outline">撤回 1 份</button>
+                        <button type="submit" class="btn btn-sm btn-outline">撤回 1 {{ workbench_shell.unit_label }}</button>
                     </form>
                     {% endif %}
                 </div>
@@ -92,21 +92,13 @@
                 <button type="submit" class="btn btn-sm btn-outline">修改本单时间</button>
             </form>
             {% endif %}
-            {% if order.is_cash_awaiting_confirm %}
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
-                {% csrf_token %}
-                <input type="hidden" name="confirm_cash" value="1">
-                <input type="hidden" name="order_id" value="{{ order.order_id }}">
-                <button type="submit" class="btn btn-sm btn-primary">确认已收现金（货到付款）</button>
-            </form>
-            {% endif %}
             {% if row.can_dispatch %}
             <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="dispatch_order" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
                 <select name="rider_id" class="seller-select">
-                    <option value="">自动派单（按当前上班骑手分配）</option>
+                    <option value="">自动派单（按当前上班{{ workbench_shell.rider_role_word }}分配）</option>
                     {% for r in dispatch_riders %}
                     <option value="{{ r.username }}">{{ r.username }}</option>
                     {% endfor %}
@@ -114,7 +106,7 @@
                 <button type="submit" class="btn btn-sm btn-green">手动派单</button>
             </form>
             {% elif row.can_reassign %}
-            <p class="card-meta">当前骑手：{{ row.rider_id }}</p>
+            <p class="card-meta">当前{{ workbench_shell.rider_role_word }}：{{ row.rider_id }}</p>
             <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="reassign_rider" value="1">
@@ -124,7 +116,7 @@
                     <option value="{{ r.username }}" {% if r.username == row.rider_id %}selected{% endif %}>{{ r.username }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit" class="btn btn-sm btn-outline">改派骑手</button>
+                <button type="submit" class="btn btn-sm btn-outline">改派{{ workbench_shell.rider_role_word }}</button>
             </form>
             {% endif %}
             {% if row.can_collect %}
@@ -156,7 +148,7 @@
                 <input type="hidden" name="complete_pickup" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
                 <button type="submit" class="btn btn-sm btn-green btn-block">
-                    {% if order.is_dine_in %}用餐完成{% else %}客人已取走{% endif %}
+                    {% if order.is_dine_in %}{{ workbench_shell.complete_dine_in }}{% else %}{{ workbench_shell.complete_takeaway }}{% endif %}
                 </button>
             </form>
             {% endif %}

@@ -1,12 +1,10 @@
 # 支付总线：对外入口（保持原函数名，供页面 / 微信回调调用）
 # 通用到账在 core；饮食履约在饮食插件 dining_bridge；本文件负责编排。
 
-from datetime import timedelta
-
+from django.db import transaction
 from django.utils import timezone
 
 from ..models import BuyOrder, ShopPaymentSettings
-from ..time_helpers import format_beijing_time
 from .base import PaymentInitResult
 from .core import get_payment_settings, mark_payment_received
 from waimai.plugins.dining.dining_bridge import (
@@ -15,10 +13,6 @@ from waimai.plugins.dining.dining_bridge import (
 )
 from .registry import build_buyer_pay_options
 from .wechat_native import create_native_payment, try_sync_wechat_payment
-
-# 店家开始备货时可选的出餐/取餐时间（分钟）——饮食场景
-IN_STORE_ETA_MINUTES = (10, 15, 20, 30)
-
 
 def confirm_order_paid(order: BuyOrder, payment_method: str, paid_at=None):
     """订单标记为已支付；主体订单不调用饮食履约。"""
@@ -123,35 +117,12 @@ def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentIni
     return PaymentInitResult(ok=False, message='支付方式尚未实现')
 
 
-def confirm_in_store_order(order: BuyOrder, eta_minutes: int) -> tuple[bool, str]:
-    """堂食/打包到店单：开始备货并反馈预计出餐/取餐时间（不确认收款）"""
-    if not order.is_awaiting_in_store_order_confirm():
-        return False, '该订单不是待备货的堂食/打包单'
-    if eta_minutes not in IN_STORE_ETA_MINUTES:
-        return False, '请选择有效的出餐时间'
-
-    now = timezone.now()
-    order.order_status = 'preparing'
-    order.preparing_at = now
-    order.estimated_ready_at = now + timedelta(minutes=eta_minutes)
-    order.save(update_fields=[
-        'order_status', 'preparing_at', 'estimated_ready_at', 'updated_at',
-    ])
-
-    ready_str = format_beijing_time(order.estimated_ready_at)
-    if order.is_dine_in():
-        return True, f'已开始备餐，预计 {ready_str} 可出餐'
-    return True, f'已开始备货，预计 {ready_str} 可取餐'
-
-
 def confirm_cash_payment(order: BuyOrder) -> tuple[bool, str]:
     """卖家确认现金已收"""
     if order.payment_method != 'cash' or order.payment_status != 'pending_payment':
         return False, '该订单不是待确认的现金单'
 
     if order.is_in_store():
-        if order.is_awaiting_in_store_order_confirm():
-            return False, '请先选择预计时间并开始备货，再确认收款'
         if order.order_status not in ('awaiting_prep', 'preparing', 'ready_pickup', 'completed'):
             return False, '当前订单状态不能确认收款'
         # 仅到账，不再改履约状态（店内单已在备货流中）
@@ -162,13 +133,17 @@ def confirm_cash_payment(order: BuyOrder) -> tuple[bool, str]:
     return True, '已确认收款，订单进入备货'
 
 
-def rider_collect_cash(order: BuyOrder, rider_id: str, amount) -> tuple[bool, str]:
+@transaction.atomic
+def rider_collect_cash(
+    order: BuyOrder, rider_id: str, amount, shortfall_reason: str = '',
+) -> tuple[bool, str]:
     """
     外卖货到付款：骑手送达时收现金。
-    记录实收金额与收款骑手，并把订单标为已收款；之后才允许点「已送达」。
+    足额时直接记为已收款；少收时先等买家当面确认，未确认不能交餐结单。
     """
     from decimal import Decimal, InvalidOperation
 
+    order = BuyOrder.objects.select_for_update().get(pk=order.pk)
     if not order.is_delivery_cod():
         return False, '该订单不是外卖现金货到付款单'
     if order.payment_status == 'paid':
@@ -182,22 +157,132 @@ def rider_collect_cash(order: BuyOrder, rider_id: str, amount) -> tuple[bool, st
         return False, '请输入有效的收款金额'
     if amt <= 0:
         return False, '收款金额须大于 0'
+    if amt > order.total_amount:
+        return False, '实收金额不能高于应收金额，请先找零后按实际应收登记'
 
     now = timezone.now()
     order.cash_collected_amount = amt
     order.cash_collected_by = rider_id or ''
+    if amt < order.total_amount:
+        reason = (shortfall_reason or '').strip()
+        if len(reason) < 2:
+            return False, '少收时必须填写原因（至少两个字），再请买家当面确认'
+        order.cash_shortfall_reason = reason
+        order.cash_shortfall_status = 'buyer_pending'
+        order.cash_shortfall_buyer_responded_at = None
+        order.cash_collected_at = None
+        order.payment_status = 'pending_payment'
+        order.payment_time = None
+        order.save(update_fields=[
+            'cash_collected_amount', 'cash_collected_by',
+            'cash_shortfall_reason', 'cash_shortfall_status',
+            'cash_shortfall_buyer_responded_at', 'cash_collected_at',
+            'payment_status', 'payment_time', 'updated_at',
+        ])
+        diff = order.total_amount - amt
+        return True, (
+            f'已向买家发起少收确认：实付 ¥{amt}，少付 ¥{diff}。'
+            '买家确认前不能交餐或结单'
+        )
+
+    had_shortfall = bool(order.cash_shortfall_status)
+    order.cash_collected_at = now
+    order.payment_status = 'paid'
+    order.payment_time = now
+    order.cash_shortfall_status = 'resolved_full' if had_shortfall else ''
+    if not had_shortfall:
+        order.cash_shortfall_reason = ''
+        order.cash_shortfall_buyer_responded_at = None
+    order.save(update_fields=[
+        'cash_collected_amount', 'cash_collected_by', 'cash_collected_at',
+        'payment_status', 'payment_time', 'cash_shortfall_status',
+        'cash_shortfall_reason', 'cash_shortfall_buyer_responded_at', 'updated_at',
+    ])
+    return True, f'已确认收款 ¥{amt}'
+
+
+@transaction.atomic
+def buyer_respond_cash_shortfall(order: BuyOrder, buyer_id: str, *, accept: bool) -> tuple[bool, str]:
+    """买家当面确认或拒绝配送员登记的少收金额。"""
+    order = BuyOrder.objects.select_for_update().get(pk=order.pk)
+    if order.buyer_id != (buyer_id or ''):
+        return False, '您不能处理这份订单'
+    if order.cash_shortfall_status != 'buyer_pending':
+        return False, '这份少收申请已经处理，不能重复确认'
+
+    now = timezone.now()
+    order.cash_shortfall_buyer_responded_at = now
+    if not accept:
+        order.cash_shortfall_status = 'buyer_rejected'
+        order.save(update_fields=[
+            'cash_shortfall_status', 'cash_shortfall_buyer_responded_at', 'updated_at',
+        ])
+        return True, '已拒绝确认。配送员不能交餐或结单，请当面协商或由配送员电话联系管理人员'
+
+    order.cash_shortfall_status = 'buyer_confirmed'
     order.cash_collected_at = now
     order.payment_status = 'paid'
     order.payment_time = now
     order.save(update_fields=[
-        'cash_collected_amount', 'cash_collected_by', 'cash_collected_at',
-        'payment_status', 'payment_time', 'updated_at',
+        'cash_shortfall_status', 'cash_shortfall_buyer_responded_at',
+        'cash_collected_at', 'payment_status', 'payment_time', 'updated_at',
     ])
-    diff = amt - order.total_amount
-    if diff == 0:
-        return True, f'已确认收款 ¥{amt}'
-    sign = '多收' if diff > 0 else '少收'
-    return True, f'已记录收款 ¥{amt}（应收 ¥{order.total_amount}，{sign} ¥{abs(diff)}），请与店家核对'
+    return True, f'您已确认实付 ¥{order.cash_collected_amount}，配送员现在可以交餐'
+
+
+@transaction.atomic
+def mark_cash_exception(order: BuyOrder, rider_id: str, note: str) -> tuple[bool, str]:
+    """配送员电话沟通后，在订单上留下异常与管理指示。"""
+    order = BuyOrder.objects.select_for_update().get(pk=order.pk)
+    note = (note or '').strip()
+    if len(note) < 5:
+        return False, '请写明电话沟通和得到的指示（至少五个字）'
+    if order.cash_shortfall_status not in ('buyer_pending', 'buyer_rejected', 'exception'):
+        return False, '当前订单没有需要标记的少收异常'
+    if order.cash_collected_by != (rider_id or ''):
+        return False, '只能由本单收款配送员标记异常'
+    order.cash_shortfall_status = 'exception'
+    order.cash_exception_note = note
+    order.cash_exception_marked_by = rider_id or ''
+    order.cash_exception_marked_at = timezone.now()
+    order.save(update_fields=[
+        'cash_shortfall_status', 'cash_exception_note',
+        'cash_exception_marked_by', 'cash_exception_marked_at', 'updated_at',
+    ])
+    return True, '已标记现金异常并保存电话沟通备注，请等待管理人员处理'
+
+
+@transaction.atomic
+def manager_approve_cash_exception(order: BuyOrder, manager_id: str, note: str) -> tuple[bool, str]:
+    """管理人员同意按少收金额交餐，并直接兜底完成配送。"""
+    order = BuyOrder.objects.select_for_update().select_related('delivery_order').get(pk=order.pk)
+    note = (note or '').strip()
+    if len(note) < 5:
+        return False, '请写明兜底决定和原因（至少五个字）'
+    if order.cash_shortfall_status not in ('buyer_pending', 'buyer_rejected', 'exception'):
+        return False, '当前订单没有可兜底的现金异常'
+    delivery = getattr(order, 'delivery_order', None)
+    if not delivery or delivery.delivery_status != 'picked_up':
+        return False, '配送员尚未取餐，当前不能兜底结单'
+
+    now = timezone.now()
+    order.cash_shortfall_status = 'manager_approved'
+    order.cash_collected_at = now
+    order.payment_status = 'paid'
+    order.payment_time = now
+    order.cash_exception_note = note
+    order.cash_exception_resolved_by = manager_id or ''
+    order.cash_exception_resolved_at = now
+    order.order_status = 'completed'
+    order.save(update_fields=[
+        'cash_shortfall_status', 'cash_collected_at', 'payment_status',
+        'payment_time', 'cash_exception_note', 'cash_exception_resolved_by',
+        'cash_exception_resolved_at', 'order_status', 'updated_at',
+    ])
+    delivery.delivery_status = 'completed'
+    delivery.completed_at = now
+    delivery.save(update_fields=['delivery_status', 'completed_at', 'updated_at'])
+    return True, '管理人员已按少收金额兜底结单，处理决定已留痕'
 
 
 def confirm_cash_remittance(orders, confirmer_id: str) -> tuple[int, str]:

@@ -24,7 +24,10 @@ class ShopWorkAuthMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        from django.contrib import messages
+
         from .session_guard import force_logout_all_channels, idle_expired, touch_user_activity
+        from .single_login_helpers import single_login_is_current
 
         request.shop_work_user = get_shop_work_user(request)
 
@@ -44,8 +47,34 @@ class ShopWorkAuthMiddleware:
                     return redirect(reverse('shop_work', kwargs={'shop_code': shop_code}))
                 return redirect('directory')
 
-        # 服务端兜底：超过 15 分钟无操作则退出（心跳接口自行处理，避免循环）
+        # 新设备登录同一账号后，旧设备下次操作时退出；不同账号互不影响。
+        # 心跳接口不在这里拦截（会返回明确 JSON 信号，前端好弹提示），交给心跳视图处理。
         path = request.path or ''
+        is_session_api = path.startswith('/accounts/session/')
+        if not is_session_api and getattr(request.user, 'is_authenticated', False):
+            request.user.refresh_from_db(fields=['active_session_key'])
+            if not single_login_is_current(request, request.user):
+                from .session_guard import logout_eco_channel
+
+                logout_eco_channel(request)
+                messages.warning(request, '此账号已在另一台设备重新登录，本设备已退出')
+                if not path_is_shop_work(path):
+                    return redirect('login')
+
+        if not is_session_api and request.shop_work_user is not None:
+            request.shop_work_user.refresh_from_db(fields=['active_session_key'])
+            if not single_login_is_current(request, request.shop_work_user):
+                from .shop_work_auth import clear_shop_work_session
+
+                clear_shop_work_session(request)
+                request.shop_work_user = None
+                messages.warning(request, '此工作台账号已在另一台设备重新登录，本设备已退出')
+                if path_is_shop_work(path):
+                    code = shop_code_from_request_safe(request)
+                    if code:
+                        return redirect(reverse('shop_work', kwargs={'shop_code': code}))
+
+        # 服务端兜底：超过 15 分钟无操作则退出（心跳接口自行处理，避免循环）
         if not path.startswith('/accounts/session/'):
             has_session = (
                 getattr(request.user, 'is_authenticated', False)

@@ -5,9 +5,16 @@ from django.shortcuts import redirect
 
 
 def get_shop_managers(seller_id: str, *, active_only: bool = False):
+    from django.db.models import Q
+
     from .models import User
 
-    qs = User.objects.filter(role='manager', employer_seller_id=seller_id)
+    qs = User.objects.filter(
+        role__in=('staff', 'manager'),
+        employer_seller_id=seller_id,
+    ).filter(
+        Q(staff_account_type='management') | Q(role='manager'),
+    )
     if active_only:
         qs = qs.filter(is_active=True)
     return qs.order_by('date_joined', 'username')

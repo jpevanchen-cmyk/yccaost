@@ -1,7 +1,7 @@
 {% if rows %}
 <table class="seller-table sales-rank-table">
     <thead>
-        <tr><th>名次</th><th>菜品</th><th>销量（份）</th></tr>
+        <tr><th>名次</th><th>{{ product_shell.item_label }}</th><th>销量（{{ product_shell.unit_label }}）</th></tr>
     </thead>
     <tbody>
     {% for row in rows %}

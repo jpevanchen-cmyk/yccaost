@@ -4,9 +4,13 @@ from django.utils import timezone
 
 from .forms import CreateKitchenForm
 from .models import BuyOrder
-from .dispatch_helpers import dispatch_buy_order, maybe_auto_dispatch_order, validate_shop_rider
+from .dispatch_helpers import (
+    manual_dispatch_order,
+    maybe_auto_dispatch_order,
+    operator_can_manual_dispatch,
+    reassign_delivery_rider,
+)
 from .kitchen_helpers import (
-    get_delivery_handoff_mode,
     kitchen_order_can_start,
     mark_kitchen_dish_unit_prepared,
     undo_kitchen_dish_unit_prepared,
@@ -38,28 +42,20 @@ def handle_kitchen_board_post(request, seller_id: str, *, redirect_to=None):
 
     operator = getattr(request, 'shop_work_user', None) or request.user
     target = redirect_to or reverse('kitchen_home')
-    can_dispatch = operator.role == 'seller' or get_delivery_handoff_mode(seller_id) == 'kitchen'
+    from .staff_account_helpers import PERM_DINING_KITCHEN, staff_has_permission
+
+    if not staff_has_permission(operator, PERM_DINING_KITCHEN):
+        messages.error(request, '您没有后厨工作台操作权限')
+        return redirect(target)
     order_id = request.POST.get('order_id', '').strip()
     if not order_id:
         return None
     order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
 
     if 'adjust_wait_time' in request.POST:
-        from .audit_helpers import audit_order_status
-        from .wait_time_helpers import adjust_order_wait_time
+        from .workbench_action_helpers import handle_adjust_wait_time_action
 
-        ok, msg, minutes = adjust_order_wait_time(order, request.POST.get('wait_minutes'))
-        if ok:
-            audit_order_status(
-                order=order,
-                actor=operator,
-                summary=f'调整预计时间 {order.get_display_order_no()}（从现在起约 {minutes} 分钟）',
-                request=request,
-            )
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return handle_adjust_wait_time_action(request, order, operator, target)
 
     if 'mark_prepared_unit' in request.POST:
         dish_id = request.POST.get('dish_id', '').strip()
@@ -108,36 +104,24 @@ def handle_kitchen_board_post(request, seller_id: str, *, redirect_to=None):
         return redirect(target)
 
     if 'dispatch_order' in request.POST:
-        if not can_dispatch:
-            messages.error(request, '当前店铺设置下，后厨没有手动派单权限')
-            return redirect(target)
         rider_id = request.POST.get('rider_id', '').strip() or None
-        if order.payment_status == 'paid' and order.order_status in ('awaiting_prep', 'preparing', 'ready_pickup'):
-            delivery, err = dispatch_buy_order(order, rider_id=rider_id)
-            if delivery:
-                messages.success(request, f'已派单给骑手 {delivery.rider_id}')
-            else:
-                messages.error(request, err or '派单失败')
+        delivery, err = manual_dispatch_order(operator, 'kitchen', order, rider_id)
+        if delivery:
+            messages.success(request, f'已派单给配送员 {delivery.rider_id}')
         else:
-            messages.error(request, '当前订单状态不能派单')
+            messages.error(request, err or '派单失败')
         return redirect(target)
 
     if 'reassign_rider' in request.POST:
-        if not can_dispatch:
-            messages.error(request, '当前店铺设置下，后厨没有手动派单权限')
+        if not operator_can_manual_dispatch(operator, seller_id, 'kitchen'):
+            messages.error(request, '当前店铺设置下，您没有手动派单权限')
             return redirect(target)
         rider_id = request.POST.get('rider_id', '').strip()
-        if hasattr(order, 'delivery_order') and rider_id:
-            if not validate_shop_rider(seller_id, rider_id):
-                messages.error(request, '只能改派给本店当前上班中的骑手')
-            else:
-                delivery = order.delivery_order
-                if delivery.delivery_status == 'accepted':
-                    delivery.rider_id = rider_id
-                    delivery.save(update_fields=['rider_id', 'updated_at'])
-                    messages.success(request, f'已改派给骑手 {rider_id}')
-                else:
-                    messages.error(request, '配送已开始，无法改派')
+        ok, msg = reassign_delivery_rider(order, rider_id)
+        if ok:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
         return redirect(target)
 
     return None

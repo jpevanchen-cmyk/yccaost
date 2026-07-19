@@ -62,7 +62,7 @@
                     {% if shop.shop_code %}
                     <a class="btn btn-sm btn-outline" href="{% url 'shop_showcase' shop.shop_code %}">进店主页</a>
                     {% endif %}
-                    <a class="btn btn-sm btn-green" href="/shop/?seller_id={{ shop.seller_id }}">点餐</a>
+                    <a class="btn btn-sm btn-green" href="/shop/?seller_id={{ shop.seller_id }}">进入店铺</a>
                 </div>
             </div>
             {% endfor %}

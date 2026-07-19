@@ -13,9 +13,9 @@
 {% block content %}
 <h1 class="page-title">🧭 店铺工作台</h1>
 {% if shop_profile %}
-<p class="page-desc">{{ shop_profile.shop_name }} · {{ work_user.get_role_display }} <strong>{{ work_user.username|staff_display }}</strong></p>
+<p class="page-desc">{{ shop_profile.shop_name }} · {{ work_user_title }} <strong>{{ work_user.username|staff_display }}</strong></p>
 {% endif %}
-{% if work_user.role == 'waiter' or work_user.role == 'kitchen' or work_user.role == 'rider' %}
+{% if is_work_staff %}
 <div class="card" style="padding:12px;margin-bottom:12px;">
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
         <div>
@@ -42,31 +42,59 @@
 {% endif %}
 
 <div class="rider-quick-links" style="margin-bottom:12px;">
-    <a class="btn {% if current_view == 'waiter' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_waiter_url }}">服务员</a>
-    <a class="btn {% if current_view == 'kitchen' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_kitchen_url }}">后厨</a>
-    <a class="btn {% if current_view == 'rider' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_rider_url }}">骑手</a>
+    {% if 'orders' in enabled_work_views %}
+    <a class="btn {% if current_view == 'orders' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_orders_url }}">{{ workbench_shell.tab_orders }}</a>
+    {% endif %}
+    {% if 'waiter' in enabled_work_views %}
+    <a class="btn {% if current_view == 'waiter' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_waiter_url }}">{{ workbench_shell.tab_waiter }}</a>
+    {% endif %}
+    {% if 'kitchen' in enabled_work_views %}
+    <a class="btn {% if current_view == 'kitchen' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_kitchen_url }}">{{ workbench_shell.tab_kitchen }}</a>
+    {% endif %}
+    {% if 'rider' in enabled_work_views %}
+    <a class="btn {% if current_view == 'rider' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_rider_url }}">{{ workbench_shell.tab_rider }}</a>
+    {% endif %}
     {% if my_audit_logs is not None %}
     <a class="btn {% if show_my_audit %}btn-orange{% else %}btn-outline{% endif %}"
        href="{{ form_action }}{% if '?' in form_action %}&{% else %}?{% endif %}my_audit=1">我的操作记录</a>
     {% endif %}
+    <a class="btn btn-outline btn-sm" href="{% url 'account_password_change' %}">修改密码</a>
     <form method="post" action="{{ shop_work_logout_url }}" style="display:inline;margin-left:8px;">
         {% csrf_token %}
         <button type="submit" class="btn btn-outline btn-sm">退出工作台</button>
     </form>
     {# 新单提醒按钮的放置点：这一排最右端 #}
+    {% if can_use_order_alert %}
     <div id="order-alert-mount" style="margin-left:auto;"></div>
+    {% endif %}
 </div>
 
+{% if current_view %}
+<div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-bottom:10px;">
+    <span class="card-meta">订单顺序：</span>
+    <a class="btn btn-sm {% if work_order_sort == 'newest' %}btn-orange{% else %}btn-outline{% endif %}"
+       href="{{ sort_newest_url }}">新单在上</a>
+    <a class="btn btn-sm {% if work_order_sort == 'oldest' %}btn-orange{% else %}btn-outline{% endif %}"
+       href="{{ sort_oldest_url }}">旧单在上</a>
+</div>
+{% endif %}
+
 <div class="card" style="padding:14px;">
-    {% if current_view == 'waiter' %}
-    <h2 style="margin:0 0 10px;font-size:18px;">🍽 服务员视角</h2>
+    {% if current_view == 'orders' %}
+    <h2 style="margin:0 0 10px;font-size:18px;">📋 {{ workbench_shell.view_orders_title }}</h2>
+    {% include 'waimai/_shop_work_orders_panel.html' %}
+    {% elif current_view == 'waiter' %}
+    <h2 style="margin:0 0 10px;font-size:18px;">🍽 {{ workbench_shell.view_waiter_title }}</h2>
     {% include 'waimai/_shop_work_waiter_panel.html' with can_operate=can_operate_waiter form_action=form_action %}
     {% elif current_view == 'kitchen' %}
-    <h2 style="margin:0 0 10px;font-size:18px;">👨‍🍳 后厨视角</h2>
+    <h2 style="margin:0 0 10px;font-size:18px;">👨‍🍳 {{ workbench_shell.view_kitchen_title }}</h2>
     {% include 'waimai/_shop_work_kitchen_panel.html' with can_operate=can_operate_kitchen form_action=form_action %}
-    {% else %}
-    <h2 style="margin:0 0 10px;font-size:18px;">🛵 骑手视角</h2>
+    {% elif current_view == 'rider' %}
+    <h2 style="margin:0 0 10px;font-size:18px;">🛵 {{ workbench_shell.view_rider_title }}</h2>
     {% include 'waimai/_shop_work_rider_panel.html' with can_operate=can_operate_rider form_action=form_action show_rider_extras=show_rider_extras %}
+    {% else %}
+    <h2 style="margin:0 0 10px;font-size:18px;">工作台基础</h2>
+    <p class="card-meta">当前没有可打开的业务面板。请店主在「员工工作台管理」为您勾选订单处理或业态权限。</p>
     {% endif %}
 </div>
 
@@ -158,15 +186,15 @@
 {% endblock %}
 
 {% block extra_js %}
-{% if work_user.role == 'seller' or work_user.role == 'waiter' or work_user.role == 'kitchen' or work_user.role == 'manager' or work_user.role == 'rider' %}
+{% if can_use_order_alert %}
 <script>
 window.YC_ORDER_ALERT = {
-    pollUrl: "{% url 'shop_work_new_orders_json' shop_code=shop_work_code %}",
-    storagePrefix: "yc_work_order_alert",
-    mountSelector: "#order-alert-mount"{% if work_user.role == 'rider' %},
-    itemLabel: "个外卖单待接单，请及时处理！"{% endif %}
+    pollUrl: "{% url 'shop_work_new_orders_json' shop_code=shop_work_code %}?view={{ current_view }}",
+    storagePrefix: "yc_work_order_alert_{{ current_view }}",
+    mountSelector: "#order-alert-mount"{% if current_view == 'rider' %},
+    itemLabel: "{{ workbench_shell.rider_alert_item }}"{% endif %}
 };
 </script>
-<script src="{% static 'waimai/order_alert.js' %}?v=6"></script>
+<script src="{% static 'waimai/order_alert.js' %}?v=8"></script>
 {% endif %}
 {% endblock %}

@@ -1,0 +1,29 @@
+{# 可整体替换的购物车外壳：电脑侧栏 + 手机底栏/抽屉 #}
+<aside class="cart-sidebar">
+    {% include 'waimai/_shop_cart_panel.html' with panel_id='desktop' %}
+</aside>
+
+{% if cart_has_lines %}
+<div class="cart-bar is-visible" id="cart-bar">
+    <button type="button" class="cart-bar-info" id="cart-open-btn" data-cart-open>
+        🛒 共 <strong>{{ cart_count }}</strong> 件 · <strong>¥{{ cart_total }}</strong>
+        <span style="font-size:12px;color:#ccc;margin-left:6px;">点击查看</span>
+    </button>
+    <button type="button" class="btn btn-orange btn-sm" data-cart-open>去结算</button>
+</div>
+
+<div class="cart-drawer" id="cart-drawer">
+    <div class="cart-drawer-backdrop" data-cart-close></div>
+    <div class="cart-drawer-panel">
+        <div class="cart-drawer-head">
+            <h3>🛒 购物车</h3>
+            <div class="cart-drawer-head-actions">
+                <button type="button" class="btn btn-outline btn-sm cart-done-btn" data-cart-close>完成</button>
+                <button type="button" class="cart-close-btn" data-cart-close aria-label="关闭购物车">×</button>
+            </div>
+        </div>
+        <p class="cart-drawer-hint">在下方滑动改数量；点「完成」或灰色背景关闭</p>
+        {% include 'waimai/_shop_cart_panel.html' with panel_id='mobile' %}
+    </div>
+</div>
+{% endif %}

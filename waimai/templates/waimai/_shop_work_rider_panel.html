@@ -5,11 +5,71 @@
 
 {% if not can_operate %}
 <p class="card-meta" style="margin-bottom:12px;padding:10px;background:#fff8e1;border-radius:8px;">
-    👀 当前为<strong>只读预览</strong>：您可查看本店配送概况，操作请使用骑手账号登录。
+    {{ workbench_shell.rider_readonly_hint|safe }}
 </p>
 {% endif %}
 
-<p class="page-desc">骑手 <strong>{{ rider_id }}</strong> · 进行中的任务</p>
+<p class="page-desc">{{ workbench_shell.tab_rider }} <strong>{{ rider_id }}</strong> · 进行中的任务</p>
+
+{% if rider_cash_remittance %}
+<div class="card" style="margin-bottom:14px;">
+    <h3 style="margin-top:0;">现金交款</h3>
+    <p class="card-meta">
+        可申请交款：{{ rider_cash_remittance.available_count }} 单，共
+        <strong>¥{{ rider_cash_remittance.available_total }}</strong>。金额由系统按每单实收自动合计。
+    </p>
+    {% if rider_cash_remittance.available_count %}
+    <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %}>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="request_remittance">
+        <label class="card-meta">交款备注（可选）
+            <input type="text" name="remittance_note" maxlength="500" placeholder="例如：晚班现金交款">
+        </label>
+        <button type="submit" class="btn btn-sm btn-primary"
+            onclick="return confirm('确认发起 ¥{{ rider_cash_remittance.available_total }} 的交款申请？');">
+            发起交款申请
+        </button>
+    </form>
+    {% endif %}
+    {% if rider_cash_remittance.requests %}
+    <div style="margin-top:10px;">
+        {% for remit in rider_cash_remittance.requests %}
+        <p class="card-meta" style="margin:4px 0;">
+            {{ remit.created_at|date:"m-d H:i" }} · {{ remit.order_count }} 单 · ¥{{ remit.total_amount }}
+            · <strong>{{ remit.get_status_display }}</strong>
+            {% if remit.review_note %}· {{ remit.review_note }}{% endif %}
+        </p>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if pending_dispatch_orders %}
+<div class="card" style="margin-bottom:14px;">
+    <h3 style="margin-top:0;">待派单池</h3>
+    <p class="card-meta">无人可派时订单会留在这里。配送员可主动接单；开启自动派单时，上班或送完一单也会自动补派。</p>
+    {% for order in pending_dispatch_orders %}
+    <div class="line-item" style="align-items:center;gap:10px;">
+        <div style="flex:1;">
+            <strong>{{ order.get_display_order_no }}</strong>
+            · {{ order.created_at|date:"m-d H:i" }}
+            · ¥{{ order.total_amount }}
+            {% if order.is_delivery_cod %}· 货到付款{% endif %}
+            <div class="card-meta">{{ order.delivery_address }}</div>
+        </div>
+        {% if can_operate and rider_can_claim %}
+        <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="action" value="claim_pending">
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <button type="submit" class="btn btn-sm btn-green">接这单</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
 
 {% if active_orders %}
     {% for order in active_orders %}
@@ -19,7 +79,7 @@
             · <a href="{% url 'shop_work_order' shop_work_code order.buy_order.order_id %}">联系 / 沟通</a>
         </div>
         <p class="delivery-card-meta">
-            <strong>取餐</strong>：{{ order.pickup_address }}<br>
+            <strong>{{ workbench_shell.pickup_label }}</strong>：{{ order.pickup_address }}<br>
             <strong>送达</strong>：{{ order.delivery_address }}<br>
             配送费：<strong style="color:var(--yc-orange);">¥{{ order.delivery_fee }}</strong>
             · 约 {{ order.distance_km }} 公里
@@ -36,6 +96,12 @@
             <p class="delivery-cod-line">💵 <strong>货到付款</strong> · 应收 <strong style="color:var(--yc-orange);">¥{{ order.buy_order.total_amount }}</strong></p>
             {% if order.buy_order.payment_status == 'paid' %}
             <p class="card-meta">✅ 已收款{% if order.buy_order.cash_collected_amount %}（实收 ¥{{ order.buy_order.cash_collected_amount }}）{% else %}（顾客已在线付款）{% endif %}，可点「我已送达」。</p>
+            {% elif order.buy_order.cash_shortfall_status == 'buyer_pending' %}
+            <p class="msg-err">等待买家当面确认：实付 ¥{{ order.buy_order.cash_collected_amount }}，少付 ¥{{ order.buy_order.cash_shortfall_amount }}。确认前不能交餐或结单。</p>
+            {% elif order.buy_order.cash_shortfall_status == 'buyer_rejected' %}
+            <p class="msg-err">买家已拒绝确认少付。请继续协商；无法解决时电话联系管理人员，并在下方标记异常。</p>
+            {% elif order.buy_order.cash_shortfall_status == 'exception' %}
+            <p class="msg-err">已标记现金异常，等待管理人员处理。电话备注：{{ order.buy_order.cash_exception_note }}</p>
             {% else %}
             <p class="card-meta">尚未收款。收到现金后请填写实收金额确认；确认收款后才能点「我已送达」。</p>
             {% endif %}
@@ -43,7 +109,7 @@
         {% endif %}
         <div class="delivery-action-stack">
             {% if not order.handoff_ready %}
-            <p class="card-meta">餐品尚未完成交接，请等店内先交给骑手。</p>
+            <p class="card-meta">{{ workbench_shell.handoff_wait_text }}</p>
             {% endif %}
             {% if can_operate %}
             <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %}>
@@ -52,7 +118,7 @@
                 <input type="hidden" name="action" value="pickup">
                 <button type="submit" class="btn btn-pickup"
                     {% if order.delivery_status != 'accepted' or not order.handoff_ready %}disabled{% endif %}>
-                    我已取餐
+                    {{ workbench_shell.pickup_button }}
                 </button>
             </form>
             {% if order.buy_order.is_cod_awaiting_collection %}
@@ -64,11 +130,28 @@
                     <input type="number" name="cash_amount" step="0.01" min="0"
                         value="{{ order.buy_order.total_amount }}" inputmode="decimal">
                 </label>
+                <label class="delivery-cash-label">少收原因（实收不足时必填）
+                    <input type="text" name="shortfall_reason" maxlength="500"
+                        value="{{ order.buy_order.cash_shortfall_reason }}"
+                        placeholder="例如：买家缺少零钱，双方同意少付">
+                </label>
                 <button type="submit" class="btn btn-orange"
-                    {% if order.delivery_status != 'picked_up' %}disabled title="请先取餐"{% endif %}>
-                    确认收到现金
+                    {% if order.delivery_status != 'picked_up' %}disabled title="{{ workbench_shell.pickup_disabled_title }}"{% endif %}>
+                    登记实收金额
                 </button>
             </form>
+            {% if order.buy_order.cash_shortfall_status == 'buyer_pending' or order.buy_order.cash_shortfall_status == 'buyer_rejected' or order.buy_order.cash_shortfall_status == 'exception' %}
+            <form method="POST" class="delivery-cash-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                {% csrf_token %}
+                <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
+                <input type="hidden" name="action" value="mark_cash_exception">
+                <label class="delivery-cash-label">电话沟通与管理指示备注
+                    <textarea name="exception_note" rows="2" maxlength="500"
+                        placeholder="例如：02:30 已电话联系店长，指示暂不交餐并等待处理">{{ order.buy_order.cash_exception_note }}</textarea>
+                </label>
+                <button type="submit" class="btn btn-outline">标记现金异常</button>
+            </form>
+            {% endif %}
             {% endif %}
             <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}

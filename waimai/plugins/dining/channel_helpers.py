@@ -79,6 +79,12 @@ def resolve_shop_channel(request, seller_id: str, table_session) -> str:
 def channel_switch_enabled(settings, channel: str) -> bool:
     """店主后台「当前是否允许该通道接单」开关。"""
     if channel == CHANNEL_DELIVERY:
+        # 外卖通道依赖履约配送插件：关掉履约则不接新外卖单
+        from waimai.plugins.fulfillment.ownership import fulfillment_plugin_enabled
+
+        seller_id = getattr(settings, 'seller_id', '') or ''
+        if seller_id and not fulfillment_plugin_enabled(seller_id):
+            return False
         return bool(settings.delivery_channel_enabled)
     if channel == CHANNEL_TAKEAWAY:
         return bool(getattr(settings, 'takeaway_channel_enabled', True))

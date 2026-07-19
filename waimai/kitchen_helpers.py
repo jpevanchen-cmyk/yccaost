@@ -1,8 +1,9 @@
 from django.db.models import Q
 from django.utils import timezone
 
+from .dispatch_helpers import get_delivery_handoff_mode
 from .models import BuyOrder, OrderKitchenDishPrepLog, User
-from .operating_helpers import get_operating_settings
+from .order_workflow_rules import cash_prepare_before_payment_q, order_can_start_preparing
 from .order_progress_helpers import (
     build_progress_groups,
     count_progress_units,
@@ -16,7 +17,12 @@ from .time_helpers import format_beijing_time
 
 def get_shop_kitchens(seller_id: str, *, active_only: bool = False):
     """本店后厨子账号列表"""
-    qs = User.objects.filter(role='kitchen', employer_seller_id=seller_id)
+    from .staff_account_helpers import PERM_DINING_KITCHEN, staff_permission_query
+
+    qs = User.objects.filter(
+        staff_permission_query(PERM_DINING_KITCHEN),
+        employer_seller_id=seller_id,
+    )
     if active_only:
         qs = qs.filter(is_active=True)
     return qs.order_by('date_joined')
@@ -24,7 +30,9 @@ def get_shop_kitchens(seller_id: str, *, active_only: bool = False):
 
 def ensure_kitchen_employer(user) -> str | None:
     """后厨所属店铺 ID；无效则 None"""
-    if not user.is_authenticated or user.role != 'kitchen' or not user.is_active:
+    from .staff_account_helpers import PERM_DINING_KITCHEN, staff_has_permission
+
+    if not user.is_authenticated or not staff_has_permission(user, PERM_DINING_KITCHEN):
         return None
     return (user.employer_seller_id or '').strip() or None
 
@@ -47,38 +55,16 @@ def query_kitchen_board_orders(seller_id: str):
                     | Q(fulfillment_type='delivery', delivery_order__delivery_status='accepted')
                 )
             )
-            | Q(
-                fulfillment_type__in=('dine_in', 'takeaway'),
-                payment_method='cash',
-                payment_status='pending_payment',
-                order_status__in=(
-                    'awaiting_shop_confirm', 'awaiting_prep', 'preparing', 'ready_pickup',
-                ),
-            )
+            | cash_prepare_before_payment_q()
         )
         .exclude(order_status='completed')
         .select_related('delivery_order')
-        .order_by('created_at')
     )
 
 
 def kitchen_order_can_start(order: BuyOrder) -> bool:
-    """后厨能否开始此单：已付单，或堂食/打包现场付单。"""
-    if order.order_status not in ('awaiting_shop_confirm', 'awaiting_prep'):
-        return False
-    if order.payment_status == 'paid':
-        return True
-    return bool(
-        order.is_in_store()
-        and order.payment_method == 'cash'
-        and order.payment_status == 'pending_payment'
-    )
-
-
-def get_delivery_handoff_mode(seller_id: str) -> str:
-    """外卖交接方式：默认服务员交骑手"""
-    settings = get_operating_settings(seller_id)
-    return (settings.delivery_handoff_mode or 'waiter').strip() or 'waiter'
+    """后厨能否开始此单（读取订单流程公共规则）。"""
+    return order_can_start_preparing(order)
 
 
 def build_kitchen_dish_groups(order: BuyOrder) -> list[dict]:
@@ -92,7 +78,15 @@ def count_kitchen_units(order: BuyOrder) -> tuple[int, int]:
 
 
 def build_kitchen_phase_label(order: BuyOrder) -> str:
-    """后厨看板上的阶段说明"""
+    """后厨看板上的阶段说明（用语跟工作台壳走）"""
+    from .workbench_shell_helpers import build_workbench_shell
+
+    shell = build_workbench_shell(order.seller_id)
+    rider_w = shell['rider_role_word']
+    waiter_w = shell['tab_waiter']
+    pickup_w = shell['pickup_word']
+    serve_dine = shell['serve_dine_in']
+
     total, prepared = count_kitchen_units(order)
     handoff_mode = get_delivery_handoff_mode(order.seller_id)
     if order.order_status in ('awaiting_shop_confirm', 'awaiting_prep'):
@@ -103,11 +97,11 @@ def build_kitchen_phase_label(order: BuyOrder) -> str:
         return '备货中'
     if order.fulfillment_type == 'delivery' and getattr(order, 'delivery_order', None):
         if handoff_mode == 'waiter':
-            return '已备好 · 待服务员交骑手'
+            return f'已备好 · 待{waiter_w}交{rider_w}'
         rider_id = order.delivery_order.rider_id
-        return f'已备好 · 待骑手 {rider_id} 取餐'
+        return f'已备好 · 待{rider_w} {rider_id} {pickup_w}'
     if order.is_dine_in():
-        return '已出餐 · 待服务员上桌'
+        return f'已出货 · 待{waiter_w}{serve_dine}'
     if order.is_takeaway():
         return '已备好 · 待买家自取'
     return order.get_order_status_display()

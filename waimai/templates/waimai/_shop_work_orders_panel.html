@@ -1,0 +1,133 @@
+{# 主体通用订单台：处理基础「下单」通道 #}
+{% load yc_time %}
+
+{# 操作结果必须在本页显示并消费，避免积压到卖家后台一次性弹出 #}
+{% if messages %}
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}msg-err{% else %}msg-ok{% endif %}" style="margin-bottom:12px;">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+{% if not order_desk_can_update and not order_desk_can_confirm %}
+<p class="card-meta" style="margin:0 0 12px;">{{ workbench_shell.orders_readonly_hint|safe }}</p>
+{% else %}
+<p class="card-meta" style="margin:0 0 12px;">
+    处理本店「下单」通道的订单：开始处理 → 可交付 → 完成。
+    {% if order_desk_can_confirm %}可确认现金收款。{% endif %}
+    堂食/外卖等行业面板仍由已启用插件提供。
+</p>
+{% endif %}
+
+{% if cash_manage_allowed %}
+{% if cash_exception_orders %}
+<div class="card" style="margin-bottom:14px;">
+    <h3 style="margin-top:0;">货到付款异常</h3>
+    <p class="card-meta">电话沟通后，由管理人员决定继续收足、兜底结单或进入订单详情终止配送。</p>
+    {% for order in cash_exception_orders %}
+    <div class="line-item" style="display:block;border-bottom:1px solid #eee;padding:10px 0;">
+        <strong>{{ order.get_display_order_no }}</strong>
+        · 应收 ¥{{ order.total_amount }}
+        · 实付 ¥{{ order.cash_collected_amount }}
+        · 少付 ¥{{ order.cash_shortfall_amount }}
+        <p class="card-meta" style="margin:4px 0;">
+            状态：{{ order.get_cash_shortfall_status_display }} · 原因：{{ order.cash_shortfall_reason }}
+            {% if order.cash_exception_note %}<br>电话备注：{{ order.cash_exception_note }}{% endif %}
+        </p>
+        <form method="post" action="{{ form_action }}" style="margin-top:6px;"
+              onsubmit="return confirm('确认由管理人员同意少收并直接兜底结单？');">
+            {% csrf_token %}
+            <input type="hidden" name="cash_manage_action" value="approve_exception">
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <input type="text" name="decision_note" maxlength="500" required
+                   placeholder="写明电话指示和同意少收的原因">
+            <button type="submit" class="btn btn-sm btn-green">同意少收并兜底结单</button>
+            <a class="btn btn-sm btn-outline" href="{% url 'shop_work_order' shop_work_code order.order_id %}">查看/终止配送</a>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if pending_cash_remittances %}
+<div class="card" style="margin-bottom:14px;">
+    <h3 style="margin-top:0;">待确认现金交款</h3>
+    {% for remit in pending_cash_remittances %}
+    <div class="line-item" style="display:block;border-bottom:1px solid #eee;padding:10px 0;">
+        <strong>{{ remit.rider_id }}</strong> · {{ remit.order_count }} 单 ·
+        <strong>¥{{ remit.total_amount }}</strong>
+        {% if remit.note %}<p class="card-meta" style="margin:4px 0;">配送员备注：{{ remit.note }}</p>{% endif %}
+        <form method="post" action="{{ form_action }}" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+            {% csrf_token %}
+            <input type="hidden" name="request_id" value="{{ remit.request_id }}">
+            <input type="text" name="review_note" maxlength="500" placeholder="退回时必须填写原因">
+            <button type="submit" class="btn btn-sm btn-green" name="cash_manage_action" value="confirm_remittance"
+                    onclick="return confirm('确认已收到 ¥{{ remit.total_amount }} 现金？');">确认入金</button>
+            <button type="submit" class="btn btn-sm btn-outline" name="cash_manage_action" value="reject_remittance">退回申请</button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+
+{% if order_desk_empty %}
+<p class="card-meta">{{ workbench_shell.orders_empty }}</p>
+{% else %}
+{% for row in order_desk_rows %}
+{% with order=row.order %}
+<div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:12px 0;">
+    <div style="flex:1;min-width:220px;">
+        <strong>订单 {{ order.get_display_order_no }}</strong>
+        <div class="card-meta" style="margin-top:4px;">
+            {{ order.created_at|beijing:"m-d H:i" }}
+            · ¥{{ order.total_amount }}
+            · {{ order.get_order_status_display }}
+            · 支付：{{ order.get_payment_status_display }}
+            {% if order.payment_method %}（{{ order.get_payment_method_display }}）{% endif %}
+        </div>
+        {% if order.buyer_note %}
+        <div class="card-meta" style="margin-top:4px;">备注：{{ order.buyer_note }}</div>
+        {% endif %}
+        {% if row.needs_cash_before_complete %}
+        <div class="msg-err" style="margin-top:6px;font-size:13px;">完成前须先确认已收到现金</div>
+        {% endif %}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        {% if row.can_start %}
+        <form method="post" action="{{ form_action }}">
+            {% csrf_token %}
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <button type="submit" class="btn btn-sm btn-orange" name="order_desk_start" value="1">开始处理</button>
+        </form>
+        {% endif %}
+        {% if row.can_mark_ready %}
+        <form method="post" action="{{ form_action }}">
+            {% csrf_token %}
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <button type="submit" class="btn btn-sm btn-orange" name="order_desk_ready" value="1">标记可交付</button>
+        </form>
+        {% endif %}
+        {% if row.can_confirm_cash %}
+        <form method="post" action="{{ form_action }}">
+            {% csrf_token %}
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <button type="submit" class="btn btn-sm btn-green" name="order_desk_confirm_cash" value="1">确认已收现金</button>
+        </form>
+        {% endif %}
+        {% if row.can_complete %}
+        <form method="post" action="{{ form_action }}">
+            {% csrf_token %}
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <button type="submit" class="btn btn-sm btn-green" name="order_desk_complete" value="1">确认完成</button>
+        </form>
+        {% endif %}
+        {% if order_desk_can_contact %}
+        <a class="btn btn-outline btn-sm" href="{% url 'shop_work_order' shop_work_code order.order_id %}">联系 / 沟通</a>
+        {% elif order_desk_can_view %}
+        <a class="btn btn-outline btn-sm" href="{% url 'shop_work_order' shop_work_code order.order_id %}">查看</a>
+        {% endif %}
+    </div>
+</div>
+{% endwith %}
+{% endfor %}
+{% endif %}

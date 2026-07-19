@@ -4,7 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import BuyOrder, OrderMessage
-from .shop_work_helpers import SHOP_STAFF_ROLES
+from .shop_work_helpers import current_seller_id_for_user
 
 # 客人仍可自主取消的状态（尚未开始备货）
 BUYER_CANCELABLE_STATUSES = (
@@ -29,24 +29,16 @@ SHOP_NOTE_MIN_LEN = 8
 
 def resolve_employer_seller_id(user) -> str | None:
     """当前账号所属店铺卖家 ID（店主为自己，员工为雇主）"""
-    if not user or not getattr(user, 'is_authenticated', False):
-        return None
-    if user.role == 'seller':
-        return user.username
-    if user.role in SHOP_STAFF_ROLES:
-        return (user.employer_seller_id or '').strip() or None
-    return None
+    return current_seller_id_for_user(user) or None
 
 
 def user_has_cancel_order_perm(user) -> bool:
     """是否有权执行店家侧取消（店主始终可以；员工须勾选权限）"""
     if not user or not getattr(user, 'is_authenticated', False) or not user.is_active:
         return False
-    if user.role == 'seller':
-        return True
-    if user.role in SHOP_STAFF_ROLES:
-        return bool(getattr(user, 'perm_cancel_order', False))
-    return False
+    from .staff_account_helpers import PERM_CANCEL_ORDER, staff_has_permission
+
+    return staff_has_permission(user, PERM_CANCEL_ORDER)
 
 
 def buyer_can_self_cancel(order: BuyOrder) -> bool:

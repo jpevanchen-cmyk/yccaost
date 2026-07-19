@@ -4,11 +4,7 @@ from django.contrib import messages
 from django.shortcuts import redirect
 
 from .forms import ShopWorkbenchSettingsForm
-from .kitchen_handlers import handle_seller_kitchen_post
-from .manager_handlers import handle_seller_manager_post
 from .operating_helpers import get_operating_settings
-from .rider_handlers import handle_seller_rider_post
-from .waiter_handlers import handle_seller_waiter_post
 
 
 def handle_seller_workbench_post(request, seller_id: str):
@@ -16,8 +12,11 @@ def handle_seller_workbench_post(request, seller_id: str):
     from .staff_account_helpers import (
         AttendanceFilterForm,
         export_attendance_csv,
+        handle_create_staff_account_post,
+        handle_edit_staff_account_post,
         handle_manager_staff_status_post,
         handle_staff_cancel_perm_post,
+        handle_toggle_staff_account_post,
         purge_old_attendance_logs,
         query_attendance_logs,
     )
@@ -25,6 +24,10 @@ def handle_seller_workbench_post(request, seller_id: str):
     if 'save_workbench_settings' in request.POST:
         operating = get_operating_settings(seller_id)
         form = ShopWorkbenchSettingsForm(request.POST, request.FILES, instance=operating)
+        from .plugins.fulfillment.ownership import fulfillment_plugin_enabled
+        if not fulfillment_plugin_enabled(seller_id):
+            for fname in ('delivery_handoff_mode', 'auto_dispatch_enabled'):
+                form.fields.pop(fname, None)
         if form.is_valid():
             form.save()
             purge_old_attendance_logs(seller_id, form.cleaned_data.get('attendance_retention_days'))
@@ -41,28 +44,24 @@ def handle_seller_workbench_post(request, seller_id: str):
     if response:
         return response
 
+    response = handle_create_staff_account_post(request, seller_id, section='workbench')
+    if response:
+        return response
+
+    response = handle_edit_staff_account_post(request, seller_id, section='workbench')
+    if response:
+        return response
+
+    response = handle_toggle_staff_account_post(request, seller_id, section='workbench')
+    if response:
+        return response
+
     if 'export_attendance_csv' in request.POST:
         operating = get_operating_settings(seller_id)
-        filter_form = AttendanceFilterForm(request.POST)
+        filter_form = AttendanceFilterForm(request.POST, seller_id=seller_id)
         filters = filter_form.cleaned_data if filter_form.is_valid() else {}
         logs = query_attendance_logs(seller_id, operating.attendance_retention_days, filters=filters)
         return export_attendance_csv(logs, seller_id=seller_id)
-
-    response = handle_seller_manager_post(request, seller_id, section='workbench')
-    if response:
-        return response
-
-    response = handle_seller_waiter_post(request, seller_id, section='workbench')
-    if response:
-        return response
-
-    response = handle_seller_kitchen_post(request, seller_id, section='workbench')
-    if response:
-        return response
-
-    response = handle_seller_rider_post(request, seller_id, section='workbench')
-    if response:
-        return response
 
     return None
 
@@ -86,6 +85,20 @@ def handle_shop_work_post(request, seller_id: str, shop_code: str, current_view:
 
     # 临时把操作人挂到 request，供现有 handler 读取
     request.shop_work_user = operator
+
+    if current_view == 'orders':
+        response = handle_cash_management_post(
+            request, seller_id, operator, redirect_to=redirect_to,
+        )
+        if response:
+            return response
+        from .order_desk_handlers import handle_order_desk_post
+
+        response = handle_order_desk_post(
+            request, seller_id, redirect_to=redirect_to, work_user=operator,
+        )
+        if response:
+            return response
 
     if current_view == 'waiter' and perms.get('waiter'):
         response = handle_waiter_post(request, seller_id, redirect_to=redirect_to)
@@ -111,6 +124,75 @@ def handle_shop_work_post(request, seller_id: str, shop_code: str, current_view:
     return redirect(redirect_to)
 
 
+def handle_cash_management_post(request, seller_id: str, operator, *, redirect_to: str):
+    """订单台：管理人员处理现金异常与配送员交款申请。"""
+    from .staff_account_helpers import (
+        PERM_FULFILLMENT_CASH_MANAGE,
+        staff_has_permission,
+    )
+
+    action = (request.POST.get('cash_manage_action') or '').strip()
+    if not action:
+        return None
+    if not staff_has_permission(operator, PERM_FULFILLMENT_CASH_MANAGE):
+        messages.error(request, '您没有现金异常与入金处理权限')
+        return redirect(redirect_to)
+
+    if action == 'approve_exception':
+        from django.shortcuts import get_object_or_404
+
+        from .models import BuyOrder
+        from .payments import manager_approve_cash_exception
+
+        order = get_object_or_404(
+            BuyOrder.objects.select_related('delivery_order'),
+            order_id=request.POST.get('order_id'),
+            seller_id=seller_id,
+        )
+        ok, msg = manager_approve_cash_exception(
+            order, operator.username, request.POST.get('decision_note', ''),
+        )
+        if ok:
+            from .audit_helpers import audit_order_status
+
+            audit_order_status(
+                order=order,
+                actor=operator,
+                summary=f'管理人员兜底处理现金异常 {order.get_display_order_no()}',
+                request=request,
+            )
+            from .dispatch_helpers import maybe_refill_dispatch_after_rider_available
+            from .models import User
+
+            rider = User.objects.filter(
+                username=order.delivery_order.rider_id,
+                employer_seller_id=seller_id,
+            ).first()
+            if rider:
+                maybe_refill_dispatch_after_rider_available(rider)
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return redirect(redirect_to)
+
+    if action in ('confirm_remittance', 'reject_remittance'):
+        from .rider_cash_helpers import review_cash_remittance_request
+
+        ok, msg = review_cash_remittance_request(
+            seller_id,
+            request.POST.get('request_id'),
+            operator.username,
+            approve=(action == 'confirm_remittance'),
+            note=request.POST.get('review_note', ''),
+        )
+        if ok:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return redirect(redirect_to)
+    return None
+
+
 def handle_my_deliveries_post(request, *, seller_id: str, shop_code: str, user, redirect_to: str | None = None):
     """骑手 Tab：取餐 / 送达"""
     from django.shortcuts import get_object_or_404, redirect
@@ -126,9 +208,45 @@ def handle_my_deliveries_post(request, *, seller_id: str, shop_code: str, user, 
 
     if request.method != 'POST':
         return None
+    from .staff_account_helpers import PERM_DINING_RIDER, staff_has_permission
+
+    if not staff_has_permission(user, PERM_DINING_RIDER):
+        messages.error(request, '您没有配送工作台操作权限')
+        return redirect(fallback)
 
     delivery_id = request.POST.get('delivery_id')
     action = request.POST.get('action')
+    if action == 'request_remittance':
+        if seller_mode:
+            messages.error(request, '店主不能代配送员发起交款申请')
+            return redirect(fallback)
+        from .rider_cash_helpers import create_cash_remittance_request
+
+        remit, msg = create_cash_remittance_request(
+            seller_id, rider_id, request.POST.get('remittance_note', ''),
+        )
+        if remit:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return redirect(fallback)
+    if action == 'claim_pending':
+        if seller_mode:
+            messages.error(request, '店主只能查看待派单池，请使用配送员账号接单')
+            return redirect(fallback)
+        from .dispatch_helpers import try_dispatch_pending_for_rider
+
+        delivery, err = try_dispatch_pending_for_rider(
+            seller_id,
+            rider_id,
+            order_id=(request.POST.get('order_id') or '').strip(),
+        )
+        if delivery:
+            messages.success(request, f'接单成功：{delivery.buy_order.get_display_order_no()}')
+        else:
+            messages.error(request, err or '当前没有可接的订单')
+        return redirect(fallback)
+
     try:
         if seller_mode:
             order = DeliveryOrder.objects.select_related('buy_order').get(
@@ -159,21 +277,49 @@ def handle_my_deliveries_post(request, *, seller_id: str, shop_code: str, user, 
             )
         elif action == 'collect_cash':
             # 外卖货到付款：骑手送达时收现金，记录实收金额
-            from .payments import rider_collect_cash
-            ok, msg = rider_collect_cash(
-                order.buy_order, user.username, request.POST.get('cash_amount', ''),
-            )
-            if ok:
-                messages.success(request, msg)
-                from .audit_helpers import audit_order_status
-                audit_order_status(
-                    order=order.buy_order,
-                    actor=user,
-                    summary=f'骑手收款 {order.buy_order.get_display_order_no()} · ¥{order.buy_order.cash_collected_amount}',
-                    request=request,
-                )
+            if order.delivery_status != 'picked_up':
+                messages.error(request, '请先完成取餐，面对买家时再登记实收金额')
             else:
-                messages.error(request, msg)
+                from .payments import rider_collect_cash
+                ok, msg = rider_collect_cash(
+                    order.buy_order,
+                    user.username,
+                    request.POST.get('cash_amount', ''),
+                    request.POST.get('shortfall_reason', ''),
+                )
+                if ok:
+                    order.buy_order.refresh_from_db()
+                    messages.success(request, msg)
+                    from .audit_helpers import audit_order_status
+                    audit_order_status(
+                        order=order.buy_order,
+                        actor=user,
+                        summary=f'骑手收款 {order.buy_order.get_display_order_no()} · ¥{order.buy_order.cash_collected_amount}',
+                        request=request,
+                    )
+                else:
+                    messages.error(request, msg)
+        elif action == 'mark_cash_exception':
+            if order.delivery_status != 'picked_up':
+                messages.error(request, '尚未取餐，当前不能标记当面收款异常')
+            else:
+                from .payments import mark_cash_exception
+
+                ok, msg = mark_cash_exception(
+                    order.buy_order, user.username, request.POST.get('exception_note', ''),
+                )
+                if ok:
+                    messages.success(request, msg)
+                    from .audit_helpers import audit_order_status
+
+                    audit_order_status(
+                        order=order.buy_order,
+                        actor=user,
+                        summary=f'标记现金异常 {order.buy_order.get_display_order_no()}',
+                        request=request,
+                    )
+                else:
+                    messages.error(request, msg)
         elif action == 'complete' and order.delivery_status == 'picked_up':
             # 货到付款单：未收款不许结单（须先收现金或顾客已扫码付）
             if order.buy_order.is_cod_awaiting_collection():
@@ -194,6 +340,15 @@ def handle_my_deliveries_post(request, *, seller_id: str, shop_code: str, user, 
                 summary=f'骑手送达完成 {order.buy_order.get_display_order_no()}',
                 request=request,
             )
+            if not seller_mode:
+                from .dispatch_helpers import maybe_refill_dispatch_after_rider_available
+
+                next_delivery, _ = maybe_refill_dispatch_after_rider_available(user)
+                if next_delivery:
+                    messages.success(
+                        request,
+                        f'已自动补派下一单：{next_delivery.buy_order.get_display_order_no()}',
+                    )
     except DeliveryOrder.DoesNotExist:
         pass
 

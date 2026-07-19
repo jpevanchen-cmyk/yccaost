@@ -6,10 +6,24 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import ShopProfile
+from .staff_account_helpers import ALL_STAFF_ROLES
 
-SHOP_STAFF_ROLES = ('waiter', 'kitchen', 'rider', 'manager')
-WORK_VIEWS = ('waiter', 'kitchen', 'rider')
+# 兼容旧引用；员工角色只以 staff_account_helpers 的定义为准。
+SHOP_STAFF_ROLES = ALL_STAFF_ROLES
+# orders = 主体通用订单台；其余为业态插件 Tab
+WORK_VIEWS = ('orders', 'waiter', 'kitchen', 'rider')
 SESSION_SHOP_WORK_CODE = 'shop_work_code'
+
+
+def current_seller_id_for_user(user) -> str:
+    """统一取得账号所属店铺：店主用账号名，员工用所属店铺。"""
+    if not getattr(user, 'is_authenticated', False):
+        return ''
+    if getattr(user, 'role', '') == 'seller':
+        return (getattr(user, 'username', '') or '').strip()
+    if getattr(user, 'role', '') in SHOP_STAFF_ROLES:
+        return (getattr(user, 'employer_seller_id', '') or '').strip()
+    return ''
 
 
 def get_shop_profile_by_code(shop_code: str) -> ShopProfile | None:
@@ -22,14 +36,7 @@ def get_shop_profile_by_code(shop_code: str) -> ShopProfile | None:
 
 def get_shop_code_for_user(user) -> str:
     """当前登录用户所属店铺店码；无则空字符串"""
-    if not user.is_authenticated:
-        return ''
-    if user.role == 'seller':
-        seller_id = user.username
-    elif user.role in SHOP_STAFF_ROLES:
-        seller_id = (user.employer_seller_id or '').strip()
-    else:
-        return ''
+    seller_id = current_seller_id_for_user(user)
     if not seller_id:
         return ''
     profile = ShopProfile.objects.filter(seller_id=seller_id).values_list('shop_code', flat=True).first()
@@ -40,36 +47,47 @@ def user_belongs_to_shop(user, seller_id: str) -> bool:
     """是否可使用本店工作台（店主或本店员工）"""
     if not user.is_authenticated or not user.is_active:
         return False
-    if user.role == 'seller':
-        return user.username == seller_id
-    if user.role in SHOP_STAFF_ROLES:
-        return (user.employer_seller_id or '').strip() == seller_id
-    return False
+    return current_seller_id_for_user(user) == seller_id
 
 
 def work_permissions(user) -> dict[str, bool]:
-    """各岗位是否可操作（店主三岗全开；店长可操作服务员视角以便处理订单）"""
+    """各业务面板是否可写入；通用订单台按细权限拆开后，有改状态或确认收款即视为可操作。"""
+    from .staff_account_helpers import (
+        PERM_DINING_KITCHEN,
+        PERM_DINING_RIDER,
+        PERM_DINING_WAITER,
+        PERM_ORDERS_CONFIRM_PAYMENT,
+        PERM_ORDERS_UPDATE_STATUS,
+        staff_has_any_order_desk_permission,
+        staff_has_permission,
+    )
+
     if user.role == 'seller':
-        return {'waiter': True, 'kitchen': True, 'rider': True}
-    if user.role == 'manager':
-        return {'waiter': True, 'kitchen': False, 'rider': False}
+        return {'orders': True, 'waiter': True, 'kitchen': True, 'rider': True}
+    can_orders_write = (
+        staff_has_permission(user, PERM_ORDERS_UPDATE_STATUS)
+        or staff_has_permission(user, PERM_ORDERS_CONFIRM_PAYMENT)
+    )
     return {
-        'waiter': user.role == 'waiter',
-        'kitchen': user.role == 'kitchen',
-        'rider': user.role == 'rider',
+        # 能打开订单台：任一细权限；写入由面板内按钮再判
+        'orders': staff_has_any_order_desk_permission(user) and can_orders_write,
+        'waiter': staff_has_permission(user, PERM_DINING_WAITER),
+        'kitchen': staff_has_permission(user, PERM_DINING_KITCHEN),
+        'rider': staff_has_permission(user, PERM_DINING_RIDER),
     }
 
 
 def default_work_view(user) -> str:
-    """登录后默认打开的 Tab"""
-    mapping = {
-        'waiter': 'waiter',
-        'kitchen': 'kitchen',
-        'rider': 'rider',
-        'manager': 'waiter',
-        'seller': 'waiter',
-    }
-    return mapping.get(user.role, 'waiter')
+    """登录后打开第一个有操作权（或至少可看订单台）的业务 Tab。"""
+    from .staff_account_helpers import staff_has_any_order_desk_permission
+
+    permissions = work_permissions(user)
+    for view in WORK_VIEWS:
+        if permissions.get(view):
+            return view
+    if staff_has_any_order_desk_permission(user):
+        return 'orders'
+    return 'orders'
 
 
 def build_shop_work_path(shop_code: str, *, view: str = '') -> str:
@@ -110,11 +128,9 @@ def resolve_waiter_return_url(request) -> str:
 
 def get_delivery_dispatch_role(seller_id: str) -> str:
     """手动派单归谁操作：跟随外卖交接方式"""
-    from .operating_helpers import get_operating_settings
+    from .dispatch_helpers import get_delivery_handoff_mode
 
-    settings = get_operating_settings(seller_id)
-    mode = (getattr(settings, 'delivery_handoff_mode', '') or 'waiter').strip()
-    return mode if mode in ('waiter', 'kitchen') else 'waiter'
+    return get_delivery_handoff_mode(seller_id)
 
 
 def _today_range():
@@ -135,7 +151,12 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
     start, end = _today_range()
     is_owner = bool(user and getattr(user, 'role', '') == 'seller')
     username = (getattr(user, 'username', '') or '').strip() if user else ''
-    role = (getattr(user, 'role', '') or '').strip() if user else ''
+    from .staff_account_helpers import (
+        PERM_DINING_KITCHEN,
+        PERM_DINING_RIDER,
+        PERM_DINING_WAITER,
+        staff_has_permission,
+    )
 
     today_orders = (
         BuyOrder.objects.filter(
@@ -157,9 +178,9 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
         })
 
     activity_items: list[dict] = []
-    show_kitchen = is_owner or role == 'kitchen'
-    show_waiter = is_owner or role in ('waiter', 'manager')
-    show_rider = is_owner or role == 'rider'
+    show_kitchen = staff_has_permission(user, PERM_DINING_KITCHEN)
+    show_waiter = staff_has_permission(user, PERM_DINING_WAITER)
+    show_rider = staff_has_permission(user, PERM_DINING_RIDER)
     show_shop_events = is_owner  # 收款/备齐等无操作人字段的事件，仅老板看全店汇总
 
     if show_kitchen:
@@ -314,9 +335,12 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
     }
 
 
-def build_waiter_board_context(seller_id: str, *, allow_dispatch: bool = False) -> dict:
+def build_waiter_board_context(
+    seller_id: str, *, allow_dispatch: bool = False, sort_mode: str = 'newest',
+) -> dict:
     """服务员 Tab 数据"""
     from .dispatch_helpers import get_shop_riders
+    from .order_workflow_rules import order_can_dispatch
     from .waiter_helpers import (
         build_dish_groups,
         get_serve_unit_label,
@@ -328,10 +352,9 @@ def build_waiter_board_context(seller_id: str, *, allow_dispatch: bool = False) 
         waiter_can_collect_payment,
         waiter_can_complete_in_store,
         waiter_can_confirm_cash,
-        waiter_can_confirm_in_store_order,
     )
 
-    raw_orders = list(query_waiter_active_orders(seller_id))
+    raw_orders = list(query_waiter_active_orders(seller_id, sort_mode=sort_mode))
     dispatch_riders = list(get_shop_riders(seller_id))
     from .order_message_helpers import unread_map_for_orders
     from .wait_time_helpers import can_adjust_order_wait_time
@@ -349,17 +372,13 @@ def build_waiter_board_context(seller_id: str, *, allow_dispatch: bool = False) 
             'log_lines': recent_waiter_activity_logs(order),
             'can_collect': waiter_can_collect_payment(order),
             'can_confirm_cash': waiter_can_confirm_cash(order),
-            'can_confirm_in_store_order': waiter_can_confirm_in_store_order(order),
             'can_adjust_wait_time': can_adjust_order_wait_time(order),
             'can_complete_in_store': waiter_can_complete_in_store(order),
             'can_close_uncollected': waiter_can_close_uncollected(order),
             'unread_msg_count': unread_map.get(order.order_id, 0),
             'can_dispatch': bool(
                 allow_dispatch
-                and order.fulfillment_type == 'delivery'
-                and order.payment_status == 'paid'
-                and not delivery
-                and order.order_status in ('awaiting_prep', 'preparing', 'ready_pickup')
+                and order_can_dispatch(order)
             ),
             'can_reassign': bool(
                 allow_dispatch
@@ -372,9 +391,12 @@ def build_waiter_board_context(seller_id: str, *, allow_dispatch: bool = False) 
     return {'orders': orders, 'dispatch_riders': dispatch_riders}
 
 
-def build_kitchen_board_context(seller_id: str, *, allow_dispatch: bool = False) -> dict:
+def build_kitchen_board_context(
+    seller_id: str, *, allow_dispatch: bool = False, sort_mode: str = 'newest',
+) -> dict:
     """后厨 Tab 数据"""
     from .dispatch_helpers import get_shop_riders
+    from .order_workflow_rules import order_can_dispatch
     from .kitchen_helpers import (
         build_kitchen_dish_groups,
         build_kitchen_dish_rows,
@@ -386,7 +408,12 @@ def build_kitchen_board_context(seller_id: str, *, allow_dispatch: bool = False)
         recent_kitchen_activity_logs,
     )
 
-    raw_orders = list(query_kitchen_board_orders(seller_id))
+    from .workbench_sort_helpers import order_queryset_by_created
+
+    raw_orders = list(order_queryset_by_created(
+        query_kitchen_board_orders(seller_id),
+        sort_mode,
+    ))
     dispatch_riders = list(get_shop_riders(seller_id))
     from .wait_time_helpers import can_adjust_order_wait_time
 
@@ -403,10 +430,7 @@ def build_kitchen_board_context(seller_id: str, *, allow_dispatch: bool = False)
             'can_start_preparing': kitchen_order_can_start(order),
             'can_dispatch': bool(
                 allow_dispatch
-                and order.fulfillment_type == 'delivery'
-                and order.payment_status == 'paid'
-                and not delivery
-                and order.order_status in ('awaiting_prep', 'preparing', 'ready_pickup')
+                and order_can_dispatch(order)
             ),
             'can_reassign': bool(
                 allow_dispatch
@@ -423,8 +447,9 @@ def build_kitchen_board_context(seller_id: str, *, allow_dispatch: bool = False)
     }
 
 
-def build_rider_board_context(user, seller_id: str) -> dict:
+def build_rider_board_context(user, seller_id: str, *, sort_mode: str = 'newest') -> dict:
     """骑手 Tab 数据（店主预览本店全部进行中配送）"""
+    from .dispatch_helpers import query_pending_dispatch_orders, validate_shop_rider
     from .models import DeliveryOrder
     from .waiter_helpers import delivery_handoff_ready
 
@@ -438,11 +463,22 @@ def build_rider_board_context(user, seller_id: str) -> dict:
     else:
         active_orders = active_orders.filter(rider_id=rider_id)
 
-    active_list = list(active_orders.order_by('-created_at'))
+    from .workbench_sort_helpers import order_queryset_by_created
+
+    active_list = list(order_queryset_by_created(active_orders, sort_mode))
     for order in active_list:
         order.handoff_ready = delivery_handoff_ready(order.buy_order)
 
+    rider_cash = None
+    if not seller_mode:
+        from .rider_cash_helpers import rider_remittance_context
+
+        rider_cash = rider_remittance_context(seller_id, rider_id)
+
     return {
         'active_orders': active_list,
+        'pending_dispatch_orders': list(query_pending_dispatch_orders(seller_id)[:30]),
+        'rider_can_claim': (not seller_mode and validate_shop_rider(seller_id, rider_id)),
         'rider_id': rider_id,
+        'rider_cash_remittance': rider_cash,
     }

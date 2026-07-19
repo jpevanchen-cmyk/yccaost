@@ -19,7 +19,9 @@ ORDER_DATE_RANGE_CHOICES = (
     ('all', '全部时间'),
 )
 
-ORDER_SEARCH_PARAM_KEYS = ('q', 'order_status', 'payment_status', 'fulfillment_type', 'date_range')
+ORDER_SEARCH_PARAM_KEYS = (
+    'q', 'order_status', 'payment_status', 'fulfillment_type', 'cash_issue', 'date_range',
+)
 
 
 def default_order_date_range() -> str:
@@ -37,6 +39,7 @@ def parse_seller_order_search(get_params) -> dict:
         'order_status': (get_params.get('order_status') or '').strip(),
         'payment_status': (get_params.get('payment_status') or '').strip(),
         'fulfillment_type': (get_params.get('fulfillment_type') or '').strip(),
+        'cash_issue': (get_params.get('cash_issue') or '').strip(),
         'date_range': date_range,
     }
 
@@ -55,6 +58,8 @@ def build_order_search_querystring(get_params) -> str:
         data['payment_status'] = search['payment_status']
     if search['fulfillment_type']:
         data['fulfillment_type'] = search['fulfillment_type']
+    if search['cash_issue']:
+        data['cash_issue'] = search['cash_issue']
     return urlencode(data)
 
 
@@ -131,6 +136,8 @@ def query_seller_orders(seller_id: str, search: dict):
         qs = qs.filter(payment_status=search['payment_status'])
     if search.get('fulfillment_type') in valid_fulfillment:
         qs = qs.filter(fulfillment_type=search['fulfillment_type'])
+    if search.get('cash_issue') == 'abnormal':
+        qs = qs.exclude(cash_shortfall_status='')
 
     qs = _apply_keyword_filter(qs, search.get('q', ''))
     return list(qs.order_by('-created_at')[:ORDER_LIST_LIMIT])

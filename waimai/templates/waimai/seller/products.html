@@ -3,7 +3,7 @@
 
 {% block seller_content %}
 <details class="seller-panel-fold" id="sales-ranking">
-    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📊 菜品销量排行</span></summary>
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📊 {{ product_shell.sales_title }}</span></summary>
     <div class="seller-panel-fold-body">
         <p class="page-desc">只统计<strong>已完成</strong>的订单。</p>
         <div class="sales-rank-tabs" role="tablist">
@@ -28,6 +28,7 @@
     </div>
 </details>
 
+{% if product_shell.show_menu_catalog %}
 <details class="seller-panel-fold" id="menu-panel">
     <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📋 今日菜单清单</span></summary>
     <div class="seller-panel-fold-body">
@@ -96,7 +97,7 @@
             <table class="seller-table menu-item-table">
                 <thead>
                     <tr>
-                        <th>菜品</th>
+                        <th>{{ product_shell.item_label }}</th>
                         <th>本清单上架</th>
                         <th>展示会员价</th>
                         <th>展示特价</th>
@@ -173,6 +174,7 @@
         {% endif %}
     </div>
 </details>
+{% endif %}
 
 <details class="seller-panel-fold" id="special-pool">
     <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">🏷 全店特价活动规则</span></summary>
@@ -199,15 +201,17 @@
             <input type="hidden" name="add_dish" value="1">
             <label>商品名称 <input type="text" name="name" required placeholder="如：回锅肉"></label>
             <label>通用价格（元）<input type="number" name="price" step="0.01" min="0.01" required></label>
-            <label>排序（0为不排序，越小越靠前，是客人看到菜单的排序）<input type="number" name="sort_order" value="0"></label>
+            <label>{{ product_shell.sort_help }}<input type="number" name="sort_order" value="0"></label>
             <label>描述 <textarea name="description" rows="2"></textarea></label>
             {% include 'waimai/seller/_tier_price_block.html' with prefix='member' title='会员价' hint='须登录买家可购；可设单日/累计限购。' dish=None only %}
             {% include 'waimai/seller/_tier_price_block.html' with prefix='special' title='特价' hint='须登录买家可购；受全店特价合计上限约束。' dish=None only %}
+            {% if product_shell.show_menu_catalog %}
             <label class="product-add-list-row">
                 <input type="checkbox" name="list_on_all_menus" value="1" id="list-on-all-menus-cb">
                 添加后在本店<strong>所有菜单清单</strong>中设为「已上架」
             </label>
             <p class="card-meta product-add-list-hint">不勾选时：新商品会进入各份清单，但默认「已下架」，须您在清单里手动上架。勾选并确认后：客人将立刻在店铺页看到。</p>
+            {% endif %}
             <button type="submit" class="btn btn-green btn-block">添加商品</button>
         </form>
     </div>
@@ -216,7 +220,7 @@
 <details class="seller-panel-fold" id="product-list"{% if edit_dish_id %} open{% endif %}>
     <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📋 商品管理</span></summary>
     <div class="seller-panel-fold-body">
-        <p class="card-meta">在此设定商品名称、通用价，以及<strong>是否允许</strong>会员价、特价（价格与限购规则）。是否在客人菜单里展示，由下方「今日菜单清单」控制。</p>
+        <p class="card-meta">{{ product_shell.product_help }}</p>
         {% for dish in dishes %}
         <div class="seller-dish-row" id="dish-{{ dish.dish_id.hex|slice:":8" }}">
             <div class="seller-dish-summary">
@@ -243,7 +247,7 @@
                 <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
                 <label>名称 <input type="text" name="name" value="{{ dish.name }}" required></label>
                 <label>通用价格 <input type="number" name="price" step="0.01" min="0.01" value="{{ dish.price }}" required></label>
-                <label>排序（0为不排序，越小越靠前，是客人看到菜单的排序）<input type="number" name="sort_order" value="{{ dish.sort_order }}"></label>
+                <label>{{ product_shell.sort_help }}<input type="number" name="sort_order" value="{{ dish.sort_order }}"></label>
                 <label>描述 <textarea name="description" rows="2">{{ dish.description }}</textarea></label>
                 {% include 'waimai/seller/_tier_price_block.html' with prefix='member' title='会员价' hint='须登录买家可购。' dish=dish only %}
                 {% include 'waimai/seller/_tier_price_block.html' with prefix='special' title='特价' hint='须登录；受全店特价上限约束。' dish=dish only %}

@@ -42,10 +42,13 @@
 </div>
 {% endif %}
 {% if using_menu %}
-<p class="page-desc">本店当前按「今日菜单清单」展示菜品与价格档位（会员价/特价以清单设置为准）。</p>
+<p class="page-desc">{{ product_shell.shop_catalog_intro }}</p>
 {% endif %}
 {% if user.is_authenticated and user.role == 'seller' and user.username == seller_id %}
-<p class="msg-warn">卖家预览：会员价/特价须用<strong>买家账号登录</strong>后才可购买；展示与否以使用中清单为准。</p>
+<p class="msg-warn">
+    卖家预览：会员价/特价须用<strong>买家账号登录</strong>后才可购买；
+    {% if product_shell.show_menu_catalog %}展示与否以使用中清单为准。{% else %}当前页面按主体商品上下架状态展示。{% endif %}
+</p>
 {% endif %}
 
 {% if need_channel_pick %}
@@ -110,39 +113,14 @@
         {% endfor %}
         {% endwith %}
         {% empty %}
-        <p class="card-meta">该店铺暂无菜品</p>
+        <p class="card-meta">{{ product_shell.empty_shop_text }}</p>
         {% endfor %}
     </div>
 
-    <aside class="cart-sidebar">
-        {% include 'waimai/_shop_cart_panel.html' with panel_id='desktop' %}
-    </aside>
-</div>
-
-{% if cart_has_lines %}
-<div class="cart-bar is-visible" id="cart-bar">
-    <button type="button" class="cart-bar-info" id="cart-open-btn" data-cart-open>
-        🛒 共 <strong>{{ cart_count }}</strong> 件 · <strong>¥{{ cart_total }}</strong>
-        <span style="font-size:12px;color:#ccc;margin-left:6px;">点击查看</span>
-    </button>
-    <button type="button" class="btn btn-orange btn-sm" data-cart-open>去结算</button>
-</div>
-
-<div class="cart-drawer" id="cart-drawer">
-    <div class="cart-drawer-backdrop" data-cart-close></div>
-    <div class="cart-drawer-panel">
-        <div class="cart-drawer-head">
-            <h3>🛒 购物车</h3>
-            <div class="cart-drawer-head-actions">
-                <button type="button" class="btn btn-outline btn-sm cart-done-btn" data-cart-close>完成</button>
-                <button type="button" class="cart-close-btn" data-cart-close aria-label="关闭购物车">×</button>
-            </div>
-        </div>
-        <p class="cart-drawer-hint">在下方滑动改数量；点「完成」或灰色背景关闭</p>
-        {% include 'waimai/_shop_cart_panel.html' with panel_id='mobile' %}
+    <div id="shop-cart-shell" style="display:contents;">
+        {% include 'waimai/_shop_cart_shell.html' %}
     </div>
 </div>
-{% endif %}
 {% endif %}
 
 {% if dining_plugin_enabled %}

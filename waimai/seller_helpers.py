@@ -5,7 +5,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 
 from .delivery_helpers import get_delivery_settings
-from .forms import CreateRiderForm, ShopDeliverySettingsForm, ShopPaymentSettingsForm
+from .forms import ShopDeliverySettingsForm, ShopPaymentSettingsForm
 from .payments import get_payment_settings
 from .scroll_helpers import redirect_with_anchor
 
@@ -27,16 +27,12 @@ def handle_seller_post(request, seller_id, section):
     处理卖家面板表单提交。
     成功或失败后 redirect 回同一分区，并定位到刚操作的条目附近。
   """
-    if 'create_rider' in request.POST and section == 'riders':
-        rider_form = CreateRiderForm(request.POST, seller_id=seller_id)
-        if rider_form.is_valid():
-            rider_form.save()
-            messages.success(request, '骑手账号已创建')
-        else:
-            messages.error(request, '创建失败，请检查用户名和密码')
-        return _seller_panel_redirect('riders', 'rider-create-form')
+    from .plugins.fulfillment.ownership import fulfillment_plugin_enabled
 
     if 'save_delivery_settings' in request.POST and section == 'delivery':
+        if not fulfillment_plugin_enabled(seller_id):
+            messages.error(request, '履约配送插件未启用，无法保存配送费规则')
+            return _seller_panel_redirect('plugins', request=request)
         settings = get_delivery_settings(seller_id)
         form = ShopDeliverySettingsForm(request.POST, instance=settings)
         if form.is_valid():
@@ -49,6 +45,9 @@ def handle_seller_post(request, seller_id, section):
     if 'save_payment_settings' in request.POST and section == 'payment':
         settings = get_payment_settings(seller_id)
         form = ShopPaymentSettingsForm(request.POST, instance=settings)
+        # 履约关闭时不允许改货到付款开关（字段不在表单里也应挡住 POST 篡改）
+        if not fulfillment_plugin_enabled(seller_id) and 'enable_cod' in form.fields:
+            del form.fields['enable_cod']
         if form.is_valid():
             form.save()
             from .audit_helpers import write_audit_log
@@ -66,22 +65,28 @@ def handle_seller_post(request, seller_id, section):
         return _seller_panel_redirect('payment', 'payment-settings-form')
 
     if 'confirm_rider_remit' in request.POST and section == 'payment':
-        # 骑手入金：店主确认某骑手交回的现金（店主后台仅店主可进；店长入金待工作台入口）
-        from .payments import confirm_cash_remittance
-        from .rider_cash_helpers import pending_remit_orders_for_rider
+        if not fulfillment_plugin_enabled(seller_id):
+            messages.error(request, '履约配送插件未启用，无法确认配送员入金')
+            return _seller_panel_redirect('payment', request=request)
+        # 配送员先发起正式交款申请；店主在这里核对后确认。
+        from .rider_cash_helpers import review_cash_remittance_request
 
-        rider_id = (request.POST.get('rider_id') or '').strip()
-        orders = list(pending_remit_orders_for_rider(seller_id, rider_id))
-        count, msg = confirm_cash_remittance(orders, request.user.username)
+        ok, msg = review_cash_remittance_request(
+            seller_id,
+            request.POST.get('request_id'),
+            request.user.username,
+            approve=True,
+            note=request.POST.get('review_note', ''),
+        )
         from .audit_helpers import write_audit_log
         write_audit_log(
             action_code='rider_cash_remit',
-            summary=f'确认骑手 {rider_id} 入金 {count} 笔',
+            summary=f'店主处理配送员交款申请：{msg}',
             seller_id=seller_id,
             actor=request.user,
             request=request,
         )
-        if count:
+        if ok:
             messages.success(request, msg)
         else:
             messages.error(request, msg)

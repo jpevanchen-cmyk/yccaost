@@ -105,6 +105,12 @@ class ShopOperatingSettings(models.Model):
         verbose_name='启用饮食插件（试验）',
         help_text='关闭后卖家后台隐藏「堂食营业」入口；业务数据不删，只是先像插件一样可停用。',
     )
+    # 履约配送插件：配送费与配送页签（默认开，兼容现店外卖）
+    plugin_fulfillment_enabled = models.BooleanField(
+        default=True,
+        verbose_name='启用履约配送插件（试验）',
+        help_text='关闭后：不接新外卖单；隐藏配送费规则、工作台配送页签、货到付款入金；已有配送单与权限保留。',
+    )
     active_menu_profile = models.ForeignKey(
         'MenuProfile', on_delete=models.SET_NULL,
         blank=True, null=True, related_name='+', verbose_name='当前菜单清单',

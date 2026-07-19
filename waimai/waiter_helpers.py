@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from django.db import models
 
+from .dispatch_helpers import get_delivery_handoff_mode
 from .models import BuyOrder, OrderWaiterDishServeLog, User
-from .operating_helpers import get_operating_settings
 from .order_progress_helpers import (
     build_progress_groups,
     count_progress_units,
@@ -32,7 +32,12 @@ _DELIVERY_DONE_STATUSES = ('picked_up', 'in_transit', 'completed', 'cancelled')
 
 def get_shop_waiters(seller_id: str, *, active_only: bool = False):
     """本店服务员子账号列表"""
-    qs = User.objects.filter(role='waiter', employer_seller_id=seller_id)
+    from .staff_account_helpers import PERM_DINING_WAITER, staff_permission_query
+
+    qs = User.objects.filter(
+        staff_permission_query(PERM_DINING_WAITER),
+        employer_seller_id=seller_id,
+    )
     if active_only:
         qs = qs.filter(is_active=True)
     return qs.order_by('date_joined')
@@ -45,7 +50,9 @@ def validate_shop_waiter(seller_id: str, username: str) -> bool:
 
 def ensure_waiter_employer(user) -> str | None:
     """服务员所属店铺 ID；无效则 None"""
-    if not user.is_authenticated or user.role != 'waiter' or not user.is_active:
+    from .staff_account_helpers import PERM_DINING_WAITER, staff_has_permission
+
+    if not user.is_authenticated or not staff_has_permission(user, PERM_DINING_WAITER):
         return None
     return (user.employer_seller_id or '').strip() or None
 
@@ -72,22 +79,24 @@ def build_dish_groups(dish_items: list | None) -> list[dict]:
 
 
 def get_serve_unit_label(order: BuyOrder) -> str:
-    """按取餐方式返回「每份」动作文案"""
-    if order.is_dine_in():
-        return '上桌'
-    if order.is_takeaway():
-        return '交付'
-    return '交给骑手'
+    """按履约方式返回「每件/每份」动作文案（读工作台壳）"""
+    from .workbench_shell_helpers import serve_unit_label_for_order
 
-
-def get_delivery_handoff_mode(seller_id: str) -> str:
-    """外卖交接方式；默认服务员交给骑手"""
-    settings = get_operating_settings(seller_id)
-    return (settings.delivery_handoff_mode or 'waiter').strip() or 'waiter'
+    return serve_unit_label_for_order(order)
 
 
 def get_waiter_phase_label(order: BuyOrder) -> str:
-    """服务员看到的订单阶段说明"""
+    """服务员看到的订单阶段说明（用语跟工作台壳走）"""
+    from .workbench_shell_helpers import build_workbench_shell
+
+    shell = build_workbench_shell(order.seller_id)
+    rider_w = shell['rider_role_word']
+    kitchen_w = shell['kitchen_role_word']
+    waiter_w = shell['tab_waiter']
+    prep_w = shell['prep_word']
+    pickup_w = shell['pickup_word']
+    serve_all = shell['serve_dine_in'] if order.is_dine_in() else '交付'
+
     delivery = getattr(order, 'delivery_order', None)
     total, served = count_order_units(order.dish_items)
     items, _ = normalize_dish_items(order.dish_items)
@@ -97,11 +106,11 @@ def get_waiter_phase_label(order: BuyOrder) -> str:
         return '已取消'
     if total > 0 and served >= total:
         if order.payment_status == 'paid' and order.is_in_store():
-            return '已全部上桌 · 已收款'
+            return f'已全部{serve_all} · 已收款'
         if order.payment_status != 'paid':
             return '已全部送达 · 待收款'
         if delivery and delivery.delivery_status == 'accepted':
-            return f'已全部交骑手 · 待骑手 {delivery.rider_id} 取餐'
+            return f'已全部交{rider_w} · 待{rider_w} {delivery.rider_id} {pickup_w}'
     if order.payment_status == 'pending_payment' and order.order_status == 'awaiting_payment':
         return '新订单 · 待客人支付'
     if order.is_awaiting_in_store_order_confirm():
@@ -110,19 +119,22 @@ def get_waiter_phase_label(order: BuyOrder) -> str:
         return '已支付 · 待开始备货'
     if order.order_status == 'preparing':
         if served > 0 and served < total:
-            return f'备餐/服务中 · 已{get_serve_unit_label(order)} {served}/{total}'
-        return '后厨备货中'
+            return f'{prep_w}/服务中 · 已{get_serve_unit_label(order)} {served}/{total}'
+        return f'{kitchen_w}备货中'
     if order.fulfillment_type == 'delivery' and delivery:
         if delivery.delivery_status == 'waiting':
-            return '待派骑手'
+            return f'待派{rider_w}'
         if delivery.delivery_status == 'accepted':
             if handoff_mode == 'kitchen':
-                return f'后厨直交骑手 · 骑手 {delivery.rider_id}'
+                return f'{kitchen_w}直交{rider_w} · {rider_w} {delivery.rider_id}'
             if prepared < total:
-                return f'后厨备餐中 · 待服务员接餐（已备好 {prepared}/{total}）'
+                return (
+                    f'{kitchen_w}{prep_w}中 · 待{waiter_w}接单'
+                    f'（已备好 {prepared}/{total}）'
+                )
             if served >= total and total > 0:
-                return f'待骑手取餐 · 骑手 {delivery.rider_id}'
-            return f'待交给骑手 · 骑手 {delivery.rider_id}'
+                return f'待{rider_w}{pickup_w} · {rider_w} {delivery.rider_id}'
+            return f'待交给{rider_w} · {rider_w} {delivery.rider_id}'
     if total > 0 and served < total:
         return f'服务中 · 已{get_serve_unit_label(order)} {served}/{total}'
     if order.payment_status == 'paid':
@@ -130,7 +142,7 @@ def get_waiter_phase_label(order: BuyOrder) -> str:
     return order.get_order_status_display()
 
 
-def query_waiter_active_orders(seller_id: str):
+def query_waiter_active_orders(seller_id: str, *, sort_mode: str = 'newest'):
     """
     服务员可见订单：下单后直至完结。
     外卖单在骑手取餐后从列表消失。
@@ -147,7 +159,9 @@ def query_waiter_active_orders(seller_id: str):
         fulfillment_type='delivery',
         delivery_order__delivery_status__in=_DELIVERY_DONE_STATUSES,
     )
-    return qs.order_by('-created_at')
+    from .workbench_sort_helpers import order_queryset_by_created
+
+    return order_queryset_by_created(qs, sort_mode)
 
 
 def _find_markable_line(items: list[dict], dish_id: str) -> dict | None:
@@ -310,19 +324,17 @@ def waiter_can_collect_payment(order: BuyOrder) -> bool:
 
 
 def waiter_can_confirm_cash(order: BuyOrder) -> bool:
-    """现金单是否可点「确认已收款」"""
+    """现金单是否可点「确认已收款」。
+    只对堂食/打包（到店付）开放：这类是服务员当面收钱。
+    外卖货到付款的现金由配送员送达时收取，服务员这里不再出现该按钮。
+    """
     if order.payment_method != 'cash' or order.payment_status != 'pending_payment':
         return False
     if order.is_awaiting_in_store_order_confirm():
         return False
     if order.is_in_store():
         return order.order_status in ('awaiting_prep', 'preparing', 'ready_pickup', 'completed')
-    return order.order_status in ('preparing', 'ready_pickup', 'delivering')
-
-
-def waiter_can_confirm_in_store_order(order: BuyOrder) -> bool:
-    """服务员/店主可在工作台确认到店单"""
-    return order.is_awaiting_in_store_order_confirm()
+    return False
 
 
 def waiter_can_complete_in_store(order: BuyOrder) -> bool:

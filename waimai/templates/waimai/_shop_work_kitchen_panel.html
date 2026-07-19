@@ -12,12 +12,12 @@
 
 {% if not can_operate %}
 <p class="card-meta" style="margin-bottom:12px;padding:10px;background:#fff8e1;border-radius:8px;">
-    👀 当前为<strong>只读预览</strong>：您可查看后厨待备概况，操作请使用后厨账号登录。
+    {{ workbench_shell.kitchen_readonly_hint|safe }}
 </p>
 {% endif %}
 
 <div class="card" style="margin-bottom:14px;">
-    <div class="delivery-card-head">📦 待备菜品汇总</div>
+    <div class="delivery-card-head">📦 {{ workbench_shell.kitchen_summary_title }}</div>
     {% if summary_rows %}
         {% for row in summary_rows %}
         <div class="line-item">
@@ -26,7 +26,7 @@
         </div>
         {% endfor %}
     {% else %}
-    <p class="card-meta">当前没有待备菜品。</p>
+    <p class="card-meta">{{ workbench_shell.kitchen_summary_empty }}</p>
     {% endif %}
 </div>
 
@@ -38,9 +38,9 @@
             订单 {{ order.get_display_order_no }} · {{ order.get_fulfillment_display_short }}
         </div>
         <p class="delivery-card-meta">
-            {% if order.table_label %}桌台：<strong>{{ order.table_label }}</strong><br>{% endif %}
+            {% if workbench_shell.show_table_on_board and order.table_label %}{{ workbench_shell.table_caption }}：<strong>{{ order.table_label }}</strong><br>{% endif %}
             下单：{{ order.created_at|beijing:"m-d H:i" }}
-            {% if row.rider_id %}<br>骑手：<strong>{{ row.rider_id }}</strong>{% endif %}
+            {% if row.rider_id %}<br>{{ workbench_shell.rider_role_word }}：<strong>{{ row.rider_id }}</strong>{% endif %}
         </p>
         <span class="delivery-status-badge delivery-status-accepted">{{ row.phase_label }}</span>
         {% if order.estimated_ready_at %}
@@ -70,7 +70,7 @@
                         {% csrf_token %}
                         <input type="hidden" name="order_id" value="{{ order.order_id }}">
                         <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
-                        <button type="submit" name="mark_prepared_unit" value="1" class="btn btn-sm btn-orange">+1 份备好</button>
+                        <button type="submit" name="mark_prepared_unit" value="1" class="btn btn-sm btn-orange">+1 {{ workbench_shell.unit_label }}备好</button>
                     </form>
                     {% endif %}
                     {% if dish.prepared_qty > 0 %}
@@ -78,7 +78,7 @@
                         {% csrf_token %}
                         <input type="hidden" name="order_id" value="{{ order.order_id }}">
                         <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
-                        <button type="submit" name="undo_prepared_unit" value="1" class="btn btn-sm btn-outline">撤回 1 份</button>
+                        <button type="submit" name="undo_prepared_unit" value="1" class="btn btn-sm btn-outline">撤回 1 {{ workbench_shell.unit_label }}</button>
                     </form>
                     {% endif %}
                 </div>
@@ -115,7 +115,7 @@
                 <input type="hidden" name="dispatch_order" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
                 <select name="rider_id" class="seller-select">
-                    <option value="">自动派单（按当前上班骑手分配）</option>
+                    <option value="">自动派单（按当前上班{{ workbench_shell.rider_role_word }}分配）</option>
                     {% for r in dispatch_riders %}
                     <option value="{{ r.username }}">{{ r.username }}</option>
                     {% endfor %}
@@ -123,7 +123,7 @@
                 <button type="submit" class="btn btn-sm btn-green">手动派单</button>
             </form>
             {% elif row.can_reassign %}
-            <p class="card-meta">当前骑手：{{ row.rider_id }}</p>
+            <p class="card-meta">当前{{ workbench_shell.rider_role_word }}：{{ row.rider_id }}</p>
             <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="reassign_rider" value="1">
@@ -133,7 +133,7 @@
                     <option value="{{ r.username }}" {% if r.username == row.rider_id %}selected{% endif %}>{{ r.username }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit" class="btn btn-sm btn-outline">改派骑手</button>
+                <button type="submit" class="btn btn-sm btn-outline">改派{{ workbench_shell.rider_role_word }}</button>
             </form>
             {% endif %}
         </div>
@@ -141,7 +141,7 @@
 
         {% if row.log_lines %}
         <details class="detail-collapse" style="margin-top:10px;">
-            <summary>📝 后厨记录</summary>
+            <summary>📝 {{ workbench_shell.kitchen_log_title }}</summary>
             <div class="detail-collapse-body">
                 {% for line in row.log_lines %}
                 <div class="card-meta" style="margin-bottom:6px;">{{ line }}</div>
@@ -153,7 +153,7 @@
     {% endwith %}
     {% endfor %}
 {% else %}
-<p class="card-meta">当前没有需要后厨处理的订单。</p>
+<p class="card-meta">{{ workbench_shell.kitchen_empty_orders }}</p>
 {% endif %}
 
 {# 旧的「弱提醒 + 每15秒整页刷新」已移除：改用统一的网页内强提醒（order_alert.js），
