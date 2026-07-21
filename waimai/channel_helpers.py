@@ -103,6 +103,26 @@ def list_homepage_channels(seller_id: str) -> list[dict]:
     }]
 
 
+def auto_pick_single_homepage_channel(
+    request, seller_id: str, table_session,
+) -> bool:
+    """主页只剩一个可选通道时自动选中，避免重复点选。"""
+    if table_session:
+        return False
+    if resolve_shop_channel(request, seller_id, table_session):
+        return False
+    available = [
+        item for item in list_homepage_channels(seller_id)
+        if item.get('available')
+    ]
+    if len(available) != 1:
+        return False
+    ok, _msg = try_set_homepage_channel(
+        request, seller_id, available[0]['code'], table_session,
+    )
+    return ok
+
+
 def try_set_homepage_channel(
     request, seller_id: str, channel: str, table_session,
 ) -> tuple[bool, str]:

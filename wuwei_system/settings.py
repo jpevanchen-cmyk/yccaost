@@ -100,6 +100,12 @@ INSTALLED_APPS = [
     'waimai.apps.WaimaiConfig',
 ]
 
+# ---------- 服务器拥有者私人工具包（默认关闭；目录不进公开 Git）----------
+YECAO_OWNER_TOOLKIT_ENABLED = os.environ.get('YECAO_OWNER_TOOLKIT_ENABLED', '0') == '1'
+YECAO_OWNER_TOOLKIT_PATH = Path(
+    os.environ.get('YECAO_OWNER_TOOLKIT_PATH', str(BASE_DIR / 'owner_toolkit'))
+)
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -111,6 +117,16 @@ MIDDLEWARE = [
     'waimai.middleware.ExperienceOnlineMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# 私人工具包：开启且目录存在时挂访客统计中间件
+if YECAO_OWNER_TOOLKIT_ENABLED and YECAO_OWNER_TOOLKIT_PATH.is_dir():
+    import sys as _sys
+
+    _owner_root = str(YECAO_OWNER_TOOLKIT_PATH.parent)
+    if _owner_root not in _sys.path:
+        _sys.path.insert(0, _owner_root)
+    INSTALLED_APPS.append('owner_toolkit.apps.OwnerToolkitConfig')
+    MIDDLEWARE.insert(-1, 'owner_toolkit.middleware.VisitorAnalyticsMiddleware')
 
 ROOT_URLCONF = 'wuwei_system.urls'
 
@@ -129,6 +145,8 @@ TEMPLATES = [
                 'waimai.context_processors.experience_site',
                 'waimai.context_processors.site_compliance',
                 'waimai.context_processors.site_branding',
+                'waimai.context_processors_owner.visitor_tracking',
+                'waimai.context_processors_owner.server_plugin_nav',
             ],
         },
     },
@@ -225,8 +243,17 @@ EMAIL_USE_TLS = os.environ.get('YECAO_EMAIL_TLS', '0') == '1'
 EMAIL_USE_SSL = (os.environ.get('YECAO_EMAIL_SSL', '1') == '1') and not EMAIL_USE_TLS
 DEFAULT_FROM_EMAIL = os.environ.get('YECAO_EMAIL_FROM', '').strip() or EMAIL_HOST_USER
 EMAIL_TIMEOUT = 10
-# 三项齐全才认为发信邮箱可用；否则通知逻辑直接跳过，避免卡顿或报错。
+# 三项齐全才认为 .env 发信邮箱可用；网页配置优先，见 waimai.email_helpers。
 YECAO_EMAIL_READY = bool(EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD)
+
+# 邮件防刷上限（可按服务器在 .env 调整）
+YECAO_EMAIL_DAILY_SERVER_MAX = int(os.environ.get('YECAO_EMAIL_DAILY_SERVER_MAX', '400'))
+YECAO_EMAIL_RECIPIENT_HOURLY_MAX = int(os.environ.get('YECAO_EMAIL_RECIPIENT_HOURLY_MAX', '5'))
+YECAO_EMAIL_RECIPIENT_DAILY_MAX = int(os.environ.get('YECAO_EMAIL_RECIPIENT_DAILY_MAX', '20'))
+YECAO_EMAIL_DEDUPE_COOLDOWN_SECONDS = int(os.environ.get('YECAO_EMAIL_DEDUPE_COOLDOWN_SECONDS', '600'))
+# 留言防刷：按账号或浏览器访客编号（私人工具包读取）
+YECAO_GUESTBOOK_ACTOR_HOURLY_MAX = int(os.environ.get('YECAO_GUESTBOOK_ACTOR_HOURLY_MAX', '3'))
+YECAO_GUESTBOOK_ACTOR_DAILY_MAX = int(os.environ.get('YECAO_GUESTBOOK_ACTOR_DAILY_MAX', '15'))
 
 # ---------- A.12 技术运行日志（文件不进 Git；普通约 30 天、错误/支付约 90 天）----------
 YECAO_LOG_DIR = BASE_DIR / 'logs'

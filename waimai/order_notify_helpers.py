@@ -1,25 +1,18 @@
 # 新订单邮件通知：有新订单时给店铺配置的收件邮箱发提醒
 #
 # 说明：
-# - 只有服务器已在 .env 配好发信邮箱（YECAO_EMAIL_READY 为真），且店铺开启了通知、
+# - 只有服务器已配置发信邮箱（网页或 .env），且店铺开启了通知、
 #   填了收件邮箱时才会真的发信；否则安静跳过，不报错、不卡顿。
 # - 发信放在数据库事务提交后进行，避免拖慢下单本身。
 
 import logging
 
-from django.conf import settings
-from django.core.mail import send_mail
 from django.db import transaction
 
+from .email_helpers import parse_recipient_list, send_yecao_mail
+from .email_rate_limit_helpers import KIND_NEW_ORDER
+
 logger = logging.getLogger('waimai')
-
-
-def _parse_recipients(raw: str) -> list[str]:
-    """把「a@x.com, b@y.com」这类字符串拆成邮箱列表"""
-    if not raw:
-        return []
-    text = raw.replace('；', ',').replace(';', ',').replace(' ', ',')
-    return [e.strip() for e in text.split(',') if e.strip()]
 
 
 def _build_new_order_email(order) -> tuple[str, str]:
@@ -51,7 +44,9 @@ def _build_new_order_email(order) -> tuple[str, str]:
 
 def notify_new_order(order) -> None:
     """给店铺配置的收件邮箱发一封新订单提醒（条件不满足时安静跳过）"""
-    if not getattr(settings, 'YECAO_EMAIL_READY', False):
+    from .email_helpers import is_email_ready
+
+    if not is_email_ready():
         return
     try:
         from .operating_helpers import get_operating_settings
@@ -61,21 +56,18 @@ def notify_new_order(order) -> None:
         return
     if not getattr(op, 'order_notify_enabled', False):
         return
-    recipients = _parse_recipients(getattr(op, 'order_notify_email', '') or '')
+    recipients = parse_recipient_list(getattr(op, 'order_notify_email', '') or '')
     if not recipients:
         return
 
     subject, body = _build_new_order_email(order)
-    try:
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or recipients[0],
-            recipient_list=recipients,
-            fail_silently=True,
-        )
-    except Exception:
-        logger.exception('新订单通知邮件发送失败')
+    send_yecao_mail(
+        subject=subject,
+        message=body,
+        recipient_list=recipients,
+        kind=KIND_NEW_ORDER,
+        dedupe_key=f'order:{order.order_id}:new_order',
+    )
 
 
 def on_buy_order_created(sender, instance, created, **kwargs):

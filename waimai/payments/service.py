@@ -179,6 +179,9 @@ def rider_collect_cash(
             'cash_shortfall_buyer_responded_at', 'cash_collected_at',
             'payment_status', 'payment_time', 'updated_at',
         ])
+        from ..buyer_notify_helpers import schedule_buyer_cash_shortfall_notify
+
+        schedule_buyer_cash_shortfall_notify(order)
         diff = order.total_amount - amt
         return True, (
             f'已向买家发起少收确认：实付 ¥{amt}，少付 ¥{diff}。'

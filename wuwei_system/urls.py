@@ -27,6 +27,7 @@ urlpatterns = [
     path('server-settings/', views_owner.server_settings_home, name='server_settings'),
     path('server-settings/branding/', views_owner.server_settings_branding, name='server_settings_branding'),
     path('server-settings/compliance/', views_owner.server_settings_compliance, name='server_settings_compliance'),
+    path('server-settings/email/', views_owner.server_settings_email, name='server_settings_email'),
     path('server-settings/home/', views_owner.server_settings_home_page, name='server_settings_home_page'),
     path('owner/', views_owner.server_settings_home, name='owner_console'),
     path('owner/branding/', views_owner.server_settings_branding, name='owner_branding'),
@@ -58,6 +59,14 @@ urlpatterns = [
     path('order-history/', views.order_history, name='order_history'),
     path('order/<uuid:order_id>/', views.order_detail, name='order_detail'),
 ]
+
+# 服务器拥有者私人工具包 URL（未开启时不注册）
+try:
+    from waimai.server_plugin_runtime import get_server_plugin_urls
+
+    urlpatterns += get_server_plugin_urls()
+except Exception:
+    pass
 
 # 本地开发时由 Django 提供上传图片；正式服务器由 Nginx 提供 /media/。
 if settings.DEBUG:

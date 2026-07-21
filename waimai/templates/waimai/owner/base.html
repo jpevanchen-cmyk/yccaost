@@ -26,7 +26,11 @@
         <a class="btn btn-sm {% if section == 'index' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings' %}">总览</a>
         <a class="btn btn-sm {% if section == 'branding' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_branding' %}">站点品牌</a>
         <a class="btn btn-sm {% if section == 'compliance' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_compliance' %}">备案信息</a>
+        <a class="btn btn-sm {% if section == 'email' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_email' %}">发信邮箱</a>
         <a class="btn btn-sm {% if section == 'server_home' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_home_page' %}">服务器主页</a>
+        {% for item in server_plugin_nav %}
+        <a class="btn btn-sm {% if section == item.section %}btn-primary{% else %}btn-outline{% endif %}" href="{% url item.url_name %}">{{ item.label }}</a>
+        {% endfor %}
         <a class="btn btn-sm btn-outline" href="/" target="_blank" rel="noopener">预览根地址</a>
         <a class="btn btn-sm btn-outline" href="{% url 'seller_panel' %}">回店铺管理</a>
     </nav>

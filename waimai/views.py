@@ -885,6 +885,7 @@ def _merge_cart_into_order(order, cart_items, seller_id, distance_km, fulfillmen
 def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
     """店铺页统一渲染（含菜单过滤、桌台与下单通道）"""
     from .channel_helpers import (
+        auto_pick_single_homepage_channel,
         channel_template_flags,
         dining_plugin_enabled,
         list_homepage_channels,
@@ -897,6 +898,7 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
     dishes, using_menu = _shop_page_dishes(seller_id)
     menu_items_map = get_active_menu_items_map(seller_id) if using_menu else {}
     table_session = get_buyer_table_session(request, seller_id)
+    auto_pick_single_homepage_channel(request, seller_id, table_session)
     shop_channel = resolve_shop_channel(request, seller_id, table_session)
     need_channel_pick = (not table_session) and (not shop_channel)
     # 本桌进行中的订单：游客/买家回店后可一点打开详情（结账翻台后不再显示）
@@ -1476,6 +1478,8 @@ def seller_panel_section(request, section):
         )
         from .workbench_qr import build_work_login_qr_png
 
+        from django.conf import settings
+
         operating = get_operating_settings(seller_id)
         workbench_form = ShopWorkbenchSettingsForm(instance=operating)
         from .plugins.fulfillment.ownership import fulfillment_plugin_enabled
@@ -1532,10 +1536,12 @@ def seller_panel_section(request, section):
             )
             png = build_work_login_qr_png(work_login_url)
             work_qr_data_url = 'data:image/png;base64,' + base64.b64encode(png).decode('ascii')
-            work_mobile_url = build_mobile_share_url(work_login_url)
-            if work_mobile_url:
-                mobile_png = build_work_login_qr_png(work_mobile_url)
-                work_mobile_qr_data_url = 'data:image/png;base64,' + base64.b64encode(mobile_png).decode('ascii')
+            if settings.DEBUG:
+                mobile_candidate = build_mobile_share_url(work_login_url)
+                if mobile_candidate and mobile_candidate != work_login_url:
+                    work_mobile_url = mobile_candidate
+                    mobile_png = build_work_login_qr_png(work_mobile_url)
+                    work_mobile_qr_data_url = 'data:image/png;base64,' + base64.b64encode(mobile_png).decode('ascii')
         context['work_login_url'] = work_login_url
         context['work_qr_data_url'] = work_qr_data_url
         context['work_mobile_url'] = work_mobile_url
@@ -1936,11 +1942,36 @@ def order_history(request):
 
 @login_required
 def buyer_center(request):
-    """买家中心：基本信息、当前订单与历史订单。"""
+    """买家中心：基本信息、当前订单与历史订单、邮件通知设置。"""
     if request.user.role != 'buyer':
         return redirect('directory')
 
+    from django.core.validators import validate_email
+    from django.core.exceptions import ValidationError
+
     from .order_message_helpers import unread_map_for_orders
+
+    user = request.user
+    if request.method == 'POST' and 'save_buyer_notify' in request.POST:
+        user.buyer_notify_enabled = request.POST.get('buyer_notify_enabled') == '1'
+        email = (request.POST.get('buyer_notify_email') or '').strip()[:254]
+        save_ok = True
+        if user.buyer_notify_enabled and not email:
+            messages.error(request, '开启邮件通知时请填写收件邮箱')
+            save_ok = False
+        elif email:
+            try:
+                validate_email(email)
+            except ValidationError:
+                messages.error(request, '邮箱格式不正确')
+                save_ok = False
+            else:
+                user.buyer_notify_email = email
+        else:
+            user.buyer_notify_email = ''
+        if save_ok:
+            user.save(update_fields=['buyer_notify_enabled', 'buyer_notify_email'])
+            messages.success(request, '邮件通知设置已保存')
 
     orders = list(
         BuyOrder.objects.filter(buyer_id=request.user.username)
@@ -1972,6 +2003,8 @@ def buyer_center(request):
     return render(request, 'waimai/buyer_center.html', {
         'current_order_rows': current_rows,
         'history_order_rows': history_rows,
+        'buyer_notify_enabled': user.buyer_notify_enabled,
+        'buyer_notify_email': user.buyer_notify_email,
     })
 
 

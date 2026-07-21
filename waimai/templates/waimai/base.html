@@ -6,6 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}野草系统{% endblock %}</title>
+    {% if yc_page_view_id %}<meta name="yc-page-view-id" content="{{ yc_page_view_id }}">{% endif %}
     <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=42">
     {% block extra_head %}{% endblock %}
 </head>
@@ -116,5 +117,8 @@
     <script src="{% static 'waimai/session_guard.js' %}?v=5"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
+    {% if yc_track_visitor %}
+    <script src="{% static 'owner_toolkit/visitor_beacon.js' %}?v=1"></script>
+    {% endif %}
 </body>
 </html>

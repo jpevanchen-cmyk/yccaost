@@ -48,3 +48,10 @@ def get_compliance_settings():
     if obj is None:
         obj = SiteComplianceSettings(singleton_id=1)
     return obj
+
+
+def get_server_email_settings():
+    from .models import ServerEmailSettings
+
+    obj, _ = ServerEmailSettings.objects.get_or_create(singleton_id=1)
+    return obj

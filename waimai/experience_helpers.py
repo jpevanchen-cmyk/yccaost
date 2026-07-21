@@ -236,7 +236,7 @@ def maybe_notify(subject: str, body: str) -> None:
 
 
 def purge_experience_data() -> dict:
-    """清空所有体验帐户及相关体验店数据；不动官方小店与正式号"""
+    """清空所有体验帐户及相关体验店数据；不动官方小店与正式号；不删留言/访客统计。"""
     from .models import (
         BuyOrder,
         DeliveryOrder,

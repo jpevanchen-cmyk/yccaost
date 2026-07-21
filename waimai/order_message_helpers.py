@@ -70,6 +70,10 @@ def post_order_message(order: BuyOrder, user, body: str) -> tuple[bool, str]:
     )
     # 自己发出的立即算已读，避免自己红点
     mark_order_messages_read(order, user)
+    if side == 'shop':
+        from .buyer_notify_helpers import schedule_buyer_order_message_notify
+
+        schedule_buyer_order_message_notify(order, preview=text[:120])
     return True, '留言已发送'
 
 

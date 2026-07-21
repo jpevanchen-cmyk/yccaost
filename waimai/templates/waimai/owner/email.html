@@ -1,0 +1,59 @@
+{% extends 'waimai/owner/base.html' %}
+{% block title %}发信邮箱{% endblock %}
+{% block owner_content %}
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h1 style="margin:0 0 8px;font-size:20px;">发信邮箱</h1>
+    <p class="card-meta" style="margin:0;">
+        整台服务器统一用这里的邮箱发通知（新订单、买家通知、留言回复等）。
+        此处保存后<strong>优先于</strong> <code>.env</code>。
+        当前状态：{% if email_ready %}<strong style="color:#080;">可用</strong>{% else %}<strong style="color:#c00;">未配齐</strong>{% endif %}
+        {% if backup_ready %} · 备用邮箱：<strong style="color:#080;">已配</strong>{% endif %}
+    </p>
+    {% if rate_stats %}
+    <p class="card-meta" style="margin-top:8px;">
+        防刷：今日已发 {{ rate_stats.server_today }} / {{ rate_stats.server_daily_max }} 封；
+        同一收件邮箱最多 {{ rate_stats.recipient_hourly_max }} 封/小时、{{ rate_stats.recipient_daily_max }} 封/天；
+        同单同类通知冷却约 {{ rate_stats.dedupe_cooldown_minutes }} 分钟。
+    </p>
+    {% endif %}
+</div>
+
+<form method="post" class="card seller-form-stack" style="padding:16px;margin-bottom:14px;">
+    {% csrf_token %}
+    <input type="hidden" name="save_email_settings" value="1">
+    <h2 style="margin:0 0 10px;font-size:16px;">主发信邮箱</h2>
+    <label>SMTP 地址 <input type="text" name="smtp_host" value="{{ email_settings.smtp_host }}" placeholder="如 smtp.gmail.com"></label>
+    <label>SMTP 端口 <input type="number" name="smtp_port" value="{{ email_settings.smtp_port|default:465 }}" min="1" max="65535"></label>
+    <label>SMTP 账号 <input type="text" name="smtp_user" value="{{ email_settings.smtp_user }}" autocomplete="username"></label>
+    <label>SMTP 密码
+        <input type="password" name="smtp_password" value="" placeholder="{% if email_settings.smtp_password %}已保存，留空则不修改{% else %}必填{% endif %}" autocomplete="new-password">
+    </label>
+    <label>发件人邮箱 <input type="email" name="from_email" value="{{ email_settings.from_email }}" placeholder="留空则用 SMTP 账号"></label>
+    <label class="product-add-list-row"><input type="checkbox" name="use_ssl" value="1" {% if email_settings.use_ssl %}checked{% endif %}> 使用 SSL（常见端口 465）</label>
+    <label class="product-add-list-row"><input type="checkbox" name="use_tls" value="1" {% if email_settings.use_tls %}checked{% endif %}> 使用 STARTTLS（常见端口 587）</label>
+
+    <h2 style="margin:18px 0 10px;font-size:16px;">备用发信邮箱（可选）</h2>
+    <p class="card-meta" style="margin:0 0 10px;">主邮箱发不出去时（如被邮件服务商临时限制），系统自动用备用邮箱再试一次。可不填。</p>
+    <label>备用 SMTP 地址 <input type="text" name="backup_smtp_host" value="{{ email_settings.backup_smtp_host }}" placeholder="如 smtp.qq.com"></label>
+    <label>备用 SMTP 端口 <input type="number" name="backup_smtp_port" value="{{ email_settings.backup_smtp_port|default:465 }}" min="1" max="65535"></label>
+    <label>备用 SMTP 账号 <input type="text" name="backup_smtp_user" value="{{ email_settings.backup_smtp_user }}" autocomplete="username"></label>
+    <label>备用 SMTP 密码
+        <input type="password" name="backup_smtp_password" value="" placeholder="{% if email_settings.backup_smtp_password %}已保存，留空则不修改{% else %}选填{% endif %}" autocomplete="new-password">
+    </label>
+    <label>备用发件人邮箱 <input type="email" name="backup_from_email" value="{{ email_settings.backup_from_email }}" placeholder="留空则用备用 SMTP 账号"></label>
+    <label class="product-add-list-row"><input type="checkbox" name="backup_use_ssl" value="1" {% if email_settings.backup_use_ssl %}checked{% endif %}> 备用使用 SSL</label>
+    <label class="product-add-list-row"><input type="checkbox" name="backup_use_tls" value="1" {% if email_settings.backup_use_tls %}checked{% endif %}> 备用使用 STARTTLS</label>
+
+    <button type="submit" class="btn btn-primary">保存发信设置</button>
+</form>
+
+<form method="post" class="card seller-form-stack" style="padding:16px;">
+    {% csrf_token %}
+    <h2 style="margin:0 0 8px;font-size:16px;">发送测试邮件</h2>
+    <label>测试收件邮箱 <input type="email" name="test_recipient" placeholder="you@example.com"></label>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+        <button type="submit" name="send_test_email" value="primary" class="btn btn-outline">测试主邮箱</button>
+        <button type="submit" name="send_test_email" value="backup" class="btn btn-outline">测试备用邮箱</button>
+    </div>
+</form>
+{% endblock %}

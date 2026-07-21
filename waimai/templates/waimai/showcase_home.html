@@ -70,6 +70,8 @@
             <p class="card-meta">{% if directory_query %}没有符合「{{ directory_query }}」的店铺。{% else %}暂无可展示的店铺。{% endif %}</p>
         {% endif %}
         </div>
+    {% elif block.block_type == 'contact_us' and owner_toolkit_enabled %}
+        {% include 'owner_toolkit/contact_us_block.html' with block=block %}
     {% else %}
         <h2 class="showcase-block-title">{{ block.title }}</h2>
         <div class="showcase-block-main">
@@ -121,6 +123,7 @@
         <div class="showcase-reader-body" id="showcase-reader-body"></div>
     </div>
 </div>
+{% include 'waimai/_flash_modal.html' %}
 {% endblock %}
 
 {% block extra_js %}

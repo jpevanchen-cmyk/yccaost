@@ -106,6 +106,17 @@ class User(AbstractUser):
         db_index=True,
         verbose_name='当前有效登录会话',
     )
+    # 买家邮件通知（自愿开启；注册时不要求填邮箱）
+    buyer_notify_enabled = models.BooleanField(
+        default=False,
+        verbose_name='开启订单邮件通知',
+    )
+    buyer_notify_email = models.CharField(
+        max_length=254,
+        blank=True,
+        default='',
+        verbose_name='订单通知收件邮箱',
+    )
 
     class Meta:
         db_table = 'user'
@@ -227,6 +238,85 @@ class ServerSiteSettings(models.Model):
 
     def __str__(self):
         return f'站点设置:{self.site_name}'
+
+
+class ServerEmailSettings(models.Model):
+    """整台服务器发信邮箱；由服务器管理者在「服务器设置」维护（优先于 .env）。"""
+
+    singleton_id = models.PositiveSmallIntegerField(
+        primary_key=True, default=1, editable=False, verbose_name='固定编号',
+    )
+    smtp_host = models.CharField(max_length=200, blank=True, default='', verbose_name='SMTP 地址')
+    smtp_port = models.PositiveIntegerField(default=465, verbose_name='SMTP 端口')
+    smtp_user = models.CharField(max_length=200, blank=True, default='', verbose_name='SMTP 账号')
+    smtp_password = models.CharField(max_length=200, blank=True, default='', verbose_name='SMTP 密码')
+    from_email = models.CharField(
+        max_length=254, blank=True, default='', verbose_name='发件人邮箱',
+        help_text='留空则使用 SMTP 账号作为发件地址',
+    )
+    use_tls = models.BooleanField(default=False, verbose_name='使用 STARTTLS（常见端口 587）')
+    use_ssl = models.BooleanField(default=True, verbose_name='使用 SSL（常见端口 465）')
+    # 备用发信：主邮箱 SMTP 失败时自动再试
+    backup_smtp_host = models.CharField(max_length=200, blank=True, default='', verbose_name='备用 SMTP 地址')
+    backup_smtp_port = models.PositiveIntegerField(default=465, verbose_name='备用 SMTP 端口')
+    backup_smtp_user = models.CharField(max_length=200, blank=True, default='', verbose_name='备用 SMTP 账号')
+    backup_smtp_password = models.CharField(max_length=200, blank=True, default='', verbose_name='备用 SMTP 密码')
+    backup_from_email = models.CharField(
+        max_length=254, blank=True, default='', verbose_name='备用发件人邮箱',
+    )
+    backup_use_tls = models.BooleanField(default=False, verbose_name='备用使用 STARTTLS')
+    backup_use_ssl = models.BooleanField(default=True, verbose_name='备用使用 SSL')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'server_email_settings'
+        verbose_name = '服务器发信设置'
+        verbose_name_plural = '服务器发信设置'
+
+    def save(self, *args, **kwargs):
+        self.singleton_id = 1
+        return super().save(*args, **kwargs)
+
+    def is_configured(self) -> bool:
+        return bool(
+            (self.smtp_host or '').strip()
+            and (self.smtp_user or '').strip()
+            and (self.smtp_password or '').strip()
+        )
+
+    def is_backup_configured(self) -> bool:
+        return bool(
+            (self.backup_smtp_host or '').strip()
+            and (self.backup_smtp_user or '').strip()
+            and (self.backup_smtp_password or '').strip()
+        )
+
+    def __str__(self):
+        return '服务器发信设置'
+
+
+class EmailSendLog(models.Model):
+    """发信记录（仅用于防刷计数，不存邮件正文）"""
+
+    recipient = models.EmailField(db_index=True, verbose_name='收件邮箱')
+    kind = models.CharField(max_length=32, db_index=True, verbose_name='通知类型')
+    dedupe_key = models.CharField(
+        max_length=128, blank=True, default='', db_index=True, verbose_name='去重键',
+    )
+    sender_route = models.CharField(
+        max_length=16, blank=True, default='', verbose_name='发信通道',
+        help_text='primary 主邮箱；backup 备用邮箱',
+    )
+    sent_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='发送时间')
+
+    class Meta:
+        db_table = 'email_send_log'
+        ordering = ['-sent_at']
+        verbose_name = '发信记录'
+        verbose_name_plural = '发信记录'
+
+    def __str__(self):
+        return f'{self.recipient}:{self.kind}'
 
 
 class ServerHomePage(models.Model):

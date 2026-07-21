@@ -208,3 +208,77 @@ def server_settings_home_page(request):
 
 
 owner_server_home = server_settings_home_page
+
+
+@_manager_required
+def server_settings_email(request):
+    """服务器统一发信邮箱（网页配置，优先于 .env；主失败自动试备用）"""
+    from .email_helpers import ROUTE_BACKUP, ROUTE_PRIMARY, email_rate_limit_status, is_email_ready, send_yecao_mail
+    from .email_rate_limit_helpers import KIND_TEST
+    from .owner_helpers import get_server_email_settings
+
+    email_settings = get_server_email_settings()
+    if request.method == 'POST':
+        if 'save_email_settings' in request.POST:
+            email_settings.smtp_host = (request.POST.get('smtp_host') or '').strip()[:200]
+            try:
+                email_settings.smtp_port = max(1, min(65535, int(request.POST.get('smtp_port') or 465)))
+            except (TypeError, ValueError):
+                email_settings.smtp_port = 465
+            email_settings.smtp_user = (request.POST.get('smtp_user') or '').strip()[:200]
+            new_password = request.POST.get('smtp_password') or ''
+            if new_password.strip():
+                email_settings.smtp_password = new_password
+            email_settings.from_email = (request.POST.get('from_email') or '').strip()[:254]
+            email_settings.use_tls = request.POST.get('use_tls') == '1'
+            email_settings.use_ssl = request.POST.get('use_ssl') == '1'
+
+            email_settings.backup_smtp_host = (request.POST.get('backup_smtp_host') or '').strip()[:200]
+            try:
+                email_settings.backup_smtp_port = max(
+                    1, min(65535, int(request.POST.get('backup_smtp_port') or 465)),
+                )
+            except (TypeError, ValueError):
+                email_settings.backup_smtp_port = 465
+            email_settings.backup_smtp_user = (request.POST.get('backup_smtp_user') or '').strip()[:200]
+            backup_password = request.POST.get('backup_smtp_password') or ''
+            if backup_password.strip():
+                email_settings.backup_smtp_password = backup_password
+            email_settings.backup_from_email = (request.POST.get('backup_from_email') or '').strip()[:254]
+            email_settings.backup_use_tls = request.POST.get('backup_use_tls') == '1'
+            email_settings.backup_use_ssl = request.POST.get('backup_use_ssl') == '1'
+
+            email_settings.save()
+            messages.success(request, '发信邮箱设置已保存（含备用邮箱）')
+            return redirect('server_settings_email')
+
+        test_route = (request.POST.get('send_test_email') or '').strip().lower()
+        if test_route in (ROUTE_PRIMARY, ROUTE_BACKUP):
+            test_to = (request.POST.get('test_recipient') or '').strip()
+            label = '主邮箱' if test_route == ROUTE_PRIMARY else '备用邮箱'
+            if not test_to:
+                messages.error(request, '请填写测试收件邮箱')
+            elif test_route == ROUTE_BACKUP and not email_settings.is_backup_configured():
+                messages.error(request, '备用邮箱未配齐，请先保存备用 SMTP 信息')
+            elif test_route == ROUTE_PRIMARY and not email_settings.is_configured():
+                messages.error(request, '主邮箱未配齐，请先保存主 SMTP 信息')
+            elif send_yecao_mail(
+                subject=f'野草系统 · {label}发信测试',
+                message=f'这是一封{label}测试邮件。若您收到，说明该通道可用。',
+                recipient_list=[test_to],
+                kind=KIND_TEST,
+                dedupe_key=f'test:{test_route}',
+                force_route=test_route,
+            ):
+                messages.success(request, f'{label}测试邮件已发送到 {test_to}')
+            else:
+                messages.error(request, f'{label}测试邮件发送失败，请检查 SMTP 或是否触发防刷上限')
+            return redirect('server_settings_email')
+
+    return render(request, 'waimai/owner/email.html', {
+        'email_settings': email_settings,
+        'email_ready': is_email_ready(),
+        'backup_ready': email_settings.is_backup_configured(),
+        'rate_stats': email_rate_limit_status(),
+        'section': 'email',
+    })

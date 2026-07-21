@@ -105,6 +105,11 @@ def get_shop_block_spec(code: str) -> BlockTypeSpec | None:
 def get_server_block_spec(code: str) -> BlockTypeSpec | None:
     if code == BLOCK_CUSTOM:
         return CUSTOM_BLOCK_SPEC
+    from waimai.server_plugin_runtime.registry import get_server_block_spec as _plugin_spec
+
+    plugin = _plugin_spec(code)
+    if plugin:
+        return plugin
     return _SERVER_BY_CODE.get(code)
 
 
@@ -429,9 +434,11 @@ def build_server_home_view_context(request=None) -> dict:
         })
 
     from .owner_helpers import get_site_settings
+    from waimai.server_plugin_runtime import enrich_server_home_context
+
     site = get_site_settings()
 
-    return {
+    ctx = {
         'home_kind': 'server',
         'home_page': page,
         'shop_profile': None,
@@ -446,6 +453,7 @@ def build_server_home_view_context(request=None) -> dict:
         'order_nav_mode': '',
         'brand_title': site.site_name or '本服务器',
     }
+    return enrich_server_home_context(ctx)
 
 
 def build_home_view_context(page, request=None) -> dict:

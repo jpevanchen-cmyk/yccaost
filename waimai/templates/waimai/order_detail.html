@@ -47,15 +47,6 @@
         {% endif %}
         {% endif %}
     {% endif %}
-    {% if can_buyer_cancel %}
-    <form method="post" style="margin-top:14px;" onsubmit="return confirm('确定取消这份订单吗？');">
-        {% csrf_token %}
-        <input type="hidden" name="cancel_order_buyer" value="1">
-        <button type="submit" class="btn btn-outline btn-block">取消订单</button>
-    </form>
-    {% elif show_buyer_cancel_blocked %}
-    <p class="msg-err" style="margin-top:14px;">{{ buyer_cancel_blocked_hint }}</p>
-    {% endif %}
 </div>
 
 {% if order.is_delivery_cod and order.cash_collected_amount %}
@@ -94,31 +85,6 @@
         {% elif viewer_role == 'buyer' and order.cash_shortfall_status == 'buyer_rejected' %}
         <p class="msg-err" style="margin-top:12px;">您已拒绝这份金额记录，请当面与配送员继续核对。</p>
         {% endif %}
-    </div>
-</details>
-{% endif %}
-
-{% if can_shop_cancel %}
-<details class="detail-collapse" open>
-    <summary>⚠️ 店家取消订单（兜底）</summary>
-    <div class="detail-collapse-body">
-        <p class="card-meta" style="margin:0 0 10px;">
-            仅在无法继续履约时使用（例如食材失误）。须先与客人协商：
-            {% if shop_has_chat_history %}
-            本单沟通区<strong>已有记录</strong>，可直接取消。
-            {% else %}
-            请先在「订单沟通」留言，或在下方写明沟通方式与过程（至少 8 个字）。
-            {% endif %}
-            取消后若已收款，请线下退款。操作会写入留痕。
-        </p>
-        <form method="post" onsubmit="return confirm('确定取消此订单？此操作会记入操作留痕。');">
-            {% csrf_token %}
-            <input type="hidden" name="cancel_order_shop" value="1">
-            <label class="card-meta" for="cancel_note">沟通说明（无沟通记录时必填）</label>
-            <textarea id="cancel_note" name="cancel_note" rows="3" maxlength="500" class="order-chat-input"
-                      placeholder="例如：已电话联系客人张三，因最后一份做错，客人同意取消并退款"></textarea>
-            <button type="submit" class="btn btn-sm btn-outline" style="margin-top:8px;color:#c62828;border-color:#c62828;">确认取消订单</button>
-        </form>
     </div>
 </details>
 {% endif %}
@@ -219,6 +185,52 @@
         {% endif %}
     </div>
 </details>
+
+{% if can_shop_cancel %}
+<details class="detail-collapse" open>
+    <summary>⚠️ 店家取消订单（兜底）</summary>
+    <div class="detail-collapse-body">
+        <p class="card-meta" style="margin:0 0 10px;">
+            仅在无法继续履约时使用（例如食材失误）。须先与客人协商：
+            {% if shop_has_chat_history %}
+            本单沟通区<strong>已有记录</strong>，可直接取消。
+            {% else %}
+            请先在「订单沟通」留言，或在下方写明沟通方式与过程（至少 8 个字）。
+            {% endif %}
+            取消后若已收款，请线下退款。操作会写入留痕。
+        </p>
+        <form method="post" onsubmit="return confirm('确定取消此订单？此操作会记入操作留痕。');">
+            {% csrf_token %}
+            <input type="hidden" name="cancel_order_shop" value="1">
+            <label class="card-meta" for="cancel_note">沟通说明（无沟通记录时必填）</label>
+            <textarea id="cancel_note" name="cancel_note" rows="3" maxlength="500" class="order-chat-input"
+                      placeholder="例如：已电话联系客人张三，因最后一份做错，客人同意取消并退款"></textarea>
+            <button type="submit" class="btn btn-sm btn-outline" style="margin-top:8px;color:#c62828;border-color:#c62828;">确认取消订单</button>
+        </form>
+    </div>
+</details>
+{% endif %}
+
+{% if can_buyer_cancel %}
+<details class="detail-collapse" open>
+    <summary>取消订单</summary>
+    <div class="detail-collapse-body">
+        <p class="card-meta" style="margin:0 0 10px;">若暂时不需要这份订单，可在此取消。已沟通好的情况也可先在「订单沟通」留一句说明。</p>
+        <form method="post" onsubmit="return confirm('确定取消这份订单吗？');">
+            {% csrf_token %}
+            <input type="hidden" name="cancel_order_buyer" value="1">
+            <button type="submit" class="btn btn-outline">确认取消订单</button>
+        </form>
+    </div>
+</details>
+{% elif show_buyer_cancel_blocked %}
+<details class="detail-collapse" open>
+    <summary>取消订单</summary>
+    <div class="detail-collapse-body">
+        <p class="msg-err" style="margin:0;">{{ buyer_cancel_blocked_hint }}</p>
+    </div>
+</details>
+{% endif %}
 
 <details class="detail-collapse">
     <summary>🍱 订单内容</summary>

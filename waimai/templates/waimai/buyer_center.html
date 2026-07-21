@@ -16,6 +16,21 @@
     <a class="btn btn-outline btn-sm" href="{% url 'account_password_change' %}">修改密码</a>
 </div>
 
+<div class="card" style="margin-bottom:14px;">
+    <h2 style="margin-top:0;">订单邮件通知</h2>
+    <p class="card-meta">自愿开启。目前会通知：订单有新留言、货到付款需您确认实付金额。由服务器统一邮箱发出。</p>
+    <form method="post" class="seller-form-stack">
+        {% csrf_token %}
+        <input type="hidden" name="save_buyer_notify" value="1">
+        <label class="product-add-list-row">
+            <input type="checkbox" name="buyer_notify_enabled" value="1" {% if buyer_notify_enabled %}checked{% endif %}>
+            开启邮件通知
+        </label>
+        <label>收件邮箱 <input type="email" name="buyer_notify_email" value="{{ buyer_notify_email }}" placeholder="you@gmail.com"></label>
+        <button type="submit" class="btn btn-primary btn-sm">保存通知设置</button>
+    </form>
+</div>
+
 <h2>当前订单</h2>
 {% if current_order_rows %}
     {% for row in current_order_rows %}
