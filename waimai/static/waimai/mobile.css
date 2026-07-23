@@ -2671,16 +2671,25 @@ ul.errorlist li {
 .showcase-home-page .showcase-expand-bar:active {
     opacity: 0.85;
 }
-/* 原位置展开：去掉裁切渐变，保留底部「收起」条，并略高亮当前块 */
+/* 原位置展开：「收起」跟在全文末尾，不再浮在正文中间 */
 .showcase-home-page .showcase-block.is-expanded {
     overflow: visible;
     position: relative;
-    padding-bottom: 2.75rem;
+    padding-bottom: 12px;
     scroll-margin-top: calc(var(--yc-header-h, 52px) + 56px);
     box-shadow: 0 0 0 2px rgba(230, 126, 34, 0.28);
+    cursor: default;
 }
 .showcase-home-page .showcase-block.is-expanded::after {
     display: none;
+}
+.showcase-home-page .showcase-block.is-expanded .showcase-expand-bar {
+    position: static;
+    display: flex;
+    width: 100%;
+    margin-top: 10px;
+    padding: 0.5rem 12px;
+    cursor: pointer;
 }
 
 .showcase-back-top {

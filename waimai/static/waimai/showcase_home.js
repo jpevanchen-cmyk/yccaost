@@ -69,7 +69,8 @@
     }
     block.classList.remove('is-over-threshold');
     block.classList.add('is-expanded');
-    block.style.maxHeight = '';
+    block.style.maxHeight = 'none';
+    block.style.height = 'auto';
     var bar = block.querySelector('.showcase-expand-bar');
     if (bar) setExpandBarLabel(bar, block, true);
     expandedBlock = block;
