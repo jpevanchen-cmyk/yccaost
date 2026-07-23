@@ -2627,6 +2627,15 @@ ul.errorlist li {
     overflow: hidden;
     position: relative;
     padding-bottom: 2.75rem;
+    cursor: pointer;
+}
+.showcase-home-page .showcase-block.is-over-threshold a,
+.showcase-home-page .showcase-block.is-over-threshold button,
+.showcase-home-page .showcase-block.is-over-threshold input,
+.showcase-home-page .showcase-block.is-over-threshold textarea,
+.showcase-home-page .showcase-block.is-over-threshold select,
+.showcase-home-page .showcase-block.is-over-threshold label {
+    cursor: auto;
 }
 .showcase-home-page .showcase-block.is-over-threshold::after {
     content: '';
@@ -2662,72 +2671,16 @@ ul.errorlist li {
 .showcase-home-page .showcase-expand-bar:active {
     opacity: 0.85;
 }
-
-/* 长文大阅读区（仅客人主页会挂这些节点） */
-body.showcase-reader-open {
-    overflow: hidden;
+/* 原位置展开：去掉裁切渐变，保留底部「收起」条，并略高亮当前块 */
+.showcase-home-page .showcase-block.is-expanded {
+    overflow: visible;
+    position: relative;
+    padding-bottom: 2.75rem;
+    scroll-margin-top: calc(var(--yc-header-h, 52px) + 56px);
+    box-shadow: 0 0 0 2px rgba(230, 126, 34, 0.28);
 }
-.showcase-reader {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    background: rgba(0, 0, 0, 0.45);
-    display: flex;
-    align-items: stretch;
-    justify-content: center;
-    padding: 12px;
-    box-sizing: border-box;
-}
-.showcase-reader[hidden] {
-    display: none !important;
-}
-.showcase-reader-panel {
-    background: #fff;
-    border-radius: 12px;
-    width: min(720px, 100%);
-    max-height: 100%;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-}
-.showcase-reader-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--yc-border, #eee);
-    flex-shrink: 0;
-}
-.showcase-reader-title {
-    margin: 0;
-    font-size: 18px;
-    line-height: 1.35;
-    flex: 1;
-}
-.showcase-reader-close {
-    flex-shrink: 0;
-    border: 1px solid var(--yc-border, #ddd);
-    background: #fff;
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 14px;
-    cursor: pointer;
-}
-.showcase-reader-body {
-    padding: 16px;
-    overflow: auto;
-    -webkit-overflow-scrolling: touch;
-    white-space: pre-wrap;
-    line-height: 1.7;
-    font-size: 15px;
-    flex: 1;
-    min-height: 0;
-}
-/* 名录等用网页结构展开时，不要按纯文字换行 */
-.showcase-reader-body.is-html {
-    white-space: normal;
+.showcase-home-page .showcase-block.is-expanded::after {
+    display: none;
 }
 
 .showcase-back-top {
@@ -2742,6 +2695,83 @@ body.showcase-reader-open {
     font-size: 13px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     cursor: pointer;
+}
+
+/* 留言板积木：称呼横排、邮箱与提交同一行、联系信息置底 */
+.guestbook-form {
+    margin-top: 16px;
+    gap: 10px;
+}
+.guestbook-form .guestbook-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.guestbook-form .guestbook-name-row label {
+    margin: 0;
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+.guestbook-form .guestbook-name-row input {
+    flex: 1 1 120px;
+    min-width: 0;
+    margin: 0;
+    padding: 8px 10px;
+    font-size: 14px;
+}
+.guestbook-form .guestbook-body-label {
+    display: block;
+}
+.guestbook-form .guestbook-body-label textarea {
+    width: 100%;
+    margin-top: 6px;
+    margin-bottom: 0;
+    padding: 10px 12px;
+    font-size: 14px;
+}
+.guestbook-form .guestbook-submit-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.guestbook-form .guestbook-email-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 200px;
+    min-width: 0;
+    margin: 0;
+    font-weight: 600;
+    font-size: 14px;
+}
+.guestbook-form .guestbook-email-inline input {
+    flex: 1 1 140px;
+    min-width: 0;
+    margin: 0;
+    padding: 8px 10px;
+    font-size: 14px;
+}
+.guestbook-form .guestbook-submit-btn {
+    flex: 0 0 auto;
+    min-height: auto;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.2;
+    border-radius: 6px;
+}
+.guestbook-owner-footer {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--yc-border, #eee);
+}
+.guestbook-owner-footer p {
+    margin: 0 0 4px;
+}
+.guestbook-owner-footer p:last-child {
+    margin-bottom: 0;
 }
 
 /* —— 主页积木后台：上下两块编辑 —— */

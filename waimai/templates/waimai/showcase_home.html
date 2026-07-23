@@ -112,20 +112,9 @@
 </div>
 
 <button type="button" class="showcase-back-top" id="showcase-back-top" aria-label="回到顶部" hidden>顶部</button>
-
-{# 长文大阅读区：点正文打开；Esc / 点外面 / 收起 关闭 #}
-<div class="showcase-reader" id="showcase-reader" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="showcase-reader-title">
-    <div class="showcase-reader-panel">
-        <div class="showcase-reader-head">
-            <h2 class="showcase-reader-title" id="showcase-reader-title"></h2>
-            <button type="button" class="showcase-reader-close" id="showcase-reader-close" aria-label="收起全文">收起</button>
-        </div>
-        <div class="showcase-reader-body" id="showcase-reader-body"></div>
-    </div>
-</div>
 {% include 'waimai/_flash_modal.html' %}
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'waimai/showcase_home.js' %}?v=4"></script>
+<script src="{% static 'waimai/showcase_home.js' %}?v=6"></script>
 {% endblock %}

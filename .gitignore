@@ -41,6 +41,7 @@ Desktop.ini
 .DS_Store
 
 # 仅本地保留、不提交 Git / 不推送 GitHub
+服务器启动命令以及网址等.txt
 owner_toolkit/
 规则模板-developer-profile.mdc
 .cursor/rules/developer-profile.mdc
