@@ -1,0 +1,13 @@
+{# 点菜页共用：点击缩略图后弹出大图浏览 #}
+<div class="dish-lightbox" data-dish-lightbox hidden aria-hidden="true">
+    <div class="dish-lightbox-backdrop" data-dish-lightbox-close tabindex="-1"></div>
+    <div class="dish-lightbox-panel" role="dialog" aria-modal="true" aria-label="商品大图">
+        <button type="button" class="dish-lightbox-close" data-dish-lightbox-close aria-label="关闭">&times;</button>
+        <button type="button" class="dish-lightbox-nav dish-lightbox-prev" data-dish-lightbox-prev aria-label="上一张">&#8249;</button>
+        <div class="dish-lightbox-stage">
+            <img class="dish-lightbox-img" data-dish-lightbox-img alt="" src="">
+        </div>
+        <button type="button" class="dish-lightbox-nav dish-lightbox-next" data-dish-lightbox-next aria-label="下一张">&#8250;</button>
+        <p class="dish-lightbox-counter" data-dish-lightbox-counter hidden></p>
+    </div>
+</div>

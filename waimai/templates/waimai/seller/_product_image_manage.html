@@ -1,0 +1,52 @@
+{# 商品多图：已上传列表、删图、调序、同步文件夹（G1-3） #}
+{% if dish %}
+<div class="product-image-manage-block">
+    <h4 class="product-image-manage-title">已上传图片（{{ dish_image_used|default:0 }} / {{ dish_image_max|default:10 }}）</h4>
+    {% if dish.product_images.all %}
+    <div class="product-image-thumb-row">
+        {% for img in dish.product_images.all %}
+        <figure class="product-image-thumb">
+            <img src="{{ img.image.url }}" alt="图 {{ img.sort_index }}">
+            <figcaption>{{ dish.display_code|upper }}-{{ img.sort_index }}</figcaption>
+            <div class="product-image-thumb-actions">
+                <form method="POST" class="product-image-inline-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="move_dish_image" value="1">
+                    <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                    <input type="hidden" name="image_id" value="{{ img.image_id }}">
+                    <input type="hidden" name="direction" value="up">
+                    <button type="submit" class="btn btn-sm" title="往前">↑</button>
+                </form>
+                <form method="POST" class="product-image-inline-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="move_dish_image" value="1">
+                    <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                    <input type="hidden" name="image_id" value="{{ img.image_id }}">
+                    <input type="hidden" name="direction" value="down">
+                    <button type="submit" class="btn btn-sm" title="往后">↓</button>
+                </form>
+                <form method="POST" class="product-image-inline-form" onsubmit="return confirm('确定删除这张图片？');">
+                    {% csrf_token %}
+                    <input type="hidden" name="delete_dish_image" value="1">
+                    <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                    <input type="hidden" name="image_id" value="{{ img.image_id }}">
+                    <button type="submit" class="btn btn-sm btn-danger">删</button>
+                </form>
+            </div>
+        </figure>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="card-meta">尚无图片。可在下方上传，或将文件放入编号文件夹后点「同步图片」。</p>
+    {% endif %}
+    <form method="POST" class="product-image-sync-form">
+        {% csrf_token %}
+        <input type="hidden" name="sync_dish_images" value="1">
+        <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+        <button type="submit" class="btn btn-sm">同步 / 刷新商品图片</button>
+    </form>
+    <p class="card-meta">
+        高级用法：把文件命名为「{{ dish.display_code|upper }}-1.jpg」等形式放进该商品编号文件夹，再点上方按钮挂载（不自动监视文件夹）。
+    </p>
+</div>
+{% endif %}

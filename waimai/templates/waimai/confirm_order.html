@@ -10,6 +10,10 @@
 <div class="card">
     <h2 class="page-title" style="font-size:20px;margin-bottom:16px;">📋 确认订单</h2>
 
+    {% if cart_removed_notice %}
+    <p class="msg-warn" style="margin-bottom:12px;">{{ cart_removed_notice }}</p>
+    {% endif %}
+
     <div class="fulfillment-block">
         <strong style="font-size:14px;">取餐方式</strong>
         <p style="margin:8px 0 0;font-size:16px;"><strong>{{ shop_channel_label }}</strong>

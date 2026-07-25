@@ -84,6 +84,7 @@
     <div class="dish-list">
         {% for row in dish_rows %}
         {% with dish=row.dish %}
+        <div class="dish-product-group">
         {% for opt in row.tier_options %}
         <div class="dish-offer-card" id="dish-{{ dish.dish_id.hex|slice:":8" }}-{{ opt.tier }}">
             <div class="dish-offer-row">
@@ -113,6 +114,10 @@
             {% endif %}
         </div>
         {% endfor %}
+        {% if row.image_gallery %}
+        {% include 'waimai/_dish_image_gallery.html' with gallery=row.image_gallery dish=dish only %}
+        {% endif %}
+        </div>
         {% endwith %}
         {% empty %}
         <p class="card-meta">{{ product_shell.empty_shop_text }}</p>
@@ -123,6 +128,7 @@
         {% include 'waimai/_shop_cart_shell.html' %}
     </div>
 </div>
+{% include 'waimai/_dish_image_lightbox.html' %}
 {% endif %}
 
 {% if dining_plugin_enabled %}
@@ -136,4 +142,5 @@ window.YC_DINE_HINT = {
 </script>
 <script src="{% static 'waimai/plugins/dining/dine_timeout_hint.js' %}?v=2"></script>
 {% endif %}
+<script src="{% static 'waimai/dish_gallery.js' %}?v=2"></script>
 {% endblock %}

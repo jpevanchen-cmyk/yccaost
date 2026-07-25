@@ -56,6 +56,7 @@ def get_shop_products_for_sale(seller_id: str):
 
     products = list(
         Dish.objects.filter(seller_id=seller_id, is_active=True)
+        .prefetch_related('product_images')
         .order_by('sort_order', 'name')
     )
     return products, False

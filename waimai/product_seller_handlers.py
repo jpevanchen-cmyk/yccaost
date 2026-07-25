@@ -17,6 +17,12 @@ from .menu_helpers import (
 from .models import Dish, MenuProfile, MenuProfileItem
 from .operating_helpers import get_operating_settings, has_open_orders
 from .product_helpers import parse_decimal_field, parse_optional_int
+from .product_image_helpers import (
+    apply_dish_image_uploads,
+    delete_dish_image,
+    move_dish_image,
+    sync_dish_images_from_folder,
+)
 from .scroll_helpers import redirect_with_anchor
 
 
@@ -142,7 +148,10 @@ def handle_products_post(request, seller_id):
         _fill_dish_prices(dish, request.POST, 'special')
         _apply_new_dish_special_defaults(dish)
         dish.save()
+        img_err = apply_dish_image_uploads(dish, request.FILES.getlist('dish_images'))
         sync_new_dish_to_menu_profiles(dish, list_on_all_menus=list_on_all_menus)
+        if img_err:
+            messages.warning(request, img_err)
         if list_on_all_menus:
             messages.success(request, f'已添加商品「{dish.name}」，已在本店全部{catalog_word}中上架')
         else:
@@ -164,8 +173,41 @@ def handle_products_post(request, seller_id):
         _fill_dish_prices(dish, request.POST, 'member')
         _fill_dish_prices(dish, request.POST, 'special')
         dish.save()
+        img_err = apply_dish_image_uploads(dish, request.FILES.getlist('dish_images'))
+        if img_err:
+            messages.warning(request, img_err)
+            return _products_redirect(_edit_anchor(dish), _edit_query(dish))
         messages.success(request, f'已保存「{dish.name}」')
         return _products_redirect(_dish_row_anchor(dish))
+
+    if 'delete_dish_image' in request.POST:
+        dish = get_object_or_404(Dish, dish_id=request.POST.get('dish_id'), seller_id=seller_id)
+        err = delete_dish_image(dish, request.POST.get('image_id'))
+        if err:
+            messages.error(request, err)
+        else:
+            messages.success(request, f'已删除「{dish.name}」的一张图片')
+        return _products_redirect(_edit_anchor(dish), _edit_query(dish))
+
+    if 'move_dish_image' in request.POST:
+        dish = get_object_or_404(Dish, dish_id=request.POST.get('dish_id'), seller_id=seller_id)
+        err = move_dish_image(dish, request.POST.get('image_id'), request.POST.get('direction', ''))
+        if err:
+            messages.error(request, err)
+        else:
+            messages.success(request, f'已调整「{dish.name}」图片顺序')
+        return _products_redirect(_edit_anchor(dish), _edit_query(dish))
+
+    if 'sync_dish_images' in request.POST:
+        dish = get_object_or_404(Dish, dish_id=request.POST.get('dish_id'), seller_id=seller_id)
+        err, mounted = sync_dish_images_from_folder(dish)
+        if err:
+            messages.error(request, err)
+        elif mounted:
+            messages.success(request, f'已同步文件夹图片，新挂载 {mounted} 张')
+        else:
+            messages.success(request, f'已刷新「{dish.name}」图片列表，与文件夹一致')
+        return _products_redirect(_edit_anchor(dish), _edit_query(dish))
 
     if 'delete_dish' in request.POST:
         dish = get_object_or_404(Dish, dish_id=request.POST.get('dish_id'), seller_id=seller_id)

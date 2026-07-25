@@ -6,10 +6,59 @@ from .models import BuyOrder, Dish, MenuProfile, MenuProfileItem
 from .operating_helpers import get_operating_settings
 
 
-def get_active_menu_profile(seller_id: str) -> MenuProfile | None:
-    """当前启用的菜单清单"""
+def _allocate_default_menu_profile_name(seller_id: str) -> str:
+    """为本店取一个不撞名的默认清单名（商品列表 1、2…）。"""
+    from .product_shell_helpers import build_product_shell
+
+    word = build_product_shell(seller_id).get('catalog_word', '商品列表')
+    n = 1
+    while True:
+        name = f'{word} {n}'
+        if not menu_profile_name_taken(seller_id, name):
+            return name
+        n += 1
+
+
+def ensure_active_menu_catalog(seller_id: str) -> MenuProfile:
+    """
+    A.11.12：保证本店始终有一份「使用中」的商品清单。
+    无清单则新建并纳入全部商品；有清单但未切换使用则启用最早那份。
+    """
     settings = get_operating_settings(seller_id)
-    return settings.active_menu_profile
+    profile = settings.active_menu_profile
+    if profile and profile.seller_id == seller_id:
+        return profile
+
+    profiles = list(
+        MenuProfile.objects.filter(seller_id=seller_id).order_by('created_at', 'profile_id')
+    )
+    if profiles:
+        profile = profiles[0]
+    else:
+        profile = MenuProfile.objects.create(
+            seller_id=seller_id,
+            name=_allocate_default_menu_profile_name(seller_id),
+        )
+        populate_profile_with_dishes(profile, seller_id)
+
+    settings.active_menu_profile = profile
+    settings.save(update_fields=['active_menu_profile'])
+    return profile
+
+
+def get_active_menu_profile(seller_id: str) -> MenuProfile | None:
+    """当前启用的商品清单；主体店铺须始终有一份使用中清单。"""
+    from .product_shell_helpers import build_product_shell
+
+    if not build_product_shell(seller_id).get('show_menu_catalog', True):
+        settings = get_operating_settings(seller_id)
+        return settings.active_menu_profile
+
+    settings = get_operating_settings(seller_id)
+    profile = settings.active_menu_profile
+    if profile and profile.seller_id == seller_id:
+        return profile
+    return ensure_active_menu_catalog(seller_id)
 
 
 def normalize_profile_id(profile_id) -> str:
@@ -124,7 +173,9 @@ def get_shop_dishes_for_sale(seller_id: str):
     """
     profile = get_active_menu_profile(seller_id)
     if not profile:
-        return Dish.objects.filter(seller_id=seller_id, is_active=True).order_by(
+        return Dish.objects.filter(seller_id=seller_id, is_active=True).prefetch_related(
+            'product_images',
+        ).order_by(
             'sort_order', '-created_at',
         ), False
 
@@ -133,7 +184,7 @@ def get_shop_dishes_for_sale(seller_id: str):
     ).values_list('dish_id', flat=True)
     return Dish.objects.filter(
         seller_id=seller_id, dish_id__in=dish_ids,
-    ).order_by('sort_order', '-created_at'), True
+    ).prefetch_related('product_images').order_by('sort_order', '-created_at'), True
 
 
 def get_active_menu_items_map(seller_id: str) -> dict:
@@ -184,6 +235,55 @@ def validate_dish_purchase(
     """兼容旧调用：按通用价档位校验"""
     from .product_helpers import PRICE_TIER_GENERAL, validate_tier_purchase
     return validate_tier_purchase(dish, PRICE_TIER_GENERAL, buyer, seller_id, quantity, {})
+
+
+def sanitize_cart_for_active_catalog(cart: dict, seller_id: str) -> tuple[dict, list[str]]:
+    """
+    结算前：从购物车里去掉已下架或不在「使用中清单」的商品行。
+    返回 (清理后的购物车, 移除说明列表)。
+    """
+    from .order_helpers import normalize_cart_keys
+    from .product_helpers import TIER_LABELS, parse_cart_line_key
+    from .product_shell_helpers import build_product_shell, catalog_controls_shop_display
+
+    cart = normalize_cart_keys(cart)
+    removed: list[str] = []
+    cleaned = dict(cart)
+
+    for line_key, qty in list(cart.items()):
+        if int(qty or 0) <= 0:
+            continue
+        dish_id, tier = parse_cart_line_key(line_key)
+        try:
+            dish = Dish.objects.get(dish_id=dish_id, seller_id=seller_id)
+        except Dish.DoesNotExist:
+            cleaned.pop(line_key, None)
+            removed.append('部分商品已不存在，已从购物车移除')
+            continue
+
+        if not dish.is_active:
+            cleaned.pop(line_key, None)
+            removed.append(f'「{dish.name}」已下架，已从购物车移除')
+            continue
+
+        if catalog_controls_shop_display(seller_id):
+            if not dish_visible_on_shop(seller_id, dish.dish_id):
+                word = build_product_shell(seller_id).get('catalog_word', '商品列表')
+                cleaned.pop(line_key, None)
+                removed.append(f'「{dish.name}」不在当前{word}中，已从购物车移除')
+                continue
+            menu_item = get_menu_item_for_dish(seller_id, dish.dish_id)
+            if not menu_item_allows_tier(menu_item, tier, seller_id):
+                tier_label = TIER_LABELS.get(tier, tier)
+                cleaned.pop(line_key, None)
+                removed.append(f'「{dish.name}」当前不可售{tier_label}，已从购物车移除')
+
+    # 去掉数量已为 0 的行，避免会话里留垃圾键
+    for key, qty in list(cleaned.items()):
+        if int(qty or 0) <= 0:
+            cleaned.pop(key, None)
+
+    return cleaned, removed
 
 
 def increment_menu_sold_counts(seller_id: str, cart_items):

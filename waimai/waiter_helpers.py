@@ -177,6 +177,11 @@ def _find_undo_line(items: list[dict], dish_id: str) -> dict | None:
 
 def sync_waiter_service_status(order: BuyOrder) -> list[str]:
     """根据按份进度刷新整单前台状态；返回需 save 的字段名"""
+    if order.is_basic_order():
+        from .order_desk_helpers import sync_order_desk_progress
+
+        return sync_order_desk_progress(order)
+
     total, served = count_order_units(order.dish_items)
     update_fields: list[str] = []
     if total == 0:
@@ -205,6 +210,15 @@ def sync_waiter_service_status(order: BuyOrder) -> list[str]:
         # 堂食结账完成 → 翻台：关掉桌台会话（游客本机随即看不见）
         from .guest_order_helpers import maybe_close_table_session_after_settle
         maybe_close_table_session_after_settle(order)
+    elif (
+        served >= total
+        and total > 0
+        and order.is_in_store()
+        and order.order_status in ('awaiting_prep', 'preparing')
+    ):
+        # 商品已全部交付/上桌，但尚未收款：进入「待取走/待结账」
+        order.order_status = 'ready_pickup'
+        update_fields.append('order_status')
 
     if update_fields:
         update_fields.append('updated_at')
@@ -394,13 +408,34 @@ def waiter_can_confirm_cash(order: BuyOrder) -> bool:
 
 
 def waiter_can_complete_in_store(order: BuyOrder) -> bool:
-    """服务员/店主可在工作台完成堂食/打包单"""
-    return bool(order.can_complete_in_store_order)
+    """服务员/店主可在工作台完成堂食/打包单，或基础「下单」通道单。"""
+    if order.is_basic_order():
+        from .order_desk_helpers import basic_order_can_complete, count_basic_delivered_units
+
+        if basic_order_can_complete(order):
+            return True
+        total, served = count_basic_delivered_units(order)
+        return (
+            order.payment_status == 'paid'
+            and total > 0
+            and served >= total
+            and order.order_status in ('awaiting_prep', 'preparing', 'ready_pickup')
+        )
+    if order.can_complete_in_store_order():
+        return True
+    total, served = count_order_units(order.dish_items)
+    return (
+        order.is_in_store()
+        and order.payment_status == 'paid'
+        and total > 0
+        and served >= total
+        and order.order_status in ('awaiting_prep', 'preparing', 'ready_pickup')
+    )
 
 
 def waiter_can_close_uncollected(order: BuyOrder) -> bool:
     """无法收款时，由工作台直接结单并留原因"""
-    return bool(order.can_close_as_uncollected)
+    return bool(order.can_close_as_uncollected())
 
 
 def delivery_handoff_ready(order: BuyOrder) -> bool:

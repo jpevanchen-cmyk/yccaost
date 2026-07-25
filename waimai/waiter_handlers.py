@@ -114,12 +114,44 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
     if 'complete_pickup' in request.POST:
         order_id = request.POST.get('order_id', '').strip()
         order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
-        if not order.is_in_store() or order.order_status != 'ready_pickup':
+        from .waiter_helpers import sync_waiter_service_status, waiter_can_complete_in_store
+
+        # 先同步按份进度：已付且已全部交付时可自动完结，避免卡在「备货中」
+        fields = sync_waiter_service_status(order)
+        if fields:
+            order.save(update_fields=list(dict.fromkeys(fields)))
+        order.refresh_from_db()
+
+        if order.order_status == 'completed':
+            if order.is_basic_order():
+                messages.success(request, '订单已完成')
+            elif order.is_dine_in():
+                messages.success(request, '堂食订单已完成')
+            else:
+                messages.success(request, '打包自取订单已完成')
+        elif order.is_basic_order():
+            from .order_desk_helpers import complete_basic_order
+
+            if order.is_cash_receipt_pending():
+                messages.error(request, '尚未收款，请先确认已收款或无法收款结单')
+            elif order.payment_status != 'paid':
+                messages.error(request, '请先处理收款状态再结束订单')
+            elif not waiter_can_complete_in_store(order):
+                messages.error(request, '当前订单状态不能完成')
+            else:
+                ok, msg = complete_basic_order(order, actor=operator)
+                if ok:
+                    messages.success(request, msg)
+                else:
+                    messages.error(request, msg)
+        elif not order.is_in_store():
             messages.error(request, '当前订单状态不能完成')
         elif order.is_cash_receipt_pending():
             messages.error(request, '尚未收款，请先确认已收款或无法收款结单')
         elif order.payment_status != 'paid':
             messages.error(request, '请先处理收款状态再结束订单')
+        elif not waiter_can_complete_in_store(order):
+            messages.error(request, '当前订单状态不能完成')
         else:
             order.order_status = 'completed'
             order.save(update_fields=['order_status', 'updated_at'])

@@ -1,0 +1,16 @@
+{# 买家点菜页：商品下方缩略图一行，点击弹窗看大图（G1-4 改版） #}
+<div class="dish-gallery" data-dish-gallery data-gallery-label="{{ dish.name|escape }}">
+    <div class="dish-gallery-thumbs" role="list" aria-label="{{ dish.name }} 图片">
+        {% for img in gallery %}
+        <button type="button"
+            class="dish-gallery-thumb"
+            data-dish-gallery-thumb
+            data-index="{{ forloop.counter0 }}"
+            data-src="{{ img.url }}"
+            aria-label="查看第 {{ img.sort_index }} 张">
+            <img src="{{ img.url }}" alt="" loading="lazy">
+        </button>
+        {% endfor %}
+    </div>
+    <script type="application/json" class="dish-gallery-json">[{% for img in gallery %}{"url":"{{ img.url|escapejs }}","sort":{{ img.sort_index }}}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+</div>

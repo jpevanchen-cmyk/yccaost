@@ -85,7 +85,9 @@ class ShopRegistrationForm(UserCreationForm):
                 pay.save(update_fields=['enable_wechat', 'enable_simulate'])
             ShopOperatingSettings.objects.create(seller_id=user.username)
             from .home_page_helpers import ensure_home_page_for_seller, ensure_server_home_page
+            from .menu_helpers import ensure_active_menu_catalog
             ensure_home_page_for_seller(user.username, profile)
+            ensure_active_menu_catalog(user.username)
             ensure_server_home_page()
         return user
 

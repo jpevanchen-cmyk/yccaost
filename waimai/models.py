@@ -20,6 +20,8 @@ def validate_compliance_icon_size(uploaded_file):
 MAX_HOME_BLOCK_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_USER_UPLOADED_PHOTOS = 100
 
+# 商品多图（A.11.11 · G1-2）：单商品张数上限在 product_image_helpers 定义
+
 
 def validate_home_block_image_size(uploaded_file):
     """积木配图单张不超过 5 MB。"""
@@ -624,7 +626,13 @@ class Dish(models.Model):
         max_digits=8, decimal_places=2, validators=[MinValueValidator(0.01)],
         verbose_name='通用价格（元）',
     )
-    image_url = models.URLField(max_length=500, blank=True, null=True, verbose_name='菜品图片链接')
+    image_url = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name='菜品图片链接（已废止）',
+        help_text='历史外链迁移后留空；运行时只认本地商品图文件夹。',
+    )
     description = models.TextField(blank=True, verbose_name='普通描述')
     description_member = models.TextField(blank=True, verbose_name='会员描述')
     description_special = models.TextField(blank=True, verbose_name='特价描述')
@@ -668,6 +676,14 @@ class Dish(models.Model):
     max_per_user = models.PositiveIntegerField(
         blank=True, null=True, verbose_name='每人限购（空=不限）',
     )
+    display_code = models.CharField(
+        max_length=5,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='展示编号',
+        help_text='系统自动分配（小写存库）；删商品后编号不复用',
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
@@ -676,9 +692,104 @@ class Dish(models.Model):
         ordering = ['-created_at']
         verbose_name = '菜品'
         verbose_name_plural = '菜品'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['seller_id', 'display_code'],
+                condition=~models.Q(display_code=''),
+                name='uniq_dish_display_code_per_seller',
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        # 首次保存时自动分配展示编号
+        from .product_display_code_helpers import (
+            assign_display_code_to_dish,
+            normalize_display_code,
+        )
+
+        if not normalize_display_code(getattr(self, 'display_code', '')):
+            assign_display_code_to_dish(self)
+        else:
+            self.display_code = normalize_display_code(self.display_code)
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # 单条删除：清商品图 → 释放展示编号（批量 delete 不走此方法）
+        from .product_display_code_helpers import release_display_code_for_dish
+        from .product_image_helpers import delete_all_images_for_dish
+
+        delete_all_images_for_dish(self)
+        release_display_code_for_dish(self)
+        super().delete(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} - ¥{self.price}"
+
+
+class DishDisplayCodeOccupied(models.Model):
+    """本店已释放的商品展示编号（删商品后仍占用，永不复用）"""
+
+    id = models.BigAutoField(primary_key=True)
+    seller_id = models.CharField(max_length=64, db_index=True, verbose_name='卖家ID')
+    display_code = models.CharField(max_length=5, verbose_name='展示编号')
+    released_at = models.DateTimeField(auto_now_add=True, verbose_name='释放时间')
+
+    class Meta:
+        db_table = 'dish_display_code_occupied'
+        verbose_name = '商品展示编号占用'
+        verbose_name_plural = '商品展示编号占用'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['seller_id', 'display_code'],
+                name='uniq_dish_display_code_occupied_per_seller',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.seller_id}:{self.display_code}'
+
+
+def dish_image_upload_to(instance, filename):
+    """ImageField 落盘路径（实现见 product_image_helpers）。"""
+    from .product_image_helpers import dish_image_upload_to as _upload_to
+
+    return _upload_to(instance, filename)
+
+
+class DishImage(models.Model):
+    """商品展示图（按展示编号分文件夹；文件名 编号-序号.jpg）"""
+
+    image_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='图片ID')
+    dish = models.ForeignKey(
+        Dish,
+        on_delete=models.CASCADE,
+        related_name='product_images',
+        verbose_name='所属商品',
+    )
+    seller_id = models.CharField(max_length=64, db_index=True, verbose_name='卖家ID')
+    display_code = models.CharField(max_length=5, verbose_name='展示编号')
+    sort_index = models.PositiveSmallIntegerField(verbose_name='展示序号')
+    image = models.ImageField(
+        upload_to=dish_image_upload_to,
+        max_length=300,
+        verbose_name='图片文件',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='上传时间')
+
+    class Meta:
+        db_table = 'dish_image'
+        ordering = ['sort_index']
+        verbose_name = '商品图片'
+        verbose_name_plural = '商品图片'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['dish', 'sort_index'],
+                name='uniq_dish_image_sort_per_dish',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.display_code}-{self.sort_index}'
 
 
 # ============================================

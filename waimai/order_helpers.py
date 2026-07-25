@@ -82,6 +82,18 @@ def build_cart_items(cart, seller_id, for_checkout=False):
     return cart_items, subtotal
 
 
+def prepare_checkout_cart(cart, seller_id):
+    """
+    结算前清理购物车并生成明细。
+    返回 (新购物车, 明细列表, 小计, 被移出说明)。
+    """
+    from .menu_helpers import sanitize_cart_for_active_catalog
+
+    cart, removed = sanitize_cart_for_active_catalog(cart, seller_id)
+    cart_items, subtotal = build_cart_items(cart, seller_id, for_checkout=True)
+    return cart, cart_items, subtotal, removed
+
+
 def cart_count_positive(cart):
     """购物车里有几件（只计数量大于 0）"""
     cart = normalize_cart_keys(cart)

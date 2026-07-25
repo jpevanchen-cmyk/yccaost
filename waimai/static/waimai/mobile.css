@@ -1189,6 +1189,98 @@ label.pay-method-card input {
     border-bottom: 1px solid #eee;
 }
 
+/* 商品多图缩略图（卖家后台 · G1-2） */
+.product-image-thumb-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 10px 0;
+}
+.product-image-thumb {
+    margin: 0;
+    text-align: center;
+    max-width: 88px;
+}
+.product-image-thumb img {
+    display: block;
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #eee;
+}
+.product-image-thumb figcaption {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+}
+.product-image-upload-block input[type="file"] {
+    margin-top: 6px;
+}
+.product-image-manage-block {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed #ddd;
+}
+.product-image-manage-title {
+    margin: 0 0 8px;
+    font-size: 14px;
+}
+.product-image-thumb-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+    margin-top: 6px;
+}
+.product-image-inline-form {
+    display: inline;
+    margin: 0;
+}
+.product-image-sync-form {
+    margin: 10px 0 6px;
+}
+
+/* 商品分档扫码二维码（卖家后台 · G1-6） */
+.product-scan-qr-block {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed #ddd;
+}
+.product-scan-qr-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 10px;
+}
+.product-scan-qr-card {
+    margin: 0;
+    text-align: center;
+    max-width: 180px;
+}
+.product-scan-qr-card img {
+    display: block;
+    margin: 0 auto;
+    border: 1px solid #eee;
+    padding: 6px;
+    background: #fff;
+}
+.product-scan-qr-code {
+    margin: 4px 0 0;
+    font-size: 11px;
+}
+.product-scan-qr-link-fold {
+    margin-top: 6px;
+    font-size: 12px;
+    text-align: left;
+}
+.product-scan-qr-url {
+    display: block;
+    margin-top: 6px;
+    font-size: 10px;
+    word-break: break-all;
+}
+
 .seller-order-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1953,6 +2045,161 @@ body.seller-page .content {
 }
 
 /* 客人点菜：每种价格单独一行 */
+.dish-product-group {
+    margin-bottom: 14px;
+}
+
+/* 商品图：缩略图单行排在商品下方，排不下裁掉；点缩略图弹窗看大图 */
+.dish-gallery {
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.dish-gallery-json {
+    display: none;
+}
+
+.dish-gallery-thumbs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow: hidden;
+    padding: 2px 0;
+}
+
+.dish-gallery-thumb {
+    flex: 0 0 auto;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: 1px solid var(--yc-border);
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.dish-gallery-thumb:focus-visible {
+    outline: 2px solid var(--yc-orange, #e65100);
+    outline-offset: 2px;
+}
+
+.dish-gallery-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+body.dish-lightbox-open {
+    overflow: hidden;
+}
+
+.dish-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dish-lightbox[hidden] {
+    display: none !important;
+}
+
+.dish-lightbox-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+}
+
+.dish-lightbox-panel {
+    position: relative;
+    z-index: 1;
+    width: min(92vw, 720px);
+    max-height: 88vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 48px 12px 36px;
+    box-sizing: border-box;
+}
+
+.dish-lightbox-stage {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-height: calc(88vh - 84px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dish-lightbox-img {
+    max-width: 100%;
+    max-height: calc(88vh - 84px);
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: 6px;
+    background: #111;
+}
+
+.dish-lightbox-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.92);
+    color: #333;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.dish-lightbox-nav {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.92);
+    color: #333;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.dish-lightbox-nav[hidden] {
+    display: none;
+}
+
+.dish-lightbox-counter {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 13px;
+}
+
+.dish-product-group .dish-offer-card {
+    margin-bottom: 8px;
+}
+
+.dish-product-group .dish-offer-card:last-child {
+    margin-bottom: 0;
+}
+
 .dish-offer-card {
     background: var(--yc-card);
     border: 1px solid var(--yc-border);

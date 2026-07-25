@@ -62,6 +62,7 @@ from .order_helpers import (
     normalize_cart_keys,
     parse_distance_km,
     parse_fulfillment_type,
+    prepare_checkout_cart,
     store_delivery_address,
     set_shop_cart,
     parse_cart_line_key,
@@ -130,6 +131,9 @@ class CustomLoginView(LoginView):
         return super().form_invalid(form)
 
     def get_success_url(self):
+        redirect_to = self.get_redirect_url()
+        if redirect_to:
+            return redirect_to
         user = self.request.user
         if user.role == 'seller':
             return reverse_lazy('seller_panel')
@@ -895,6 +899,7 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
     )
 
     from .product_shell_helpers import build_product_shell
+    from .product_image_helpers import build_dish_image_gallery
 
     product_shell = build_product_shell(seller_id)
     dishes, using_menu = _shop_page_dishes(seller_id)
@@ -911,6 +916,7 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         dish_rows = [
             {
                 'dish': dish,
+                'image_gallery': build_dish_image_gallery(dish),
                 'tier_options': build_dish_tier_options(
                     dish, request.user, seller_id, cart,
                     menu_item=menu_items_map.get(dish.dish_id),
@@ -941,6 +947,95 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
     if extra:
         ctx.update(extra)
     return render(request, 'waimai/shop.html', ctx)
+
+
+def product_scan_add(request, display_code, tier):
+    """商品分档二维码入口：须登录买家；成功则加购并跳转店铺页。"""
+    from urllib.parse import quote
+
+    from .product_helpers import TIER_LABELS
+    from .product_scan_helpers import (
+        SCAN_TIERS,
+        add_scanned_product_to_cart,
+        build_product_scan_path,
+        dish_scroll_anchor_for_scan,
+        evaluate_product_scan,
+        normalize_scan_tier,
+        resolve_dish_for_scan,
+    )
+    from .scroll_helpers import redirect_with_anchor
+
+    seller_id = (request.GET.get('seller_id') or '').strip()
+    tier_norm = normalize_scan_tier(tier)
+    shop_profile = ShopProfile.objects.filter(seller_id=seller_id).first() if seller_id else None
+    dish = resolve_dish_for_scan(seller_id, display_code) if seller_id else None
+
+    def _message_ctx(**extra):
+        base = {
+            'shop_profile': shop_profile,
+            'dish': dish,
+            'tier_label': TIER_LABELS.get(tier_norm, ''),
+            'shop_url': f'/shop/?seller_id={seller_id}' if seller_id else '/directory/',
+        }
+        base.update(extra)
+        return base
+
+    if tier_norm not in SCAN_TIERS or not seller_id:
+        return render(
+            request,
+            'waimai/product_scan_message.html',
+            _message_ctx(ok=False, message='无商品'),
+        )
+
+    status, msg = evaluate_product_scan(dish, tier_norm, seller_id)
+    if status != 'ok':
+        return render(
+            request,
+            'waimai/product_scan_message.html',
+            _message_ctx(ok=False, message=msg or '无商品'),
+        )
+
+    scan_path = build_product_scan_path(seller_id, display_code, tier_norm)
+    login_url = reverse('login') + '?next=' + quote(scan_path)
+
+    if not request.user.is_authenticated:
+        return render(
+            request,
+            'waimai/product_scan_message.html',
+            _message_ctx(
+                ok=False,
+                message='请先登录买家账号后再扫码加购。',
+                login_url=login_url,
+            ),
+        )
+
+    if request.user.role != 'buyer':
+        return render(
+            request,
+            'waimai/product_scan_message.html',
+            _message_ctx(
+                ok=False,
+                message='请使用买家账号登录后再扫码加购。',
+                login_url=login_url,
+            ),
+        )
+
+    ok, err = add_scanned_product_to_cart(request, dish, tier_norm, seller_id)
+    if not ok:
+        return render(
+            request,
+            'waimai/product_scan_message.html',
+            _message_ctx(ok=False, message=err),
+        )
+
+    messages.success(
+        request,
+        f'已加入购物车：{dish.name}（{TIER_LABELS.get(tier_norm, tier_norm)}）',
+    )
+    return redirect_with_anchor(
+        f'/shop/?seller_id={seller_id}',
+        dish_scroll_anchor_for_scan(dish, tier_norm),
+    )
 
 
 def shop_page(request):
@@ -1090,12 +1185,14 @@ def shop_page(request):
                     error='请先登录买家账号再下单（堂食扫桌码可免登录）',
                 )
 
-            cart_items, subtotal = build_cart_items(cart, seller_id, for_checkout=True)
+            cart, cart_items, subtotal, removed_notes = prepare_checkout_cart(cart, seller_id)
+            if removed_notes:
+                set_shop_cart(request.session, seller_id, cart)
             if not cart_items:
-                return _shop_render(
-                    request, seller_id, cart, shop_profile,
-                    error='请至少选择一份数量大于 0 的商品再结算',
-                )
+                err = '请至少选择一份数量大于 0 的商品再结算'
+                if removed_notes:
+                    err = '；'.join(dict.fromkeys(removed_notes)) + '。购物车已无可结算商品，请重新选购。'
+                return _shop_render(request, seller_id, cart, shop_profile, error=err)
 
             fulfillment_type, ch_err = require_shop_channel(request, seller_id, table_sess)
             if ch_err:
@@ -1136,6 +1233,9 @@ def shop_page(request):
 
             total_amount = subtotal + delivery_fee
             from .channel_helpers import channel_template_flags
+            cart_removed_notice = ''
+            if removed_notes:
+                cart_removed_notice = '；'.join(dict.fromkeys(removed_notes))
             return render(request, 'waimai/confirm_order.html', {
                 'cart_items': cart_items,
                 'subtotal': subtotal,
@@ -1156,6 +1256,7 @@ def shop_page(request):
                 'guest_nickname': normalize_guest_nickname(
                     request.POST.get('guest_nickname', ''),
                 ),
+                'cart_removed_notice': cart_removed_notice,
                 **channel_template_flags(fulfillment_type),
             })
 
@@ -1422,12 +1523,27 @@ def seller_panel_section(request, section):
     elif section == 'products':
         from .menu_helpers import find_menu_profile_by_pick_id, get_active_menu_profile
         from .product_shell_helpers import build_product_shell
+        from .product_image_helpers import (
+            MAX_DISH_IMAGES_PER_PRODUCT,
+            MAX_DISH_IMAGE_UPLOAD_BYTES,
+            dish_image_quota_hint,
+        )
         from .sales_helpers import get_dish_sales_rankings
         operating = get_operating_settings(seller_id)
         product_shell = build_product_shell(seller_id)
         context['operating'] = operating
         context['product_shell'] = product_shell
-        context['dishes'] = Dish.objects.filter(seller_id=seller_id).order_by('sort_order', 'name')
+        dishes = list(
+            Dish.objects.filter(seller_id=seller_id)
+            .prefetch_related('product_images')
+            .order_by('sort_order', 'name')
+        )
+        for dish in dishes:
+            dish.image_quota = dish_image_quota_hint(dish)
+        context['dishes'] = dishes
+        context['dish_image_max'] = MAX_DISH_IMAGES_PER_PRODUCT
+        context['dish_image_max_mb'] = MAX_DISH_IMAGE_UPLOAD_BYTES // (1024 * 1024)
+        context['dish_image_remaining'] = MAX_DISH_IMAGES_PER_PRODUCT
         context['sales_rankings'] = get_dish_sales_rankings(seller_id)
         profiles = []
         active_profile = None
@@ -1445,6 +1561,16 @@ def seller_panel_section(request, section):
         context['selected_profile'] = selected
         context['active_profile'] = active_profile
         context['edit_dish_id'] = request.GET.get('edit', '').strip()
+        edit_pick = context['edit_dish_id']
+        if edit_pick:
+            from .product_scan_helpers import build_product_scan_qr_rows
+
+            for dish in dishes:
+                if dish.dish_id.hex[:8] == edit_pick:
+                    context['edit_scan_qr_rows'] = build_product_scan_qr_rows(
+                        request, dish, seller_id,
+                    )
+                    break
     elif section == 'operating':
         operating = get_operating_settings(seller_id)
         context['operating'] = operating
@@ -1742,9 +1868,17 @@ def place_order(request):
         request.POST, shop_profile, fulfillment_type,
     )
 
-    cart_items, subtotal = build_cart_items(cart, seller_id, for_checkout=True)
+    cart, cart_items, subtotal, removed_notes = prepare_checkout_cart(cart, seller_id)
+    if removed_notes:
+        set_shop_cart(request.session, seller_id, cart)
     if not cart_items:
+        msg = '购物车已没有可下单的商品，请重新选购'
+        if removed_notes:
+            msg = '；'.join(dict.fromkeys(removed_notes)) + '。请返回店铺重新选购。'
+        messages.error(request, msg)
         return redirect(f'/shop/?seller_id={seller_id}')
+    if removed_notes:
+        messages.warning(request, '；'.join(dict.fromkeys(removed_notes)))
 
     ok_admit, admit_msg = check_order_admission(seller_id, fulfillment_type)
     if not ok_admit:

@@ -1,0 +1,21 @@
+{% extends 'waimai/base.html' %}
+{% block title %}扫码加购 - 野草系统{% endblock %}
+
+{% block content %}
+<h1 class="page-title">📷 扫码加购</h1>
+<div class="card" style="padding:16px;">
+    {% if shop_profile %}
+    <p class="card-meta">{{ shop_profile.shop_name }}</p>
+    {% endif %}
+    {% if dish %}
+    <p><strong>{{ dish.name }}</strong>{% if tier_label %} · {{ tier_label }}{% endif %}</p>
+    {% endif %}
+    <p class="{% if ok %}msg-ok{% else %}msg-err{% endif %}" style="margin-top:12px;">{{ message }}</p>
+    {% if login_url %}
+    <p style="margin-top:14px;"><a class="btn btn-orange btn-block" href="{{ login_url }}">去登录</a></p>
+    {% endif %}
+    {% if shop_url %}
+    <p style="margin-top:14px;"><a class="btn btn-outline btn-block" href="{{ shop_url }}">打开店铺</a></p>
+    {% endif %}
+</div>
+{% endblock %}

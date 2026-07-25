@@ -38,6 +38,11 @@ urlpatterns = [
     path('waiter-home/pay/<uuid:order_id>/status/', views.waiter_pay_order_status, name='waiter_pay_order_status'),
     path('knight-hall/', views.knight_hall_redirect, name='knight_hall'),
     path('shop/', views.shop_page, name='shop'),
+    path(
+        'shop/scan/<str:display_code>/<str:tier>/',
+        views.product_scan_add,
+        name='product_scan_add',
+    ),
     path('dine/', views.dine_table_entry, name='dine_table'),
     path('my-deliveries/', views.my_deliveries, name='my_deliveries'),
     path('rider-history/', views.rider_delivery_history, name='rider_delivery_history'),

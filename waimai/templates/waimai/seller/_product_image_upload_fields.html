@@ -1,0 +1,14 @@
+{# 商品多图上传（G1-2）：添加/编辑商品时可选多张，系统自动压缩并存入编号文件夹 #}
+<div class="product-image-upload-block">
+    <label class="product-image-upload-label">继续添加图片（最多 {{ dish_image_max|default:10 }} 张）</label>
+    <input type="file" name="dish_images" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple>
+    <p class="card-meta">
+        支持 PNG、JPG、WEBP、GIF；单张不超过 {{ dish_image_max_mb|default:5 }} MB，上传后系统会自动压缩。
+        文件将保存为「展示编号-序号」格式（如 A001-1）。
+    </p>
+    {% if dish %}
+    <p class="card-meta">还可上传 {{ dish_image_remaining }} 张。</p>
+    {% else %}
+    <p class="card-meta">保存新商品后，图片会写入该商品的展示编号文件夹。</p>
+    {% endif %}
+</div>

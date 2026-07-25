@@ -1,0 +1,20 @@
+{# 商品分档二维码：普通/会员/特价各一码（G1-6） #}
+{% if dish and scan_qr_rows %}
+<div class="product-scan-qr-block">
+    <h4 class="product-image-manage-title">分档扫码加购二维码</h4>
+    <p class="card-meta">顾客须先登录买家账号；下架或不在当前清单会提示「无商品」。可截图或打印贴货架。</p>
+    <div class="product-scan-qr-row">
+        {% for row in scan_qr_rows %}
+        <figure class="product-scan-qr-card">
+            <img src="{{ row.data_url }}" alt="{{ row.label }}二维码" width="160" height="160">
+            <figcaption>{{ row.label }}</figcaption>
+            <p class="card-meta product-scan-qr-code">{{ dish.display_code|upper }} · {{ row.label }}</p>
+            <details class="product-scan-qr-link-fold">
+                <summary>展开链接</summary>
+                <code class="product-scan-qr-url">{{ row.url }}</code>
+            </details>
+        </figure>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
