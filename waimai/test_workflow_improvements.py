@@ -16,7 +16,13 @@ from waimai.dispatch_helpers import (
 from waimai.kitchen_helpers import kitchen_order_can_start, query_kitchen_board_orders
 from waimai.models import BuyOrder, DeliveryOrder, Dish, ShopProfile, User
 from waimai.operating_helpers import get_operating_settings
-from waimai.order_desk_helpers import build_order_desk_context
+from waimai.order_desk_helpers import (
+    build_order_desk_context,
+    mark_all_basic_items_delivered,
+    mark_all_basic_items_processed,
+    mark_basic_item_delivered,
+    mark_basic_item_processed,
+)
 from waimai.order_helpers import cart_line_key
 from waimai.order_workflow_rules import order_can_dispatch
 from waimai.payments import (
@@ -445,3 +451,70 @@ class BuyerCenterAndSingleLoginTests(TestCase):
         self.assertEqual(old_response.status_code, 302)
         self.assertIn('/accounts/login/', old_response.url)
         self.assertEqual(new_device.get('/account/').status_code, 200)
+
+
+class OrderDeskItemProgressTests(WorkflowImprovementBase):
+    def make_multi_item_order(self):
+        return self.make_order(
+            dish_items=[
+                {
+                    'line_id': 'line-a',
+                    'dish_id': 'dish-a',
+                    'name': '商品A',
+                    'price': 10,
+                    'quantity': 2,
+                },
+                {
+                    'line_id': 'line-b',
+                    'dish_id': 'dish-b',
+                    'name': '商品B',
+                    'price': 10,
+                    'quantity': 1,
+                },
+            ],
+        )
+
+    def test_per_item_process_and_deliver_completes_order(self):
+        order = self.make_multi_item_order()
+        ok, _ = mark_basic_item_processed(order, 'dish-a', actor=self.seller)
+        self.assertTrue(ok)
+        order.refresh_from_db()
+        self.assertEqual(order.order_status, 'preparing')
+
+        ok, _ = mark_all_basic_items_processed(order, actor=self.seller)
+        self.assertTrue(ok)
+        order.refresh_from_db()
+        self.assertEqual(order.order_status, 'ready_pickup')
+
+        ok, _ = mark_basic_item_delivered(order, 'dish-a', actor=self.seller)
+        self.assertTrue(ok)
+        ok, _ = mark_all_basic_items_delivered(order, actor=self.seller)
+        self.assertTrue(ok)
+        order.refresh_from_db()
+        self.assertEqual(order.order_status, 'completed')
+
+    def test_cannot_deliver_before_process(self):
+        order = self.make_multi_item_order()
+        ok, msg = mark_basic_item_delivered(order, 'dish-a', actor=self.seller)
+        self.assertFalse(ok)
+        self.assertIn('处理', msg)
+
+    def test_order_desk_context_exposes_item_rows(self):
+        order = self.make_multi_item_order()
+        row = build_order_desk_context(
+            self.seller.username, work_user=self.seller,
+        )['order_desk_rows'][0]
+        self.assertEqual(len(row['item_rows']), 2)
+        self.assertTrue(row['can_mark_all_processed'])
+        html = render_to_string(
+            'waimai/_shop_work_orders_panel.html',
+            {
+                'form_action': '/s/flowshop/work/?view=orders',
+                'shop_work_code': 'flowshop',
+                'workbench_shell': build_workbench_shell(self.seller.username),
+                **build_order_desk_context(self.seller.username, work_user=self.seller),
+            },
+        )
+        self.assertIn('order_desk_mark_all_processed', html)
+        self.assertNotIn('order_desk_mark_all_delivered', html)
+        self.assertIn('商品A', html)

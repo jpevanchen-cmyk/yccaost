@@ -352,6 +352,7 @@ def build_waiter_board_context(
         waiter_can_collect_payment,
         waiter_can_complete_in_store,
         waiter_can_confirm_cash,
+        waiter_can_mark_all_served,
     )
 
     raw_orders = list(query_waiter_active_orders(seller_id, sort_mode=sort_mode))
@@ -372,6 +373,7 @@ def build_waiter_board_context(
             'log_lines': recent_waiter_activity_logs(order),
             'can_collect': waiter_can_collect_payment(order),
             'can_confirm_cash': waiter_can_confirm_cash(order),
+            'can_mark_all_served': waiter_can_mark_all_served(order),
             'can_adjust_wait_time': can_adjust_order_wait_time(order),
             'can_complete_in_store': waiter_can_complete_in_store(order),
             'can_close_uncollected': waiter_can_close_uncollected(order),
@@ -403,6 +405,7 @@ def build_kitchen_board_context(
         build_kitchen_phase_label,
         build_kitchen_summary,
         kitchen_order_can_start,
+        kitchen_can_mark_all_prepared,
         latest_kitchen_new_order_ts,
         query_kitchen_board_orders,
         recent_kitchen_activity_logs,
@@ -428,6 +431,7 @@ def build_kitchen_board_context(
             'log_lines': recent_kitchen_activity_logs(order),
             'can_adjust_wait_time': can_adjust_order_wait_time(order),
             'can_start_preparing': kitchen_order_can_start(order),
+            'can_mark_all_prepared': kitchen_can_mark_all_prepared(order),
             'can_dispatch': bool(
                 allow_dispatch
                 and order_can_dispatch(order)

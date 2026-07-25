@@ -12,7 +12,7 @@
 <p class="card-meta" style="margin:0 0 12px;">{{ workbench_shell.orders_readonly_hint|safe }}</p>
 {% else %}
 <p class="card-meta" style="margin:0 0 12px;">
-    处理本店「下单」通道的订单：开始处理 → 可交付 → 完成。
+    处理本店「下单」通道的订单：按件处理 → 按件交付；也可一键全部处理或全部交付。
     {% if order_desk_can_confirm %}可确认现金收款。{% endif %}
     堂食/外卖等行业面板仍由已启用插件提供。
 </p>
@@ -85,40 +85,91 @@
             · 支付：{{ order.get_payment_status_display }}
             {% if order.payment_method %}（{{ order.get_payment_method_display }}）{% endif %}
         </div>
+        {% if row.processed_summary %}
+        <div class="card-meta" style="margin-top:4px;">
+            处理 {{ row.processed_summary }} · 交付 {{ row.delivered_summary }}
+        </div>
+        {% endif %}
         {% if order.buyer_note %}
         <div class="card-meta" style="margin-top:4px;">备注：{{ order.buyer_note }}</div>
         {% endif %}
         {% if row.needs_cash_before_complete %}
-        <div class="msg-err" style="margin-top:6px;font-size:13px;">完成前须先确认已收到现金</div>
+        <div class="msg-err" style="margin-top:6px;font-size:13px;">商品已全部交付，请先确认已收到现金，订单才会完成</div>
         {% endif %}
     </div>
+
+    <div style="flex:1;min-width:240px;">
+        {% if row.item_rows %}
+        <p class="card-meta" style="margin:0 0 8px;"><strong>商品（按件处理 / 交付）</strong></p>
+        {% for item in row.item_rows %}
+        <div class="line-item" style="align-items:flex-start;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #f0f0f0;">
+            <span style="flex:1;min-width:140px;">
+                <strong>{{ item.name }}</strong>
+                <div class="card-meta">处理 {{ item.prepared_qty }}/{{ item.total_qty }} · 交付 {{ item.served_qty }}/{{ item.total_qty }}</div>
+            </span>
+            {% if order_desk_can_update %}
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                {% if item.prepared_qty < item.total_qty %}
+                <form method="post" action="{{ form_action }}">
+                    {% csrf_token %}
+                    <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                    <input type="hidden" name="dish_id" value="{{ item.dish_id }}">
+                    <button type="submit" class="btn btn-sm btn-orange" name="order_desk_mark_processed" value="1">+1 处理</button>
+                </form>
+                {% endif %}
+                {% if item.prepared_qty > item.served_qty %}
+                <form method="post" action="{{ form_action }}">
+                    {% csrf_token %}
+                    <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                    <input type="hidden" name="dish_id" value="{{ item.dish_id }}">
+                    <button type="submit" class="btn btn-sm btn-green" name="order_desk_mark_delivered" value="1">+1 交付</button>
+                </form>
+                {% endif %}
+                {% if item.served_qty > 0 %}
+                <form method="post" action="{{ form_action }}">
+                    {% csrf_token %}
+                    <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                    <input type="hidden" name="dish_id" value="{{ item.dish_id }}">
+                    <button type="submit" class="btn btn-sm btn-outline" name="order_desk_undo_delivered" value="1">撤回交付</button>
+                </form>
+                {% endif %}
+                {% if item.prepared_qty > item.served_qty %}
+                <form method="post" action="{{ form_action }}">
+                    {% csrf_token %}
+                    <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                    <input type="hidden" name="dish_id" value="{{ item.dish_id }}">
+                    <button type="submit" class="btn btn-sm btn-outline" name="order_desk_undo_processed" value="1">撤回处理</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-        {% if row.can_start %}
+        {% if order_desk_can_update %}
+        {% if row.can_mark_all_processed %}
         <form method="post" action="{{ form_action }}">
             {% csrf_token %}
             <input type="hidden" name="order_id" value="{{ order.order_id }}">
-            <button type="submit" class="btn btn-sm btn-orange" name="order_desk_start" value="1">开始处理</button>
+            <button type="submit" class="btn btn-sm btn-orange" name="order_desk_mark_all_processed" value="1">一键全部处理</button>
         </form>
         {% endif %}
-        {% if row.can_mark_ready %}
+        {% if row.can_mark_all_delivered %}
         <form method="post" action="{{ form_action }}">
             {% csrf_token %}
             <input type="hidden" name="order_id" value="{{ order.order_id }}">
-            <button type="submit" class="btn btn-sm btn-orange" name="order_desk_ready" value="1">标记可交付</button>
+            <button type="submit" class="btn btn-sm btn-green" name="order_desk_mark_all_delivered" value="1">一键全部交付</button>
         </form>
+        {% endif %}
         {% endif %}
         {% if row.can_confirm_cash %}
         <form method="post" action="{{ form_action }}">
             {% csrf_token %}
             <input type="hidden" name="order_id" value="{{ order.order_id }}">
             <button type="submit" class="btn btn-sm btn-green" name="order_desk_confirm_cash" value="1">确认已收现金</button>
-        </form>
-        {% endif %}
-        {% if row.can_complete %}
-        <form method="post" action="{{ form_action }}">
-            {% csrf_token %}
-            <input type="hidden" name="order_id" value="{{ order.order_id }}">
-            <button type="submit" class="btn btn-sm btn-green" name="order_desk_complete" value="1">确认完成</button>
         </form>
         {% endif %}
         {% if order_desk_can_contact %}

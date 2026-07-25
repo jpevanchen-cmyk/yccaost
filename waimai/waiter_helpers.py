@@ -9,6 +9,7 @@ from .models import BuyOrder, OrderWaiterDishServeLog, User
 from .order_progress_helpers import (
     build_progress_groups,
     count_progress_units,
+    fill_all_progress_units,
     find_markable_line,
     find_undo_line,
     norm_dish_id,
@@ -303,6 +304,49 @@ def undo_dish_unit_served(
     return True, f'已撤回「{dish_name}」1 份{label}（现为 {served_after}/{total_qty}）'
 
 
+def mark_all_dish_served(
+    order: BuyOrder,
+    *,
+    operator_username: str,
+) -> tuple[bool, str]:
+    """服务员一键全部交付/上桌（仅交付已备好份数）。"""
+    items, struct_changed = normalize_dish_items(order.dish_items)
+    if order.fulfillment_type == 'delivery' and get_delivery_handoff_mode(order.seller_id) == 'waiter':
+        marked = fill_all_progress_units(items, 'served_count', cap_field='prepared_count')
+    else:
+        marked = fill_all_progress_units(items, 'served_count')
+    if marked <= 0:
+        return False, '没有可交付的商品，请先备好'
+
+    order.dish_items = items
+    groups = build_dish_groups(items)
+    for group in groups:
+        served_after = int(group.get('served_qty') or 0)
+        total_qty = int(group.get('total_qty') or 0)
+        if served_after <= 0:
+            continue
+        OrderWaiterDishServeLog.objects.create(
+            order=order,
+            dish_id=group['dish_id'],
+            dish_name=group.get('name') or '菜品',
+            line_id='',
+            action=OrderWaiterDishServeLog.ACTION_MARK,
+            served_after=served_after,
+            total_qty=total_qty,
+            changed_by=operator_username,
+            note='一键全部交付',
+        )
+
+    update_fields = ['dish_items', 'updated_at']
+    if struct_changed:
+        pass
+    update_fields.extend(sync_waiter_service_status(order))
+    order.save(update_fields=list(dict.fromkeys(update_fields)))
+
+    label = get_serve_unit_label(order)
+    return True, f'已一键{label} {marked} 份商品'
+
+
 def init_waiter_status_on_ready(order: BuyOrder) -> bool:
     """卖家标记出餐时：若尚无按份记录，保持兼容（不再强制写整单待出餐）"""
     return False
@@ -311,6 +355,18 @@ def init_waiter_status_on_ready(order: BuyOrder) -> bool:
 def all_dishes_served(order: BuyOrder) -> bool:
     total, served = count_order_units(order.dish_items)
     return total > 0 and served >= total
+
+
+def waiter_can_mark_all_served(order: BuyOrder) -> bool:
+    """是否可一键全部交付/上桌。"""
+    items, _ = normalize_dish_items(order.dish_items)
+    if order.fulfillment_type == 'delivery' and get_delivery_handoff_mode(order.seller_id) == 'waiter':
+        for line in items:
+            if int(line.get('served_count') or 0) < int(line.get('prepared_count') or 0):
+                return True
+        return False
+    total, served = count_order_units(order.dish_items)
+    return total > 0 and served < total
 
 
 def waiter_can_collect_payment(order: BuyOrder) -> bool:

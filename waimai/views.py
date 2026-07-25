@@ -863,6 +863,7 @@ def _merge_cart_into_order(order, cart_items, seller_id, distance_km, fulfillmen
                 'price': float(item['unit_price']),
                 'quantity': item['quantity'],
                 'price_tier': tier,
+                'prepared_count': 0,
                 'served_count': 0,
             }
 
@@ -888,6 +889,7 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         auto_pick_single_homepage_channel,
         channel_template_flags,
         dining_plugin_enabled,
+        homepage_channel_switch_enabled,
         list_homepage_channels,
         resolve_shop_channel,
     )
@@ -929,6 +931,9 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         'need_channel_pick': need_channel_pick,
         'dining_plugin_enabled': dining_plugin_enabled(seller_id),
         'channel_options': list_homepage_channels(seller_id) if (need_channel_pick or not table_session) else [],
+        'can_switch_shop_channel': (
+            (not table_session) and homepage_channel_switch_enabled(seller_id)
+        ),
         'error': error or request.GET.get('error', ''),
         **channel_template_flags(shop_channel),
         **_shop_cart_context(cart, seller_id),
@@ -1014,7 +1019,9 @@ def shop_page(request):
                 return _shop_render(request, seller_id, cart, shop_profile, error='该菜品不在当前使用中的菜单清单里')
             line_key = cart_line_key(dish_id, tier)
             qty = cart.get(line_key, 0) + 1
-            ok, msg = validate_tier_purchase(dish, tier, request.user, seller_id, qty, cart)
+            ok, msg = validate_tier_purchase(
+                dish, tier, request.user, seller_id, qty, cart, line_key=line_key,
+            )
             if not ok:
                 fetch_error = _shop_cart_error(request, msg)
                 if fetch_error:
@@ -1101,7 +1108,13 @@ def shop_page(request):
 
             for item in cart_items:
                 ok, msg = validate_tier_purchase(
-                    item['dish'], item['price_tier'], request.user, seller_id, item['quantity'], cart,
+                    item['dish'],
+                    item['price_tier'],
+                    request.user,
+                    seller_id,
+                    item['quantity'],
+                    cart,
+                    line_key=cart_line_key(item['dish'].dish_id, item['price_tier']),
                 )
                 if not ok:
                     return _shop_render(request, seller_id, cart, shop_profile, error=msg)
@@ -1736,7 +1749,13 @@ def place_order(request):
 
     for item in cart_items:
         ok, msg = validate_tier_purchase(
-            item['dish'], item['price_tier'], request.user, seller_id, item['quantity'], cart,
+            item['dish'],
+            item['price_tier'],
+            request.user,
+            seller_id,
+            item['quantity'],
+            cart,
+            line_key=cart_line_key(item['dish'].dish_id, item['price_tier']),
         )
         if not ok:
             return redirect(f'/shop/?seller_id={seller_id}&error={msg}')
@@ -1760,6 +1779,7 @@ def place_order(request):
             'price': float(item['unit_price']),
             'quantity': item['quantity'],
             'price_tier': item['price_tier'],
+            'prepared_count': 0,
             'served_count': 0,
         })
 

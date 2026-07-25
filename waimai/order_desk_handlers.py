@@ -5,10 +5,13 @@ from django.shortcuts import get_object_or_404, redirect
 
 from .models import BuyOrder
 from .order_desk_helpers import (
-    complete_basic_order,
     confirm_basic_order_cash,
-    mark_basic_order_ready,
-    start_basic_order,
+    mark_all_basic_items_delivered,
+    mark_all_basic_items_processed,
+    mark_basic_item_delivered,
+    mark_basic_item_processed,
+    undo_basic_item_delivered,
+    undo_basic_item_processed,
 )
 from .staff_account_helpers import (
     PERM_ORDERS_CONFIRM_PAYMENT,
@@ -24,9 +27,12 @@ def handle_order_desk_post(request, seller_id: str, *, redirect_to: str, work_us
         return None
 
     action_keys = (
-        'order_desk_start',
-        'order_desk_ready',
-        'order_desk_complete',
+        'order_desk_mark_processed',
+        'order_desk_undo_processed',
+        'order_desk_mark_delivered',
+        'order_desk_undo_delivered',
+        'order_desk_mark_all_processed',
+        'order_desk_mark_all_delivered',
         'order_desk_confirm_cash',
     )
     if not any(key in request.POST for key in action_keys):
@@ -49,12 +55,22 @@ def handle_order_desk_post(request, seller_id: str, *, redirect_to: str, work_us
         messages.error(request, '您没有修改订单状态的权限')
         return redirect(redirect_to)
 
-    if 'order_desk_start' in request.POST:
-        ok, msg = start_basic_order(order, actor=work_user)
-    elif 'order_desk_ready' in request.POST:
-        ok, msg = mark_basic_order_ready(order, actor=work_user)
+    if 'order_desk_mark_all_processed' in request.POST:
+        ok, msg = mark_all_basic_items_processed(order, actor=work_user)
+    elif 'order_desk_mark_all_delivered' in request.POST:
+        ok, msg = mark_all_basic_items_delivered(order, actor=work_user)
+    elif 'order_desk_mark_processed' in request.POST:
+        dish_id = (request.POST.get('dish_id') or '').strip()
+        ok, msg = mark_basic_item_processed(order, dish_id, actor=work_user)
+    elif 'order_desk_undo_processed' in request.POST:
+        dish_id = (request.POST.get('dish_id') or '').strip()
+        ok, msg = undo_basic_item_processed(order, dish_id, actor=work_user)
+    elif 'order_desk_mark_delivered' in request.POST:
+        dish_id = (request.POST.get('dish_id') or '').strip()
+        ok, msg = mark_basic_item_delivered(order, dish_id, actor=work_user)
     else:
-        ok, msg = complete_basic_order(order, actor=work_user)
+        dish_id = (request.POST.get('dish_id') or '').strip()
+        ok, msg = undo_basic_item_delivered(order, dish_id, actor=work_user)
 
     if ok:
         messages.success(request, msg)

@@ -69,3 +69,49 @@ def find_undo_line(items: list[dict], dish_id: str, progress_field: str) -> dict
         if int(line.get(progress_field) or 0) > 0:
             return line
     return None
+
+
+def fill_all_progress_units(
+    items: list[dict],
+    progress_field: str,
+    *,
+    cap_field: str | None = None,
+) -> int:
+    """
+    一键补满各行的 progress_field（上限为 quantity；若指定 cap_field 则不超过该行 cap 值）。
+    返回本次新增标记的份数。
+    """
+    marked = 0
+    for line in items:
+        qty = int(line['quantity'])
+        if cap_field:
+            cap = min(qty, int(line.get(cap_field) or 0))
+        else:
+            cap = qty
+        current = int(line.get(progress_field) or 0)
+        if current < cap:
+            marked += cap - current
+            line[progress_field] = cap
+    return marked
+
+
+def build_dual_progress_groups(dish_items: list | None) -> list[dict]:
+    """按菜品合并：同时统计已处理份数与已交付份数。"""
+    items, _ = normalize_dish_items(dish_items, ('prepared_count', 'served_count'))
+    groups: dict[str, dict] = {}
+    for line in items:
+        did = norm_dish_id(str(line.get('dish_id', '')))
+        if not did:
+            continue
+        if did not in groups:
+            groups[did] = {
+                'dish_id': did,
+                'name': line.get('name') or '商品',
+                'total_qty': 0,
+                'prepared_qty': 0,
+                'served_qty': 0,
+            }
+        groups[did]['total_qty'] += int(line['quantity'])
+        groups[did]['prepared_qty'] += int(line.get('prepared_count') or 0)
+        groups[did]['served_qty'] += int(line.get('served_count') or 0)
+    return list(groups.values())

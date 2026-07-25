@@ -89,6 +89,13 @@
 
         {% if can_operate %}
         <div class="delivery-action-stack" style="margin-top:12px;">
+            {% if row.can_mark_all_prepared %}
+            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                {% csrf_token %}
+                <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                <button type="submit" name="mark_all_prepared" value="1" class="btn btn-orange btn-block">一键全部备好</button>
+            </form>
+            {% endif %}
             {% if row.can_adjust_wait_time %}
             <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}

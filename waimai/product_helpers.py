@@ -67,10 +67,10 @@ def _today_start():
 
 
 def _iter_order_tier_lines(buyer_id, seller_id, dish_id=None, tier=None, today_only=False):
-    """遍历订单明细中符合档位的行"""
+    """遍历订单明细中符合档位的行（已下单即占名额，仅取消订单释放）。"""
     qs = BuyOrder.objects.filter(
         buyer_id=buyer_id, seller_id=seller_id,
-    ).exclude(order_status__in=('cancelled', 'awaiting_payment'))
+    ).exclude(order_status='cancelled')
     if today_only:
         qs = qs.filter(created_at__gte=_today_start())
     dish_hex = str(dish_id).replace('-', '') if dish_id else None
@@ -109,6 +109,40 @@ def count_tier_in_cart(cart: dict, seller_id: str, dish_id=None, tier=None) -> i
     return total
 
 
+def _project_line_cart(cart: dict, line_key: str | None, line_qty: int) -> dict:
+    """按单行目标件数生成校验用购物车快照。"""
+    projected = dict(cart or {})
+    if not line_key:
+        return projected
+    if line_qty <= 0:
+        projected.pop(line_key, None)
+    else:
+        projected[line_key] = line_qty
+    return projected
+
+
+def _tier_quantity_after(cart: dict, line_key: str | None, line_qty: int, add_qty: int,
+                         seller_id: str, dish_id, tier: str) -> int:
+    """
+    校验用：该档位在本店购物车中的目标总件数。
+    line_key 有值时 line_qty 为该行目标件数；否则 add_qty 为拟追加件数。
+    """
+    if line_key:
+        return count_tier_in_cart(
+            _project_line_cart(cart, line_key, line_qty), seller_id, dish_id, tier,
+        )
+    return count_tier_in_cart(cart, seller_id, dish_id, tier) + int(add_qty or 0)
+
+
+def _special_quantity_after(cart: dict, line_key: str | None, line_qty: int, add_qty: int,
+                            seller_id: str) -> int:
+    if line_key:
+        return count_tier_in_cart(
+            _project_line_cart(cart, line_key, line_qty), seller_id, tier=PRICE_TIER_SPECIAL,
+        )
+    return count_tier_in_cart(cart, seller_id, tier=PRICE_TIER_SPECIAL) + int(add_qty or 0)
+
+
 def special_pool_remaining(buyer_id: str, seller_id: str, cart: dict) -> int | None:
     """
     全店特价合计剩余可买份数；未设置上限返回 None 表示不限。
@@ -132,8 +166,13 @@ def buyer_special_pool_exhausted(buyer_id: str, seller_id: str, cart: dict) -> b
 
 def validate_tier_purchase(
     dish: Dish, tier: str, buyer, seller_id: str, quantity: int, cart: dict | None = None,
+    line_key: str | None = None,
 ) -> tuple[bool, str]:
-    """校验某一档位能否购买指定数量"""
+    """
+    校验某一档位能否购买指定数量。
+    line_key 有值：quantity 为该行在购物车中的目标总件数；
+    无 line_key：quantity 为拟追加件数（如再点一次「加入购物车」）。
+    """
     cart = cart or {}
     from .product_shell_helpers import product_unit_label
 
@@ -153,33 +192,45 @@ def validate_tier_purchase(
         return False, '无效的价格档位'
 
     buyer_id = buyer.username if buyer and buyer.is_authenticated else ''
+    add_qty = quantity if not line_key else 0
+    line_qty = quantity if line_key else 0
 
     if tier == PRICE_TIER_MEMBER:
         if dish.member_daily_limit:
             bought = count_tier_purchases(
                 buyer_id, seller_id, dish.dish_id, PRICE_TIER_MEMBER, today_only=True,
             )
-            in_cart = count_tier_in_cart(cart, seller_id, dish.dish_id, PRICE_TIER_MEMBER)
-            if bought + in_cart + quantity > dish.member_daily_limit:
+            want = _tier_quantity_after(
+                cart, line_key, line_qty, add_qty, seller_id, dish.dish_id, PRICE_TIER_MEMBER,
+            )
+            if bought + want > dish.member_daily_limit:
                 return False, f'「{dish.name}」会员价今日限购 {dish.member_daily_limit} {unit}'
         if dish.member_total_limit:
             bought = count_tier_purchases(
                 buyer_id, seller_id, dish.dish_id, PRICE_TIER_MEMBER,
             )
-            in_cart = count_tier_in_cart(cart, seller_id, dish.dish_id, PRICE_TIER_MEMBER)
-            if bought + in_cart + quantity > dish.member_total_limit:
+            want = _tier_quantity_after(
+                cart, line_key, line_qty, add_qty, seller_id, dish.dish_id, PRICE_TIER_MEMBER,
+            )
+            if bought + want > dish.member_total_limit:
                 return False, f'「{dish.name}」会员价累计限购 {dish.member_total_limit} {unit}'
 
     if tier == PRICE_TIER_SPECIAL:
-        remain = special_pool_remaining(buyer_id, seller_id, cart)
-        if remain is not None and quantity > remain:
-            return False, f'特价活动名额已用完（全店每人上限），无法再买特价'
+        settings = get_operating_settings(seller_id)
+        cap = settings.special_max_per_user
+        if cap:
+            bought = count_tier_purchases(buyer_id, seller_id, tier=PRICE_TIER_SPECIAL)
+            want = _special_quantity_after(cart, line_key, line_qty, add_qty, seller_id)
+            if bought + want > cap:
+                return False, f'特价活动名额已用完（全店每人上限），无法再买特价'
         if dish.special_per_dish_limit:
             bought = count_tier_purchases(
                 buyer_id, seller_id, dish.dish_id, PRICE_TIER_SPECIAL,
             )
-            in_cart = count_tier_in_cart(cart, seller_id, dish.dish_id, PRICE_TIER_SPECIAL)
-            if bought + in_cart + quantity > dish.special_per_dish_limit:
+            want = _tier_quantity_after(
+                cart, line_key, line_qty, add_qty, seller_id, dish.dish_id, PRICE_TIER_SPECIAL,
+            )
+            if bought + want > dish.special_per_dish_limit:
                 return False, f'「{dish.name}」特价限购 {dish.special_per_dish_limit} {unit}'
 
     # 菜单清单是饮食插件能力；停用插件后不可继续暗中限制主体商品。

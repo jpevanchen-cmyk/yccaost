@@ -7,6 +7,7 @@ from .order_workflow_rules import cash_prepare_before_payment_q, order_can_start
 from .order_progress_helpers import (
     build_progress_groups,
     count_progress_units,
+    fill_all_progress_units,
     find_markable_line,
     find_undo_line,
     norm_dish_id,
@@ -75,6 +76,12 @@ def build_kitchen_dish_groups(order: BuyOrder) -> list[dict]:
 def count_kitchen_units(order: BuyOrder) -> tuple[int, int]:
     """后厨总份数 / 已备好份数"""
     return count_progress_units(order.dish_items, 'prepared_count')
+
+
+def kitchen_can_mark_all_prepared(order: BuyOrder) -> bool:
+    """是否可一键全部备好。"""
+    total, prepared = count_kitchen_units(order)
+    return total > 0 and prepared < total
 
 
 def build_kitchen_phase_label(order: BuyOrder) -> str:
@@ -227,6 +234,38 @@ def undo_kitchen_dish_unit_prepared(order: BuyOrder, dish_id: str, *, operator_u
     update_fields.extend(sync_kitchen_progress(order))
     order.save(update_fields=list(dict.fromkeys(update_fields)))
     return True, f'已撤回「{dish_name}」1 份备好（现为 {prepared_after}/{total_qty}）'
+
+
+def mark_all_kitchen_prepared(order: BuyOrder, *, operator_username: str) -> tuple[bool, str]:
+    """后厨一键全部备好。"""
+    items, _ = normalize_dish_items(order.dish_items, ('prepared_count', 'served_count'))
+    marked = fill_all_progress_units(items, 'prepared_count')
+    if marked <= 0:
+        return False, '所有商品已全部备好'
+
+    order.dish_items = items
+    groups = build_progress_groups(items, 'prepared_count', 'prepared_qty')
+    for group in groups:
+        prepared_after = int(group.get('prepared_qty') or 0)
+        total_qty = int(group.get('total_qty') or 0)
+        if prepared_after <= 0:
+            continue
+        OrderKitchenDishPrepLog.objects.create(
+            order=order,
+            dish_id=group['dish_id'],
+            dish_name=group.get('name') or '菜品',
+            line_id='',
+            action=OrderKitchenDishPrepLog.ACTION_MARK,
+            prepared_after=prepared_after,
+            total_qty=total_qty,
+            changed_by=operator_username,
+            note='一键全部备好',
+        )
+
+    update_fields = ['dish_items', 'updated_at']
+    update_fields.extend(sync_kitchen_progress(order))
+    order.save(update_fields=list(dict.fromkeys(update_fields)))
+    return True, f'已一键备好 {marked} 份商品'
 
 
 def recent_kitchen_activity_logs(order: BuyOrder, limit: int = 8) -> list[str]:

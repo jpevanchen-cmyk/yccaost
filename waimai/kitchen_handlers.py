@@ -12,6 +12,7 @@ from .dispatch_helpers import (
 )
 from .kitchen_helpers import (
     kitchen_order_can_start,
+    mark_all_kitchen_prepared,
     mark_kitchen_dish_unit_prepared,
     undo_kitchen_dish_unit_prepared,
 )
@@ -69,6 +70,14 @@ def handle_kitchen_board_post(request, seller_id: str, *, redirect_to=None):
     if 'undo_prepared_unit' in request.POST:
         dish_id = request.POST.get('dish_id', '').strip()
         ok, msg = undo_kitchen_dish_unit_prepared(order, dish_id, operator_username=operator.username)
+        if ok:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return redirect(target)
+
+    if 'mark_all_prepared' in request.POST:
+        ok, msg = mark_all_kitchen_prepared(order, operator_username=operator.username)
         if ok:
             messages.success(request, msg)
         else:

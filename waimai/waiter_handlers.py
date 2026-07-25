@@ -7,6 +7,7 @@ from .models import BuyOrder
 from .dispatch_helpers import manual_dispatch_order, reassign_delivery_rider
 from .payments import confirm_cash_payment, close_uncollected_cash_order, initiate_payment
 from .waiter_helpers import (
+    mark_all_dish_served,
     mark_dish_unit_served,
     undo_dish_unit_served,
 )
@@ -50,6 +51,16 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
         ok, msg = undo_dish_unit_served(
             order, dish_id, operator_username=operator.username,
         )
+        if ok:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return redirect(target)
+
+    if 'mark_all_served' in request.POST:
+        order_id = request.POST.get('order_id', '').strip()
+        order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
+        ok, msg = mark_all_dish_served(order, operator_username=operator.username)
         if ok:
             messages.success(request, msg)
         else:

@@ -103,6 +103,15 @@ def list_homepage_channels(seller_id: str) -> list[dict]:
     }]
 
 
+def homepage_channel_switch_enabled(seller_id: str) -> bool:
+    """主页可选通道多于一条时才允许「更换通道」。"""
+    available = [
+        item for item in list_homepage_channels(seller_id)
+        if item.get('available')
+    ]
+    return len(available) > 1
+
+
 def auto_pick_single_homepage_channel(
     request, seller_id: str, table_session,
 ) -> bool:

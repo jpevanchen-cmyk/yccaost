@@ -34,11 +34,13 @@
 {% elif shop_channel_label %}
 <div class="msg-ok" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
     <span>当前通道：<strong>{{ shop_channel_label }}</strong></span>
+    {% if can_switch_shop_channel %}
     <form method="post" style="margin:0;">
         {% csrf_token %}
         <input type="hidden" name="action" value="clear_channel">
         <button type="submit" class="btn btn-sm btn-outline">更换通道</button>
     </form>
+    {% endif %}
 </div>
 {% endif %}
 {% if using_menu %}
