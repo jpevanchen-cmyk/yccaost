@@ -233,20 +233,21 @@ def validate_tier_purchase(
             if bought + want > dish.special_per_dish_limit:
                 return False, f'「{dish.name}」特价限购 {dish.special_per_dish_limit} {unit}'
 
-    # 菜单清单是饮食插件能力；停用插件后不可继续暗中限制主体商品。
-    from .plugin_runtime.registry import is_plugin_enabled
-    if is_plugin_enabled('dining', seller_id):
-        from .menu_helpers import get_menu_item_for_dish, menu_item_allows_tier
+    # 使用中商品列表：按清单控制会员/特价展示与可售上限（不依赖饮食插件）。
+    from .menu_helpers import get_menu_item_for_dish, menu_item_allows_tier
+    from .product_shell_helpers import build_product_shell, catalog_controls_shop_display
 
+    if catalog_controls_shop_display(seller_id):
         menu_item = get_menu_item_for_dish(seller_id, dish.dish_id)
         if tier in (PRICE_TIER_MEMBER, PRICE_TIER_SPECIAL) and not menu_item_allows_tier(
             menu_item, tier, seller_id,
         ):
-            return False, f'「{dish.name}」当前菜单未开放{TIER_LABELS.get(tier, tier)}'
+            word = build_product_shell(seller_id).get('catalog_word', '商品列表')
+            return False, f'「{dish.name}」当前{word}未开放{TIER_LABELS.get(tier, tier)}'
         if menu_item and menu_item.sales_cap is not None:
             if menu_item.sold_count + quantity > menu_item.sales_cap:
                 remain = max(0, menu_item.sales_cap - menu_item.sold_count)
-                return False, f'「{dish.name}」本日清单仅剩 {remain} {unit}'
+                return False, f'「{dish.name}」本列表仅剩 {remain} {unit}'
 
     return True, ''
 
@@ -320,18 +321,20 @@ def build_dish_tier_options(
     dish: Dish, buyer, seller_id: str, cart: dict, menu_item=None,
 ) -> list[dict]:
     """点菜页：该菜有哪些档位可选"""
-    from .menu_helpers import get_menu_item_for_dish, menu_item_allows_tier
-    from .plugin_runtime.registry import is_plugin_enabled
+    from .menu_helpers import get_active_menu_profile, get_menu_item_for_dish, menu_item_allows_tier
+    from .product_shell_helpers import build_product_shell
 
     options = []
     buyer_id = buyer.username if buyer and buyer.is_authenticated else ''
     special_exhausted = buyer_special_pool_exhausted(buyer_id, seller_id, cart)
-    dining_enabled = is_plugin_enabled('dining', seller_id)
-    if dining_enabled and menu_item is None:
+    shell = build_product_shell(seller_id)
+    use_catalog = bool(shell['show_menu_catalog'])
+    active_profile = get_active_menu_profile(seller_id) if use_catalog else None
+    if active_profile and menu_item is None:
         menu_item = get_menu_item_for_dish(seller_id, dish.dish_id)
 
     for tier in (PRICE_TIER_GENERAL, PRICE_TIER_MEMBER, PRICE_TIER_SPECIAL):
-        if dining_enabled and not menu_item_allows_tier(menu_item, tier, seller_id):
+        if active_profile and not menu_item_allows_tier(menu_item, tier, seller_id):
             continue
         price = resolve_tier_price(dish, tier)
         if price is None:

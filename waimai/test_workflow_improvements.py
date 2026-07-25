@@ -546,3 +546,45 @@ class ProductTierDescriptionTests(WorkflowImprovementBase):
         self.assertEqual(by_tier['general']['description'], '普通\n第二行')
         self.assertEqual(by_tier['member']['description'], '会员专享说明')
         self.assertEqual(by_tier['special']['description'], '今日特价说明')
+
+
+class GenericProductCatalogTests(WorkflowImprovementBase):
+    def test_catalog_available_when_dining_off(self):
+        from waimai.product_shell_helpers import build_product_shell
+
+        self.settings.plugin_dining_enabled = False
+        self.settings.save(update_fields=['plugin_dining_enabled'])
+        shell = build_product_shell(self.seller.username)
+        self.assertTrue(shell['show_menu_catalog'])
+        self.assertEqual(shell['catalog_panel_title'], '商品列表')
+
+    def test_active_catalog_filters_visible_products(self):
+        from waimai.menu_helpers import get_shop_dishes_for_sale
+        from waimai.models import MenuProfile, MenuProfileItem
+
+        self.settings.plugin_dining_enabled = False
+        self.settings.save(update_fields=['plugin_dining_enabled'])
+
+        listed = Dish.objects.create(
+            seller_id=self.seller.username,
+            name='列表上架商品',
+            price=Decimal('10.00'),
+            is_active=True,
+        )
+        hidden = Dish.objects.create(
+            seller_id=self.seller.username,
+            name='列表下架商品',
+            price=Decimal('12.00'),
+            is_active=True,
+        )
+        profile = MenuProfile.objects.create(seller_id=self.seller.username, name='商品列表 1')
+        MenuProfileItem.objects.create(profile=profile, dish=listed, is_listed=True)
+        MenuProfileItem.objects.create(profile=profile, dish=hidden, is_listed=False)
+        self.settings.active_menu_profile = profile
+        self.settings.save(update_fields=['active_menu_profile'])
+
+        dishes, using_menu = get_shop_dishes_for_sale(self.seller.username)
+        self.assertTrue(using_menu)
+        names = {d.name for d in dishes}
+        self.assertIn('列表上架商品', names)
+        self.assertNotIn('列表下架商品', names)

@@ -20,20 +20,6 @@ from .product_helpers import parse_decimal_field, parse_optional_int
 from .scroll_helpers import redirect_with_anchor
 
 
-_DINING_MENU_ACTIONS = {
-    'create_menu_profile',
-    'toggle_menu_item_listed',
-    'toggle_menu_item_member',
-    'toggle_menu_item_special',
-    'save_menu_item_cap',
-    'add_dish_to_profile',
-    'activate_menu_profile',
-    'delete_menu_profile',
-    'copy_menu_profile',
-    'rename_menu_profile',
-}
-
-
 def _products_redirect(anchor=None, query=None):
     url = reverse('seller_panel_section', kwargs={'section': 'products'})
     if query:
@@ -115,13 +101,11 @@ def _apply_new_dish_special_defaults(dish):
 
 def handle_products_post(request, seller_id):
     """商品上架管理分区 POST"""
-    from .plugin_runtime.registry import is_plugin_enabled
+    from .product_shell_helpers import build_product_shell
 
-    if not is_plugin_enabled('dining', seller_id) and any(
-        action in request.POST for action in _DINING_MENU_ACTIONS
-    ):
-        messages.error(request, '菜单清单由饮食插件提供；当前插件已停用')
-        return _products_redirect('product-list')
+    catalog_shell = build_product_shell(seller_id)
+    catalog_word = catalog_shell.get('catalog_word', '商品列表')
+    catalog_all = catalog_shell.get('catalog_all_phrase', '所有商品列表')
 
     if 'save_special_pool' in request.POST:
         settings = get_operating_settings(seller_id)
@@ -140,7 +124,10 @@ def handle_products_post(request, seller_id):
         list_on_all_menus = bool(request.POST.get('list_on_all_menus'))
         has_menu_profiles = MenuProfile.objects.filter(seller_id=seller_id).exists()
         if list_on_all_menus and not has_menu_profiles:
-            messages.error(request, '本店还没有菜单清单，不能勾选「添加后在本店所有菜单清单中设为已上架」')
+            messages.error(
+                request,
+                f'本店还没有{catalog_word}，不能勾选「添加后在本店{catalog_all}中设为已上架」',
+            )
             return _products_redirect('product-add')
         dish = Dish(
             seller_id=seller_id,
@@ -157,7 +144,7 @@ def handle_products_post(request, seller_id):
         dish.save()
         sync_new_dish_to_menu_profiles(dish, list_on_all_menus=list_on_all_menus)
         if list_on_all_menus:
-            messages.success(request, f'已添加商品「{dish.name}」，已在本店全部菜单清单中上架')
+            messages.success(request, f'已添加商品「{dish.name}」，已在本店全部{catalog_word}中上架')
         else:
             messages.success(request, f'已添加商品「{dish.name}」')
         return _products_redirect('product-list')
@@ -194,7 +181,7 @@ def handle_products_post(request, seller_id):
         if not name:
             messages.error(request, '请填写清单名称')
         elif menu_profile_name_taken(seller_id, name):
-            messages.error(request, f'已有同名菜单清单「{name}」，请换一个名称')
+            messages.error(request, f'已有同名{catalog_word}「{name}」，请换一个名称')
         else:
             profile = MenuProfile.objects.create(seller_id=seller_id, name=name)
             source = find_menu_profile_by_pick_id(seller_id, copy_from_raw) if copy_from_raw else None
@@ -207,7 +194,7 @@ def handle_products_post(request, seller_id):
                 profile_q = str(profile.profile_id)
             else:
                 populate_profile_with_dishes(profile, seller_id)
-                messages.success(request, f'已创建菜单清单「{name}」，已纳入本店全部商品')
+                messages.success(request, f'已创建{catalog_word}「{name}」，已纳入本店全部商品')
                 profile_q = str(profile.profile_id)
         return _products_redirect('menu-panel', _menus_query(profile_q) if profile_q else None)
 
@@ -293,7 +280,7 @@ def handle_products_post(request, seller_id):
     if 'activate_menu_profile' in request.POST:
         profile_id = request.POST.get('profile_id')
         if has_open_orders(seller_id):
-            messages.error(request, '尚有未结束订单，不能切换菜单清单')
+            messages.error(request, f'尚有未结束订单，不能切换{catalog_word}')
             return _products_redirect('menu-panel', _menus_query(profile_id))
         profile = get_object_or_404(MenuProfile, profile_id=profile_id, seller_id=seller_id)
         settings = get_operating_settings(seller_id)
@@ -303,7 +290,7 @@ def handle_products_post(request, seller_id):
         from .audit_helpers import write_audit_log
         write_audit_log(
             action_code='menu_switch',
-            summary=f'切换菜单清单为「{profile.name}」',
+            summary=f'切换{catalog_word}为「{profile.name}」',
             seller_id=seller_id,
             actor=request.user,
             target_type='menu_profile',
@@ -312,7 +299,7 @@ def handle_products_post(request, seller_id):
         )
         messages.success(
             request,
-            f'已切换为菜单清单「{profile.name}」，店铺页面已同步更新',
+            f'已切换为{catalog_word}「{profile.name}」，店铺页面已同步更新',
         )
         return _products_redirect('menu-panel', _menus_query(profile_id))
 
@@ -325,7 +312,7 @@ def handle_products_post(request, seller_id):
             return _products_redirect('menu-panel', _menus_query(profile_id))
         name = profile.name
         profile.delete()
-        messages.success(request, f'已删除菜单清单「{name}」')
+        messages.success(request, f'已删除{catalog_word}「{name}」')
         return _products_redirect('menu-panel')
 
     if 'copy_menu_profile' in request.POST:
@@ -333,7 +320,7 @@ def handle_products_post(request, seller_id):
         source = get_object_or_404(MenuProfile, profile_id=profile_id, seller_id=seller_id)
         new_name = (request.POST.get('new_name') or '').strip() or f'{source.name} 副本'
         if menu_profile_name_taken(seller_id, new_name):
-            messages.error(request, f'已有同名菜单清单「{new_name}」，请换一个名称')
+            messages.error(request, f'已有同名{catalog_word}「{new_name}」，请换一个名称')
             return _products_redirect('menu-panel', _menus_query(profile_id))
         new_profile = MenuProfile.objects.create(seller_id=seller_id, name=new_name)
         copy_profile_items(source, new_profile)

@@ -1010,13 +1010,16 @@ def shop_page(request):
                 if fetch_error:
                     return fetch_error
                 return _shop_render(request, seller_id, cart, shop_profile, error='商品不存在或已下架')
-            from .plugin_runtime.registry import is_plugin_enabled
+            from .product_shell_helpers import catalog_controls_shop_display
 
-            if is_plugin_enabled('dining', seller_id) and not dish_visible_on_shop(seller_id, dish_id):
-                fetch_error = _shop_cart_error(request, '该菜品不在当前使用中的菜单清单里')
+            if catalog_controls_shop_display(seller_id) and not dish_visible_on_shop(seller_id, dish_id):
+                from .product_shell_helpers import build_product_shell
+                catalog_word = build_product_shell(seller_id).get('catalog_word', '商品列表')
+                err_text = f'该商品不在当前使用中的{catalog_word}里'
+                fetch_error = _shop_cart_error(request, err_text)
                 if fetch_error:
                     return fetch_error
-                return _shop_render(request, seller_id, cart, shop_profile, error='该菜品不在当前使用中的菜单清单里')
+                return _shop_render(request, seller_id, cart, shop_profile, error=err_text)
             line_key = cart_line_key(dish_id, tier)
             qty = cart.get(line_key, 0) + 1
             ok, msg = validate_tier_purchase(

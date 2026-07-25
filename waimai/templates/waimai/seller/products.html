@@ -30,22 +30,22 @@
 
 {% if product_shell.show_menu_catalog %}
 <details class="seller-panel-fold" id="menu-panel">
-    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📋 今日菜单清单</span></summary>
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📋 {{ product_shell.catalog_panel_title }}</span></summary>
     <div class="seller-panel-fold-body">
         <p class="page-desc">
-            切换清单前须无未结束订单。客人店铺页以<strong>使用中</strong>的清单为准。
+            切换{{ product_shell.catalog_word }}前须无未结束订单。客人店铺页以<strong>使用中</strong>的{{ product_shell.catalog_word }}为准。
             当前使用中：{% if active_profile %}<strong>{{ active_profile.name }}</strong>{% else %}未选（客人见全部上架商品）{% endif %}
         </p>
         {% if selected_profile and active_profile and selected_profile.profile_id != active_profile.profile_id %}
         <p class="msg-warn">当前查看的是「{{ selected_profile.name }}」，客人店铺页仍以「{{ active_profile.name }}」为准；改完后请点「切换使用」。</p>
         {% elif not active_profile %}
-        <p class="msg-warn">尚未有使用中的清单，客人店铺页不会按下方「展示」设置过滤会员价/特价；请先点「切换使用」。</p>
+        <p class="msg-warn">尚未有使用中的{{ product_shell.catalog_word }}，客人店铺页不会按下方「展示」设置过滤会员价/特价；请先点「切换使用」。</p>
         {% endif %}
-        <p class="card-meta">说明：<strong>商品管理</strong>里设定是否<strong>允许</strong>会员价、特价；<strong>本清单</strong>里设定是否<strong>对客人展示</strong>。两项都满足且本清单已「切换使用」后，店铺页才会出现对应价格按钮。</p>
+        <p class="card-meta">说明：<strong>商品管理</strong>里设定是否<strong>允许</strong>会员价、特价；<strong>本{{ product_shell.catalog_word }}</strong>里设定是否<strong>对客人展示</strong>。两项都满足且本{{ product_shell.catalog_word }}已「切换使用」后，店铺页才会出现对应价格按钮。</p>
         <form method="POST" class="seller-inline-form menu-profile-create-form" data-unsaved-guard>
             {% csrf_token %}
             <input type="hidden" name="create_menu_profile" value="1">
-            <label>新建清单 <input type="text" name="profile_name" placeholder="如今日午市" required></label>
+            <label>新建{{ product_shell.catalog_word }} <input type="text" name="profile_name" placeholder="{{ product_shell.catalog_create_placeholder }}" required></label>
             {% if menu_profiles %}
             <label>复制自（可不选）
                 <select name="copy_from_profile_id">
@@ -60,7 +60,7 @@
         </form>
         {% if menu_profiles %}
         <form method="GET" class="seller-inline-form menu-profile-picker-form" style="margin-top:12px;">
-            <label>选择清单
+            <label>选择{{ product_shell.catalog_word }}
                 <select name="profile" id="menu-profile-select">
                     {% for p in menu_profiles %}
                     <option value="{{ p.profile_id }}" {% if selected_profile and selected_profile.profile_id == p.profile_id %}selected{% endif %}>
@@ -208,7 +208,7 @@
             {% if product_shell.show_menu_catalog %}
             <label class="product-add-list-row">
                 <input type="checkbox" name="list_on_all_menus" value="1" id="list-on-all-menus-cb">
-                添加后在本店<strong>所有菜单清单</strong>中设为「已上架」
+                添加后在本店<strong>{{ product_shell.catalog_all_phrase }}</strong>中设为「已上架」
             </label>
             <p class="card-meta product-add-list-hint">不勾选时：新商品会进入各份清单，但默认「已下架」，须您在清单里手动上架。勾选并确认后：客人将立刻在店铺页看到。</p>
             {% endif %}

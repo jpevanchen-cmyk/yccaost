@@ -38,6 +38,10 @@ class DiningPlugin(Plugin):
             'unit_label': '份',
             'sales_title': '菜品销量排行',
             'show_menu_catalog': True,
+            'catalog_panel_title': '今日菜单清单',
+            'catalog_word': '菜单清单',
+            'catalog_create_placeholder': '如今日午市',
+            'catalog_all_phrase': '所有菜单清单',
             'shop_catalog_intro': (
                 '本店当前按「今日菜单清单」展示菜品与价格档位'
                 '（会员价/特价以清单设置为准）。'
