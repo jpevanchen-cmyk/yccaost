@@ -307,6 +307,15 @@ def build_tier_display_name(dish: Dish, tier: str) -> str:
     return dish.name
 
 
+def get_tier_description(dish: Dish, tier: str) -> str:
+    """按价格档位取商品描述；普通描述沿用原 description 字段。"""
+    if tier == PRICE_TIER_MEMBER:
+        return (dish.description_member or '').strip()
+    if tier == PRICE_TIER_SPECIAL:
+        return (dish.description_special or '').strip()
+    return (dish.description or '').strip()
+
+
 def build_dish_tier_options(
     dish: Dish, buyer, seller_id: str, cart: dict, menu_item=None,
 ) -> list[dict]:
@@ -336,6 +345,7 @@ def build_dish_tier_options(
             'tier': tier,
             'label': TIER_LABELS[tier],
             'display_name': build_tier_display_name(dish, tier),
+            'description': get_tier_description(dish, tier),
             'price': price,
             'disabled': disabled,
             'reason': reason if disabled else '',

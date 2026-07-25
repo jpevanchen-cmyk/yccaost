@@ -84,6 +84,13 @@ def _get_menu_item(seller_id, profile_id, item_id):
     )
 
 
+def _fill_dish_descriptions(dish, post):
+    """读取普通/会员/特价三档描述"""
+    dish.description = (post.get('description') or '').strip()
+    dish.description_member = (post.get('description_member') or '').strip()
+    dish.description_special = (post.get('description_special') or '').strip()
+
+
 def _fill_dish_prices(dish, post, prefix):
     if prefix == 'member':
         dish.member_price_enabled = bool(post.get('member_price_enabled'))
@@ -139,11 +146,11 @@ def handle_products_post(request, seller_id):
             seller_id=seller_id,
             name=name,
             price=price,
-            description=(request.POST.get('description') or '').strip(),
             sort_order=int(request.POST.get('sort_order') or 0)
             if str(request.POST.get('sort_order', '0')).lstrip('-').isdigit() else 0,
             is_active=True,
         )
+        _fill_dish_descriptions(dish, request.POST)
         _fill_dish_prices(dish, request.POST, 'member')
         _fill_dish_prices(dish, request.POST, 'special')
         _apply_new_dish_special_defaults(dish)
@@ -164,7 +171,7 @@ def handle_products_post(request, seller_id):
             return _products_redirect(_edit_anchor(dish), _edit_query(dish))
         dish.name = name
         dish.price = price
-        dish.description = (request.POST.get('description') or '').strip()
+        _fill_dish_descriptions(dish, request.POST)
         sort_val = (request.POST.get('sort_order') or '0').strip()
         dish.sort_order = int(sort_val) if sort_val.lstrip('-').isdigit() else 0
         _fill_dish_prices(dish, request.POST, 'member')

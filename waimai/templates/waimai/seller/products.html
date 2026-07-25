@@ -202,7 +202,7 @@
             <label>商品名称 <input type="text" name="name" required placeholder="如：回锅肉"></label>
             <label>通用价格（元）<input type="number" name="price" step="0.01" min="0.01" required></label>
             <label>{{ product_shell.sort_help }}<input type="number" name="sort_order" value="0"></label>
-            <label>描述 <textarea name="description" rows="2"></textarea></label>
+            {% include 'waimai/seller/_product_description_fields.html' with dish=None only %}
             {% include 'waimai/seller/_tier_price_block.html' with prefix='member' title='会员价' hint='须登录买家可购；可设单日/累计限购。' dish=None only %}
             {% include 'waimai/seller/_tier_price_block.html' with prefix='special' title='特价' hint='须登录买家可购；受全店特价合计上限约束。' dish=None only %}
             {% if product_shell.show_menu_catalog %}
@@ -248,7 +248,7 @@
                 <label>名称 <input type="text" name="name" value="{{ dish.name }}" required></label>
                 <label>通用价格 <input type="number" name="price" step="0.01" min="0.01" value="{{ dish.price }}" required></label>
                 <label>{{ product_shell.sort_help }}<input type="number" name="sort_order" value="{{ dish.sort_order }}"></label>
-                <label>描述 <textarea name="description" rows="2">{{ dish.description }}</textarea></label>
+                {% include 'waimai/seller/_product_description_fields.html' with dish=dish only %}
                 {% include 'waimai/seller/_tier_price_block.html' with prefix='member' title='会员价' hint='须登录买家可购。' dish=dish only %}
                 {% include 'waimai/seller/_tier_price_block.html' with prefix='special' title='特价' hint='须登录；受全店特价上限约束。' dish=dish only %}
                 <button type="submit" class="btn btn-block">保存修改</button>

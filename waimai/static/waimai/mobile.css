@@ -565,6 +565,7 @@ body.nav-open {
     font-size: 13px;
     color: var(--yc-muted);
     margin-top: 4px;
+    white-space: pre-wrap;
 }
 
 .dish-price {

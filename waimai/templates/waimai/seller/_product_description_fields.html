@@ -1,0 +1,11 @@
+{# 批次 H1：普通/会员/特价三描述框 #}
+<p class="card-meta" style="margin:0 0 8px;">各价格档位分别展示对应描述；可直接回车分段。</p>
+<label>普通描述
+    <textarea name="description" rows="3" placeholder="通用价卡片展示">{% if dish %}{{ dish.description }}{% endif %}</textarea>
+</label>
+<label>会员描述
+    <textarea name="description_member" rows="3" placeholder="会员价卡片展示；可留空">{% if dish %}{{ dish.description_member }}{% endif %}</textarea>
+</label>
+<label>特价描述
+    <textarea name="description_special" rows="3" placeholder="特价卡片展示；可留空">{% if dish %}{{ dish.description_special }}{% endif %}</textarea>
+</label>

@@ -625,7 +625,9 @@ class Dish(models.Model):
         verbose_name='通用价格（元）',
     )
     image_url = models.URLField(max_length=500, blank=True, null=True, verbose_name='菜品图片链接')
-    description = models.TextField(blank=True, verbose_name='菜品描述')
+    description = models.TextField(blank=True, verbose_name='普通描述')
+    description_member = models.TextField(blank=True, verbose_name='会员描述')
+    description_special = models.TextField(blank=True, verbose_name='特价描述')
     stock = models.PositiveIntegerField(default=999, verbose_name='库存数量')
     is_active = models.BooleanField(default=True, db_index=True, verbose_name='上架状态')
     sort_order = models.IntegerField(default=0, verbose_name='排序')

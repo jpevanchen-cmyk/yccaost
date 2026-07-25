@@ -14,6 +14,7 @@ from waimai.dispatch_helpers import (
     try_dispatch_pending_for_rider,
 )
 from waimai.kitchen_helpers import kitchen_order_can_start, query_kitchen_board_orders
+from waimai.product_helpers import build_dish_tier_options, get_tier_description
 from waimai.models import BuyOrder, DeliveryOrder, Dish, ShopProfile, User
 from waimai.operating_helpers import get_operating_settings
 from waimai.order_desk_helpers import (
@@ -518,3 +519,30 @@ class OrderDeskItemProgressTests(WorkflowImprovementBase):
         self.assertIn('order_desk_mark_all_processed', html)
         self.assertNotIn('order_desk_mark_all_delivered', html)
         self.assertIn('商品A', html)
+
+
+class ProductTierDescriptionTests(WorkflowImprovementBase):
+    def test_tier_descriptions_follow_price_tier(self):
+        dish = Dish.objects.create(
+            seller_id=self.seller.username,
+            name='描述试验菜',
+            price=Decimal('18.00'),
+            description='普通\n第二行',
+            description_member='会员专享说明',
+            description_special='今日特价说明',
+            member_price_enabled=True,
+            member_price_mode='fixed',
+            member_price_fixed=Decimal('15.00'),
+            special_price_enabled=True,
+            special_price_mode='fixed',
+            special_price_fixed=Decimal('12.00'),
+        )
+        self.assertEqual(get_tier_description(dish, 'general'), '普通\n第二行')
+        self.assertEqual(get_tier_description(dish, 'member'), '会员专享说明')
+        self.assertEqual(get_tier_description(dish, 'special'), '今日特价说明')
+
+        options = build_dish_tier_options(dish, None, self.seller.username, {})
+        by_tier = {opt['tier']: opt for opt in options}
+        self.assertEqual(by_tier['general']['description'], '普通\n第二行')
+        self.assertEqual(by_tier['member']['description'], '会员专享说明')
+        self.assertEqual(by_tier['special']['description'], '今日特价说明')
