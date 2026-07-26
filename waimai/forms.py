@@ -670,7 +670,6 @@ class ShopWorkbenchSettingsForm(forms.ModelForm):
         fields = [
             'delivery_handoff_mode', 'auto_dispatch_enabled', 'attendance_retention_days',
             'alert_volume', 'alert_interval_sec', 'alert_sound',
-            'order_notify_enabled', 'order_notify_email',
         ]
         labels = {
             'delivery_handoff_mode': '外卖交接方式',
@@ -679,8 +678,6 @@ class ShopWorkbenchSettingsForm(forms.ModelForm):
             'alert_volume': '新单提醒音量（0～100）',
             'alert_interval_sec': '新单提醒重复间隔（秒）',
             'alert_sound': '自定义提醒音频（可留空）',
-            'order_notify_enabled': '开启新订单邮件通知',
-            'order_notify_email': '新订单通知收件邮箱（多个用逗号分隔）',
         }
         help_texts = {
             'delivery_handoff_mode': '外卖备好后由谁交给骑手：默认服务员交接；可选后厨直交骑手。',
@@ -689,24 +686,7 @@ class ShopWorkbenchSettingsForm(forms.ModelForm):
             'alert_volume': '工作台/后厨页面开着时，新单提醒响铃的音量。',
             'alert_interval_sec': '有新单未处理时，每隔多少秒再响一次（最少 3 秒）。',
             'alert_sound': '可上传自己的提示音（MP3/WAV/OGG，最大 2MB）；留空则用系统默认提示音。',
-            'order_notify_enabled': '开启后，有新订单时给下面的邮箱发一封提醒邮件（需服务器已配置发信邮箱才会真的发出）。',
-            'order_notify_email': '可填多个邮箱，用逗号分隔，例如：a@qq.com, b@163.com。',
         }
-
-    def clean_order_notify_email(self):
-        raw = (self.cleaned_data.get('order_notify_email') or '').strip()
-        if not raw:
-            return ''
-        from django.core.validators import validate_email
-        from django.core.exceptions import ValidationError as DjangoValidationError
-
-        emails = [e.strip() for e in raw.replace('；', ',').replace(';', ',').replace(' ', ',').split(',') if e.strip()]
-        for e in emails:
-            try:
-                validate_email(e)
-            except DjangoValidationError:
-                raise forms.ValidationError(f'邮箱格式不对：{e}')
-        return ', '.join(emails)
 
     def clean_alert_volume(self):
         vol = self.cleaned_data.get('alert_volume')
@@ -734,3 +714,129 @@ class ShopWorkbenchSettingsForm(forms.ModelForm):
             if not name.endswith(('.mp3', '.wav', '.ogg', '.m4a')):
                 raise forms.ValidationError('只支持 MP3 / WAV / OGG / M4A 格式的音频')
         return f
+
+
+def _clean_comma_separated_emails(raw: str) -> str:
+    """多个邮箱用逗号分隔；校验格式。"""
+    raw = (raw or '').strip()
+    if not raw:
+        return ''
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    from django.core.validators import validate_email
+
+    emails = [
+        e.strip()
+        for e in raw.replace('；', ',').replace(';', ',').replace(' ', ',').split(',')
+        if e.strip()
+    ]
+    for e in emails:
+        try:
+            validate_email(e)
+        except DjangoValidationError:
+            raise forms.ValidationError(f'邮箱格式不对：{e}')
+    return ', '.join(emails)
+
+
+class ShopBossOrderNotifyForm(forms.ModelForm):
+    """H3 · 卖家后台：老板新订单邮件（不在店时收提醒）"""
+
+    class Meta:
+        from .dine_models import ShopOperatingSettings
+
+        model = ShopOperatingSettings
+        fields = ['boss_order_notify_enabled', 'boss_order_notify_email']
+        labels = {
+            'boss_order_notify_enabled': '开启老板新订单邮件',
+            'boss_order_notify_email': '老板收件邮箱（多个用逗号分隔）',
+        }
+        help_texts = {
+            'boss_order_notify_enabled': '适合店主不在工作台时收邮件；须服务器已配置发信邮箱才会发出。',
+            'boss_order_notify_email': '可填多个邮箱，用逗号分隔，例如：boss@qq.com, assistant@163.com。',
+        }
+
+    def clean_boss_order_notify_email(self):
+        return _clean_comma_separated_emails(self.cleaned_data.get('boss_order_notify_email') or '')
+
+
+class ShopDutyOrderNotifyForm(forms.ModelForm):
+    """H3 · 店铺工作台：值班防漏单邮件（页面未开响铃时的补充）"""
+
+    class Meta:
+        from .dine_models import ShopOperatingSettings
+
+        model = ShopOperatingSettings
+        fields = ['duty_order_notify_enabled', 'duty_order_notify_email']
+        labels = {
+            'duty_order_notify_enabled': '开启值班防漏单邮件',
+            'duty_order_notify_email': '值班收件邮箱（多个用逗号分隔）',
+        }
+        help_texts = {
+            'duty_order_notify_enabled': '适合值班人员未一直开着工作台页面时补发邮件；与上方响铃提醒可同时使用。',
+            'duty_order_notify_email': '可填值班手机能收到的邮箱；多个用逗号分隔。',
+        }
+
+    def clean_duty_order_notify_email(self):
+        return _clean_comma_separated_emails(self.cleaned_data.get('duty_order_notify_email') or '')
+
+
+def _clean_comma_separated_emails(raw: str) -> str:
+    """多个邮箱用逗号分隔；校验格式。"""
+    raw = (raw or '').strip()
+    if not raw:
+        return ''
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    from django.core.validators import validate_email
+
+    emails = [
+        e.strip()
+        for e in raw.replace('；', ',').replace(';', ',').replace(' ', ',').split(',')
+        if e.strip()
+    ]
+    for e in emails:
+        try:
+            validate_email(e)
+        except DjangoValidationError:
+            raise forms.ValidationError(f'邮箱格式不对：{e}')
+    return ', '.join(emails)
+
+
+class ShopBossOrderNotifyForm(forms.ModelForm):
+    """H3 · 卖家后台：老板新订单邮件（不在店时收提醒）"""
+
+    class Meta:
+        from .dine_models import ShopOperatingSettings
+
+        model = ShopOperatingSettings
+        fields = ['boss_order_notify_enabled', 'boss_order_notify_email']
+        labels = {
+            'boss_order_notify_enabled': '开启老板新订单邮件',
+            'boss_order_notify_email': '老板收件邮箱（多个用逗号分隔）',
+        }
+        help_texts = {
+            'boss_order_notify_enabled': '适合店主不在工作台时收邮件；须服务器已配置发信邮箱才会发出。',
+            'boss_order_notify_email': '可填多个邮箱，用逗号分隔，例如：boss@qq.com, assistant@163.com。',
+        }
+
+    def clean_boss_order_notify_email(self):
+        return _clean_comma_separated_emails(self.cleaned_data.get('boss_order_notify_email') or '')
+
+
+class ShopDutyOrderNotifyForm(forms.ModelForm):
+    """H3 · 店铺工作台：值班防漏单邮件（页面未开响铃时的补充）"""
+
+    class Meta:
+        from .dine_models import ShopOperatingSettings
+
+        model = ShopOperatingSettings
+        fields = ['duty_order_notify_enabled', 'duty_order_notify_email']
+        labels = {
+            'duty_order_notify_enabled': '开启值班防漏单邮件',
+            'duty_order_notify_email': '值班收件邮箱（多个用逗号分隔）',
+        }
+        help_texts = {
+            'duty_order_notify_enabled': '适合值班人员未一直开着工作台页面时补发邮件；与上方响铃提醒可同时使用。',
+            'duty_order_notify_email': '可填值班手机能收到的邮箱；多个用逗号分隔。',
+        }
+
+    def clean_duty_order_notify_email(self):
+        return _clean_comma_separated_emails(self.cleaned_data.get('duty_order_notify_email') or '')

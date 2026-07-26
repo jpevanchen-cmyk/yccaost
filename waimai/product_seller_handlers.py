@@ -22,6 +22,7 @@ from .product_image_helpers import (
     delete_dish_image,
     move_dish_image,
     sync_dish_images_from_folder,
+    upload_single_dish_image,
 )
 from .scroll_helpers import redirect_with_anchor
 
@@ -105,6 +106,23 @@ def _apply_new_dish_special_defaults(dish):
         dish.special_per_dish_limit = 1
 
 
+def handle_upload_dish_image_ajax(request, seller_id):
+    """Ajax 单张商品图上传（试跑补丁 H）。"""
+    from django.http import JsonResponse
+
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': '无效请求'}, status=405)
+    dish_id = request.POST.get('dish_id')
+    dish = get_object_or_404(Dish, dish_id=dish_id, seller_id=seller_id)
+    uploaded = request.FILES.get('dish_image')
+    if not uploaded:
+        return JsonResponse({'ok': False, 'error': '请选择一张图片'})
+    payload, err = upload_single_dish_image(dish, uploaded)
+    if err:
+        return JsonResponse({'ok': False, 'error': err})
+    return JsonResponse({'ok': True, **payload})
+
+
 def handle_products_post(request, seller_id):
     """商品上架管理分区 POST"""
     from .product_shell_helpers import build_product_shell
@@ -156,7 +174,7 @@ def handle_products_post(request, seller_id):
             messages.success(request, f'已添加商品「{dish.name}」，已在本店全部{catalog_word}中上架')
         else:
             messages.success(request, f'已添加商品「{dish.name}」')
-        return _products_redirect('product-list')
+        return _products_redirect(_edit_anchor(dish), _edit_query(dish))
 
     if 'edit_dish' in request.POST:
         dish = get_object_or_404(Dish, dish_id=request.POST.get('dish_id'), seller_id=seller_id)
@@ -173,10 +191,6 @@ def handle_products_post(request, seller_id):
         _fill_dish_prices(dish, request.POST, 'member')
         _fill_dish_prices(dish, request.POST, 'special')
         dish.save()
-        img_err = apply_dish_image_uploads(dish, request.FILES.getlist('dish_images'))
-        if img_err:
-            messages.warning(request, img_err)
-            return _products_redirect(_edit_anchor(dish), _edit_query(dish))
         messages.success(request, f'已保存「{dish.name}」')
         return _products_redirect(_dish_row_anchor(dish))
 

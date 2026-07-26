@@ -92,7 +92,20 @@ def handle_seller_post(request, seller_id, section):
             messages.error(request, msg)
         return _seller_panel_redirect('payment', 'rider-cash-card')
 
-    if section == 'orders':
+    if 'save_boss_order_notify' in request.POST and section == 'orders':
+        from .forms import ShopBossOrderNotifyForm
+        from .operating_helpers import get_operating_settings
+
+        operating = get_operating_settings(seller_id)
+        form = ShopBossOrderNotifyForm(request.POST, instance=operating)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '老板邮件通知已保存')
+        else:
+            messages.error(request, '老板邮件通知无效，请检查邮箱格式')
+        return _seller_panel_redirect('orders', 'boss-order-notify', request=request)
+
+    if section == 'orders' and request.method == 'POST':
         messages.error(request, '订单管理仅用于查询历史，请到店铺工作台处理现场操作')
         return _seller_panel_redirect('orders', request=request)
 

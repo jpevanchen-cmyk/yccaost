@@ -34,6 +34,9 @@ def confirm_dining_order_paid(order, payment_method: str, paid_at=None) -> None:
         return
     # mark_payment_received 已 save；履约再读一次最新支付时间
     apply_dining_after_paid(order)
+    from waimai.order_alert_helpers import maybe_notify_merchant_new_order
+
+    maybe_notify_merchant_new_order(order)
 
 
 def dining_guest_onsite_cash_only(order) -> bool:

@@ -41,6 +41,8 @@
 </div>
 {% endif %}
 
+{% include 'waimai/_duty_order_notify.html' %}
+
 <div class="rider-quick-links" style="margin-bottom:12px;">
     {% if 'orders' in enabled_work_views %}
     <a class="btn {% if current_view == 'orders' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_orders_url }}">{{ workbench_shell.tab_orders }}</a>

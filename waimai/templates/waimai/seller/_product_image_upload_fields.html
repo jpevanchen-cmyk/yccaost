@@ -1,14 +1,21 @@
-{# 商品多图上传（G1-2）：添加/编辑商品时可选多张，系统自动压缩并存入编号文件夹 #}
-<div class="product-image-upload-block">
-    <label class="product-image-upload-label">继续添加图片（最多 {{ dish_image_max|default:10 }} 张）</label>
-    <input type="file" name="dish_images" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple>
-    <p class="card-meta">
-        支持 PNG、JPG、WEBP、GIF；单张不超过 {{ dish_image_max_mb|default:5 }} MB，上传后系统会自动压缩。
-        文件将保存为「展示编号-序号」格式（如 A001-1）。
-    </p>
-    {% if dish %}
-    <p class="card-meta">还可上传 {{ dish_image_remaining }} 张。</p>
-    {% else %}
-    <p class="card-meta">保存新商品后，图片会写入该商品的展示编号文件夹。</p>
-    {% endif %}
-</div>
+{# 商品多图上传（G1-2 / 试跑补丁 H）：编辑区 Ajax 逐张传；添加区随「添加商品」表单一张一张传 #}
+<div class="product-image-upload-block"{% if dish %} data-dish-id="{{ dish.dish_id }}" data-upload-url="{% url 'seller_panel_section' 'products' %}"{% endif %}>
+    <label class="product-image-upload-label">添加商品图片（最多 {{ dish_image_max|default:10 }} 张）</label>
+    {% if dish %}
+    <input type="file" class="product-image-file-input" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple>
+    <p class="card-meta">
+        支持 PNG、JPG、WEBP、GIF；单张不超过 {{ dish_image_max_mb|default:5 }} MB。选好后点「开始上传」，系统会<strong>一张一张</strong>上传；压缩在服务器后台进行。
+        文件将保存为「展示编号-序号」格式（如 A001-1）。
+    </p>
+    <p class="card-meta product-image-quota">还可上传 {{ dish_image_remaining }} 张。</p>
+    <button type="button" class="btn btn-sm btn-green product-image-upload-btn">开始上传所选图片</button>
+    <p class="card-meta product-image-upload-status" hidden></p>
+    {% else %}
+    <input type="file" name="dish_images" class="product-image-file-input" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple>
+    <p class="card-meta">
+        支持 PNG、JPG、WEBP、GIF；单张不超过 {{ dish_image_max_mb|default:5 }} MB。选好图片后点本页下方<strong>「添加商品」</strong>，会随商品一起<strong>一张一张</strong>上传（压缩在服务器后台进行）。
+        文件将保存为「展示编号-序号」格式（如 A001-1）。
+    </p>
+    {% endif %}
+</div>
+

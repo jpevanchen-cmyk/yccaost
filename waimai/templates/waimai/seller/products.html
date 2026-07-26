@@ -35,6 +35,9 @@
         <p class="page-desc">
             切换{{ product_shell.catalog_word }}前须无未结束订单。客人店铺页以<strong>使用中</strong>的{{ product_shell.catalog_word }}为准。
             当前使用中：{% if active_profile %}<strong>{{ active_profile.name }}</strong>{% else %}未选（客人见全部上架商品）{% endif %}
+            {% if active_profile %}
+            · <a href="{% url 'seller_product_qr_print' %}" target="_blank" rel="noopener">批量打印本清单商品二维码</a>
+            {% endif %}
         </p>
         {% if selected_profile and active_profile and selected_profile.profile_id != active_profile.profile_id %}
         <p class="msg-warn">当前查看的是「{{ selected_profile.name }}」，客人店铺页仍以「{{ active_profile.name }}」为准；改完后请点「切换使用」。</p>

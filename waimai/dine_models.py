@@ -89,6 +89,21 @@ class ShopOperatingSettings(models.Model):
         max_length=255, blank=True, default='',
         verbose_name='新订单通知收件邮箱（多个用逗号分隔）',
     )
+    # H3 双轨邮件：老板轨（卖家后台）与值班轨（店铺工作台）
+    boss_order_notify_enabled = models.BooleanField(
+        default=False, verbose_name='开启老板新订单邮件',
+    )
+    boss_order_notify_email = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name='老板新订单收件邮箱（多个用逗号分隔）',
+    )
+    duty_order_notify_enabled = models.BooleanField(
+        default=False, verbose_name='开启值班防漏单邮件',
+    )
+    duty_order_notify_email = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name='值班防漏单收件邮箱（多个用逗号分隔）',
+    )
     # ---- 三类订单默认等待时间 ----
     dine_default_wait_minutes = models.PositiveSmallIntegerField(
         default=20, verbose_name='堂食默认等待时间（分钟）',

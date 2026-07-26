@@ -23,7 +23,6 @@
     {% endfor %}
 </nav>
 
-{% include 'waimai/seller/_flash_modal.html' %}
 {% include 'waimai/seller/_unsaved_modal.html' %}
 
 {% block seller_content %}{% endblock %}
@@ -50,4 +49,7 @@
 <script src="{% static 'waimai/seller_panel_fold.js' %}?v=3"></script>
 <script src="{% static 'waimai/seller_unsaved_guard.js' %}?v=2"></script>
 <script src="{% static 'waimai/home_block_editor.js' %}?v=2"></script>
+{% if section == 'products' %}
+<script src="{% static 'waimai/product_image_upload.js' %}?v=2"></script>
+{% endif %}
 {% endblock %}

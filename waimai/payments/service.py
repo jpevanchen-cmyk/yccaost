@@ -21,6 +21,9 @@ def confirm_order_paid(order: BuyOrder, payment_method: str, paid_at=None):
         if newly:
             order.order_status = 'awaiting_prep'
             order.save(update_fields=['order_status', 'updated_at'])
+            from ..order_alert_helpers import maybe_notify_merchant_new_order
+
+            maybe_notify_merchant_new_order(order)
         return
     confirm_dining_order_paid(order, payment_method, paid_at=paid_at)
 
@@ -81,11 +84,14 @@ def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentIni
             # 主体下单不套用饮食预计出餐；先进入待备货，店家后续确认现金。
             order.order_status = 'awaiting_prep'
             update_fields.append('order_status')
-            order.save(update_fields=update_fields)
-            return PaymentInitResult(
-                ok=True,
-                redirect_url=f'/order/{order.order_id}/?cash_pending=1&order=1',
-            )
+        order.save(update_fields=update_fields)
+        from ..order_alert_helpers import maybe_notify_merchant_new_order
+
+        maybe_notify_merchant_new_order(order)
+        return PaymentInitResult(
+            ok=True,
+            redirect_url=f'/order/{order.order_id}/?cash_pending=1&order=1',
+        )
         # 到店付（堂食/打包）与外卖货到付款：均立即进入待备货，先备货再收款。
         # 外卖货到付款改正：先备货、派单，送达时由骑手收款（不再「确认收款后才备货派单」）。
         order.order_status = 'awaiting_prep'
@@ -94,6 +100,9 @@ def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentIni
         assign_default_wait_time(order, save=False)
         update_fields.extend(['order_status', 'estimated_ready_at'])
         order.save(update_fields=update_fields)
+        from ..order_alert_helpers import maybe_notify_merchant_new_order
+
+        maybe_notify_merchant_new_order(order)
         suffix = 'cod=1'
         if order.is_dine_in():
             suffix = 'dine_in=1'

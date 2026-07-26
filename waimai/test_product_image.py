@@ -71,7 +71,8 @@ class ProductImageUploadTests(TestCase):
         files = [_make_png_upload(f't{i}.png', size=(40, 40)) for i in range(MAX_DISH_IMAGES_PER_PRODUCT + 1)]
         err = apply_dish_image_uploads(self.dish, files)
         self.assertIsNotNone(err)
-        self.assertEqual(self.dish.product_images.count(), 0)
+        self.assertEqual(self.dish.product_images.count(), MAX_DISH_IMAGES_PER_PRODUCT)
+        self.assertIn('失败', err)
 
     def test_delete_dish_removes_image_files(self):
         apply_dish_image_uploads(self.dish, [_make_png_upload()])

@@ -64,6 +64,9 @@ def apply_guest_onsite_cash(order: BuyOrder) -> None:
     order.save(update_fields=[
         'payment_method', 'order_status', 'estimated_ready_at', 'updated_at',
     ])
+    from waimai.order_alert_helpers import maybe_notify_merchant_new_order
+
+    maybe_notify_merchant_new_order(order)
 
 
 def maybe_close_table_session_after_settle(order: BuyOrder) -> None:

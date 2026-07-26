@@ -431,6 +431,16 @@ def shop_work(request, shop_code):
             'workbench_shell': workbench_shell,
         }
         context.update(build_shop_work_daily_history(seller_id, work_user))
+        if work_user.role == 'seller':
+            from .forms import ShopDutyOrderNotifyForm
+            from .operating_helpers import get_operating_settings
+            from .order_notify_ui_helpers import smtp_not_ready_message
+
+            operating = get_operating_settings(seller_id)
+            context['duty_order_notify_form'] = ShopDutyOrderNotifyForm(instance=operating)
+            context['duty_order_notify_smtp_warn'] = smtp_not_ready_message(
+                operating.duty_order_notify_enabled,
+            )
         from .audit_helpers import query_audit_logs, write_audit_log
         # 服务方仅看本人操作记录（A.12）
         if is_shop_staff_account(work_user):
@@ -944,6 +954,26 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         **channel_template_flags(shop_channel),
         **_shop_cart_context(cart, seller_id),
     }
+    notices = []
+    err_text = ctx.get('error') or ''
+    if err_text:
+        notices.append({'level': 'error', 'text': err_text, 'mustAck': True})
+    if ctx.get('success'):
+        ff = ctx.get('success_fulfillment') or ''
+        ok_text = '支付成功！'
+        if ff == 'order':
+            ok_text += '订单已提交，店家将按商品说明或沟通约定处理。'
+        elif ff == 'dine_in':
+            ok_text += '请入座用餐，店铺将为您备餐。'
+        elif ff == 'takeaway':
+            ok_text += '请按约定到店取餐。'
+        else:
+            ok_text += '店铺将备货并派给本店骑手配送。'
+        notices.append({'level': 'ok', 'text': ok_text, 'mustAck': False})
+    if notices:
+        import json
+
+        ctx['yc_notice_boot'] = json.dumps(notices, ensure_ascii=False)
     if extra:
         ctx.update(extra)
     return render(request, 'waimai/shop.html', ctx)
@@ -1391,6 +1421,27 @@ def seller_panel(request):
 
 
 @login_required
+def seller_product_qr_print(request):
+    """G1-7：使用中清单全部商品二维码 · 批量打印页"""
+    if request.user.role != 'seller':
+        return redirect('/accounts/login/')
+
+    seller_id = request.user.username
+    from .menu_helpers import get_active_menu_profile
+    from .product_qr_print_helpers import build_catalog_qr_print_cards
+
+    return render(
+        request,
+        'waimai/seller/product_qr_print.html',
+        {
+            'print_cards': build_catalog_qr_print_cards(request, seller_id),
+            'active_profile': get_active_menu_profile(seller_id),
+            'shop_profile': ShopProfile.objects.filter(seller_id=seller_id).first(),
+        },
+    )
+
+
+@login_required
 def seller_panel_section(request, section):
     """卖家管理分区（仅店主生态登录）"""
     if request.user.role != 'seller':
@@ -1434,6 +1485,10 @@ def seller_panel_section(request, section):
         elif section == 'dine':
             response = handle_dine_post(request, seller_id)
         elif section == 'products':
+            if request.POST.get('upload_dish_image') == '1':
+                from .product_seller_handlers import handle_upload_dish_image_ajax
+
+                return handle_upload_dish_image_ajax(request, seller_id)
             response = handle_products_post(request, seller_id)
         elif section == 'workbench':
             from .workbench_handlers import handle_seller_workbench_post
@@ -1520,6 +1575,14 @@ def seller_panel_section(request, section):
         context['seller_new_order_ts'] = max((x['created_ts'] for x in new_order_links), default=0)
         # 页顶：有未读顾客沟通的订单（不受当前搜索条件限制）
         context['shop_unread_msg_orders'] = unread_summary['orders']
+        from .forms import ShopBossOrderNotifyForm
+        from .order_notify_ui_helpers import smtp_not_ready_message
+
+        operating = get_operating_settings(seller_id)
+        context['boss_order_notify_form'] = ShopBossOrderNotifyForm(instance=operating)
+        context['boss_order_notify_smtp_warn'] = smtp_not_ready_message(
+            operating.boss_order_notify_enabled,
+        )
     elif section == 'products':
         from .menu_helpers import find_menu_profile_by_pick_id, get_active_menu_profile
         from .product_shell_helpers import build_product_shell

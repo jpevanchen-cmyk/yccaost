@@ -1,0 +1,16 @@
+{# H3 · 卖家后台：老板新订单邮件 #}
+<details class="seller-panel-fold" id="boss-order-notify" open>
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📧 老板邮件通知</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="card-meta">店主不在店铺工作台时，有新单可发邮件提醒（与值班防漏单邮件分开配置）。</p>
+        {% if boss_order_notify_smtp_warn %}
+        <p class="msg-warn">{{ boss_order_notify_smtp_warn }}</p>
+        {% endif %}
+        <form method="POST" class="seller-panel-form auth-form">
+            {% csrf_token %}
+            <input type="hidden" name="save_boss_order_notify" value="1">
+            {{ boss_order_notify_form.as_p }}
+            <button type="submit" class="btn btn-green">保存老板邮件通知</button>
+        </form>
+    </div>
+</details>

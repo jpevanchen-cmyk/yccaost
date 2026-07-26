@@ -11,18 +11,6 @@
 <h1 class="page-title">🍱 {% if shop_profile %}{{ shop_profile.shop_name }}{% else %}卖家 {{ seller_id }} 的店铺{% endif %}</h1>
 {% if shop_profile %}<p class="page-desc">{{ shop_profile.address }}</p>{% endif %}
 
-{% if success %}
-<div class="msg-ok">✅ 支付成功！
-    {% if success_fulfillment == 'order' %}订单已提交，店家将按商品说明或沟通约定处理。
-    {% elif success_fulfillment == 'dine_in' %}请入座用餐，店铺将为您备餐。
-    {% elif success_fulfillment == 'takeaway' %}请按约定到店取餐。
-    {% else %}店铺将备货并派给本店骑手配送。
-    {% endif %}
-</div>
-{% endif %}
-{% if error %}
-<div class="msg-err">⚠️ {{ error }}</div>
-{% endif %}
 {% if table_label %}
 <div class="msg-ok">🪑 当前桌台：<strong>{{ table_label }}</strong>（扫桌码 · 堂食通道，加点将计入本桌主单）
     {% if table_open_order %}
@@ -86,7 +74,7 @@
         {% with dish=row.dish %}
         <div class="dish-product-group">
         {% for opt in row.tier_options %}
-        <div class="dish-offer-card" id="dish-{{ dish.dish_id.hex|slice:":8" }}-{{ opt.tier }}">
+        <div class="dish-offer-card dish-offer-sub" id="dish-{{ dish.dish_id.hex|slice:":8" }}-{{ opt.tier }}">
             <div class="dish-offer-row">
                 <div class="dish-offer-name">{{ opt.display_name }}</div>
                 <div class="dish-offer-price">¥{{ opt.price }}</div>
@@ -115,7 +103,9 @@
         </div>
         {% endfor %}
         {% if row.image_gallery %}
+        <div class="dish-offer-sub dish-offer-gallery-wrap">
         {% include 'waimai/_dish_image_gallery.html' with gallery=row.image_gallery dish=dish only %}
+        </div>
         {% endif %}
         </div>
         {% endwith %}

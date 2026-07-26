@@ -1,0 +1,16 @@
+{# H3 · 店铺工作台：值班防漏单邮件（仅店主可见） #}
+{% if duty_order_notify_form %}
+<div class="card" style="padding:12px;margin-bottom:12px;" id="duty-order-notify">
+    <h2 style="margin:0 0 8px;font-size:16px;">📧 值班防漏单邮件</h2>
+    <p class="card-meta" style="margin:0 0 10px;">页面未一直开着时，可用邮件补发新单提醒（与卖家后台「老板邮件通知」分开）。</p>
+    {% if duty_order_notify_smtp_warn %}
+    <p class="msg-warn">{{ duty_order_notify_smtp_warn }}</p>
+    {% endif %}
+    <form method="post" action="{{ form_action }}" class="auth-form">
+        {% csrf_token %}
+        <input type="hidden" name="save_duty_order_notify" value="1">
+        {{ duty_order_notify_form.as_p }}
+        <button type="submit" class="btn btn-sm btn-green">保存值班邮件</button>
+    </form>
+</div>
+{% endif %}

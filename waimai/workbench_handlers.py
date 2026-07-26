@@ -3,7 +3,7 @@
 from django.contrib import messages
 from django.shortcuts import redirect
 
-from .forms import ShopWorkbenchSettingsForm
+from .forms import ShopWorkbenchSettingsForm, ShopDutyOrderNotifyForm
 from .operating_helpers import get_operating_settings
 
 
@@ -76,6 +76,20 @@ def handle_shop_work_post(request, seller_id: str, shop_code: str, current_view:
     operator = work_user or getattr(request, 'shop_work_user', None)
     if operator is None:
         messages.error(request, '请先登录店铺工作台')
+        return redirect(build_shop_work_redirect(shop_code, current_view))
+
+    # H3 · 值班防漏单邮件：仅店主可改
+    if 'save_duty_order_notify' in request.POST:
+        if operator.role != 'seller':
+            messages.error(request, '只有店主可以修改值班防漏单邮件设置')
+            return redirect(build_shop_work_redirect(shop_code, current_view))
+        operating = get_operating_settings(seller_id)
+        form = ShopDutyOrderNotifyForm(request.POST, instance=operating)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '值班防漏单邮件已保存')
+        else:
+            messages.error(request, '设置无效，请检查邮箱格式')
         return redirect(build_shop_work_redirect(shop_code, current_view))
 
     redirect_to = build_shop_work_redirect(shop_code, current_view)

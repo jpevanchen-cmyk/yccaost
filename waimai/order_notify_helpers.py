@@ -1,9 +1,10 @@
-# 新订单邮件通知：有新订单时给店铺配置的收件邮箱发提醒
+# 新订单邮件通知：订单进入「商家应处理」范围时给店铺配置的收件邮箱发提醒
 #
 # 说明：
 # - 只有服务器已配置发信邮箱（网页或 .env），且店铺开启了通知、
 #   填了收件邮箱时才会真的发信；否则安静跳过，不报错、不卡顿。
 # - 发信放在数据库事务提交后进行，避免拖慢下单本身。
+# - 与 order_alert_helpers.is_shop_new_order 同一口径：纯待支付单不发。
 
 import logging
 
@@ -42,6 +43,26 @@ def _build_new_order_email(order) -> tuple[str, str]:
     return subject, '\n'.join(lines)
 
 
+def _collect_order_notify_recipients(op) -> list[str]:
+    """H3 双轨：老板轨 + 值班轨；同一邮箱只发一次。"""
+    tracks = (
+        (getattr(op, 'boss_order_notify_enabled', False), getattr(op, 'boss_order_notify_email', '')),
+        (getattr(op, 'duty_order_notify_enabled', False), getattr(op, 'duty_order_notify_email', '')),
+    )
+    seen: set[str] = set()
+    recipients: list[str] = []
+    for enabled, raw in tracks:
+        if not enabled:
+            continue
+        for addr in parse_recipient_list(raw or ''):
+            key = addr.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            recipients.append(addr)
+    return recipients
+
+
 def notify_new_order(order) -> None:
     """给店铺配置的收件邮箱发一封新订单提醒（条件不满足时安静跳过）"""
     from .email_helpers import is_email_ready
@@ -54,9 +75,7 @@ def notify_new_order(order) -> None:
         op = get_operating_settings(order.seller_id)
     except Exception:
         return
-    if not getattr(op, 'order_notify_enabled', False):
-        return
-    recipients = parse_recipient_list(getattr(op, 'order_notify_email', '') or '')
+    recipients = _collect_order_notify_recipients(op)
     if not recipients:
         return
 
@@ -71,10 +90,12 @@ def notify_new_order(order) -> None:
 
 
 def on_buy_order_created(sender, instance, created, **kwargs):
-    """BuyOrder 新建后触发：提交事务后再发邮件，避免拖慢下单"""
+    """BuyOrder 新建后：仅当已是「商家应处理」单才发信（如游客堂食现场付）。"""
     if not created:
         return
     try:
-        transaction.on_commit(lambda: notify_new_order(instance))
+        from .order_alert_helpers import maybe_notify_merchant_new_order
+
+        transaction.on_commit(lambda: maybe_notify_merchant_new_order(instance))
     except Exception:
         logger.exception('登记新订单通知失败')

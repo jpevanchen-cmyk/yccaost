@@ -1597,8 +1597,9 @@ body.seller-page .content {
     word-break: break-all;
 }
 
-/* 卖家操作结果弹窗 */
-.seller-flash-modal {
+/* 卖家操作结果弹窗（yc-notice 与历史 seller-flash 共用样式） */
+.seller-flash-modal,
+.yc-notice-modal {
     position: fixed;
     inset: 0;
     z-index: 9999;
@@ -1608,13 +1609,20 @@ body.seller-page .content {
     padding: 20px;
 }
 
-.seller-flash-backdrop {
+.seller-flash-modal[hidden],
+.yc-notice-modal[hidden] {
+    display: none !important;
+}
+
+.seller-flash-backdrop,
+.yc-notice-backdrop {
     position: absolute;
     inset: 0;
     background: rgba(0, 0, 0, 0.45);
 }
 
-.seller-flash-box {
+.seller-flash-box,
+.yc-notice-box {
     position: relative;
     z-index: 1;
     width: 100%;
@@ -1627,21 +1635,32 @@ body.seller-page .content {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
-.seller-flash-icon {
+.seller-flash-icon,
+.yc-notice-icon {
     font-size: 32px;
     text-align: center;
     margin-bottom: 8px;
 }
 
-.seller-flash-text {
+.seller-flash-text,
+.yc-notice-text {
     text-align: center;
     font-size: 15px;
     line-height: 1.5;
     margin: 0 0 16px;
 }
 
-.seller-flash-item.is-error .seller-flash-text {
+.seller-flash-item.is-error .seller-flash-text,
+.yc-notice-box.is-error .yc-notice-text {
     color: #c62828;
+}
+
+.yc-notice-box.is-warn .yc-notice-text {
+    color: #e65100;
+}
+
+.yc-notice-box.is-ok .yc-notice-text {
+    color: inherit;
 }
 
 .seller-inline-form {
@@ -2044,9 +2063,32 @@ body.seller-page .content {
     margin: 8px 0 0;
 }
 
-/* 客人点菜：每种价格单独一行 */
+/* 客人点菜：每种价格单独一行，整商品一个外框 */
 .dish-product-group {
     margin-bottom: 14px;
+    background: var(--yc-card);
+    border: 1px solid var(--yc-border);
+    border-radius: var(--yc-radius);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.dish-product-group .dish-offer-sub {
+    margin-bottom: 0;
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid var(--yc-border);
+    background: transparent;
+    box-shadow: none;
+}
+
+.dish-product-group .dish-offer-sub:last-child {
+    border-bottom: none;
+}
+
+.dish-offer-gallery-wrap {
+    padding: 10px 14px 12px;
+    background: rgba(0, 0, 0, 0.02);
 }
 
 /* 商品图：缩略图单行排在商品下方，排不下裁掉；点缩略图弹窗看大图 */
@@ -2193,7 +2235,7 @@ body.dish-lightbox-open {
 }
 
 .dish-product-group .dish-offer-card {
-    margin-bottom: 8px;
+    margin-bottom: 0;
 }
 
 .dish-product-group .dish-offer-card:last-child {

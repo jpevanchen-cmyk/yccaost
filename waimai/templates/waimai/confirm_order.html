@@ -11,7 +11,7 @@
     <h2 class="page-title" style="font-size:20px;margin-bottom:16px;">📋 确认订单</h2>
 
     {% if cart_removed_notice %}
-    <p class="msg-warn" style="margin-bottom:12px;">{{ cart_removed_notice }}</p>
+    <script type="application/json" id="yc-notice-boot">[{"level":"warning","text":"{{ cart_removed_notice|escapejs }}","mustAck":true}]</script>
     {% endif %}
 
     <div class="fulfillment-block">

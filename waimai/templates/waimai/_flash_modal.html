@@ -1,25 +1,20 @@
-{# 全站通用：操作结果弹窗（成功 / 失败） #}
-{% if messages %}
-<div id="site-flash-modal" class="seller-flash-modal" role="alertdialog" aria-modal="true">
-    <div class="seller-flash-backdrop"></div>
-    <div class="seller-flash-box">
-        {% for message in messages %}
-        <div class="seller-flash-item {% if message.tags == 'error' %}is-error{% else %}is-ok{% endif %}">
-            <div class="seller-flash-icon">{% if message.tags == 'error' %}⚠️{% else %}✅{% endif %}</div>
-            <p class="seller-flash-text">{{ message }}</p>
-        </div>
-        {% endfor %}
-        <button type="button" class="btn btn-block seller-flash-close" id="site-flash-close">知道了</button>
+{# 全站通用：操作结果弹窗（成功 / 警告 / 错误） #}
+{% load static %}
+<div id="yc-notice-modal" class="yc-notice-modal" role="alertdialog" aria-modal="true" hidden>
+    <div class="yc-notice-backdrop"></div>
+    <div class="yc-notice-box is-ok">
+        <div class="yc-notice-icon">✅</div>
+        <p class="yc-notice-text"></p>
+        <button type="button" class="btn btn-block yc-notice-close">知道了</button>
     </div>
 </div>
-<script>
-(function () {
-    var modal = document.getElementById('site-flash-modal');
-    var btn = document.getElementById('site-flash-close');
-    if (!modal) return;
-    function closeModal() { modal.style.display = 'none'; }
-    if (btn) btn.addEventListener('click', closeModal);
-    modal.querySelector('.seller-flash-backdrop').addEventListener('click', closeModal);
-})();
-</script>
+{% if messages %}
+<script type="application/json" id="yc-notice-messages">[
+{% for message in messages %}{"level":"{{ message.tags|default:'ok'|escapejs }}","text":"{{ message|escapejs }}","mustAck":{% if message.tags == 'error' or message.tags == 'warning' %}true{% else %}false{% endif %}}{% if not forloop.last %},{% endif %}
+{% endfor %}
+]</script>
 {% endif %}
+{% if yc_notice_boot %}
+<script type="application/json" id="yc-notice-boot">{{ yc_notice_boot|safe }}</script>
+{% endif %}
+<script src="{% static 'waimai/yc_notice.js' %}?v=1"></script>

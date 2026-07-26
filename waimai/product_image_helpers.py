@@ -1,9 +1,11 @@
-# 商品多图：文件夹、压缩、上传（A.11.11 · 批次 G · G1-2～G1-5）
+# 商品多图：文件夹、压缩、上传（A.11.11 · 批次 G · G1-2～G1-5 · 试跑补丁 H：逐张上传 + 事后压缩）
 
 from __future__ import annotations
 
+import logging
 import re
 import shutil
+import threading
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID
@@ -22,6 +24,8 @@ ALLOWED_DISH_IMAGE_EXT = frozenset({'png', 'jpg', 'jpeg', 'webp', 'gif'})
 
 # 磁盘目录：商品图片/<展示编号>/ → 实现为 dish_images/<code>/
 DISH_IMAGE_MEDIA_PREFIX = 'dish_images'
+
+logger = logging.getLogger('waimai')
 
 
 def dish_image_upload_to(instance, filename) -> str:
@@ -55,6 +59,14 @@ def _normalize_relpath(path: str) -> str:
 def _rel_path_for(code: str, sort_index: int, ext: str) -> str:
     ext = (ext or 'jpg').lower().lstrip('.') or 'jpg'
     return f'{DISH_IMAGE_MEDIA_PREFIX}/{code}/{code}-{sort_index}.{ext}'
+
+
+def _guess_ext(uploaded) -> str:
+    name = (getattr(uploaded, 'name', '') or '').lower()
+    ext = name.rsplit('.', 1)[-1] if '.' in name else 'jpg'
+    if ext not in ALLOWED_DISH_IMAGE_EXT:
+        return 'jpg'
+    return 'jpg' if ext == 'jpeg' else ext
 
 
 def _rename_image_record_to_index(record, new_index: int) -> None:
@@ -150,44 +162,141 @@ def _next_sort_indices(dish, count: int) -> list[int] | str:
 @transaction.atomic
 def apply_dish_image_uploads(dish, uploaded_files) -> str | None:
     """
-    批量上传商品图：压缩、写入 dish_images/<编号>/、库内记序号。
-    成功返回 None；失败返回给用户看的白话错误（整批不上传）。
+    批量上传商品图（兼容旧表单）：逐张上传，部分成功部分失败时返回汇总错误。
+    新页面应走 upload_single_dish_image + Ajax。
     """
-    from .models import DishImage
-
     files = [f for f in (uploaded_files or []) if f]
     if not files:
         return None
 
+    errors: list[str] = []
+    ok_count = 0
+    for uploaded in files:
+        _, err = upload_single_dish_image(dish, uploaded)
+        if err:
+            name = getattr(uploaded, 'name', '未知')
+            errors.append(f'「{name}」：{err}')
+        else:
+            ok_count += 1
+    if errors and ok_count == 0:
+        return errors[0]
+    if errors:
+        return f'成功 {ok_count} 张，失败 {len(errors)} 张：' + '；'.join(errors)
+    return None
+
+
+def upload_single_dish_image(dish, uploaded_file) -> tuple[dict | None, str | None]:
+    """
+    单张上传：先快速保存原图并写库，再在后台线程压缩为 JPEG。
+    返回 ({image_id, sort_index, url}, None) 或 (None, 错误文案)。
+    """
+    from .models import DishImage
+
+    if not uploaded_file:
+        return None, '未收到图片文件'
+
     code = normalize_display_code(dish.display_code)
     if not code:
-        return '商品尚未分配展示编号，请保存商品后再上传图片。'
+        return None, '商品尚未分配展示编号，请先保存商品后再上传图片。'
 
-    slots = _next_sort_indices(dish, len(files))
+    slots = _next_sort_indices(dish, 1)
     if isinstance(slots, str):
-        return slots
+        return None, slots
 
-    for uploaded, sort_index in zip(files, slots):
-        err = _validate_upload_file(uploaded)
-        if err:
-            return err
+    err = _validate_upload_file(uploaded_file)
+    if err:
+        return None, err
 
-    for uploaded, sort_index in zip(files, slots):
+    sort_index = slots[0]
+    ext = _guess_ext(uploaded_file)
+    rel_path = _rel_path_for(code, sort_index, ext)
+    abs_path = _media_root() / rel_path
+    abs_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        uploaded_file.seek(0)
+        data = uploaded_file.read()
+        if not data:
+            return None, '图片文件为空'
+        abs_path.write_bytes(data)
+    except Exception:
+        return None, f'图片「{getattr(uploaded_file, "name", "未知")}」保存失败，请重试。'
+
+    record = DishImage(
+        dish=dish,
+        seller_id=dish.seller_id,
+        display_code=code,
+        sort_index=sort_index,
+    )
+    record.image.name = rel_path
+    record.save()
+
+    _schedule_dish_image_compress(record.image_id)
+    try:
+        url = record.image.url
+    except (ValueError, AttributeError):
+        url = ''
+    return {
+        'image_id': str(record.image_id),
+        'sort_index': sort_index,
+        'url': url,
+    }, None
+
+
+def _schedule_dish_image_compress(image_id) -> None:
+    """后台线程压缩，不阻塞上传响应；跑测试时同步压缩避免竞态。"""
+
+    def _job():
         try:
-            jpeg_bytes = compress_image_to_jpeg_bytes(uploaded)
+            compress_dish_image_by_id(image_id)
         except Exception:
-            return f'图片「{getattr(uploaded, "name", "未知")}」无法处理，请换一张试试。'
+            logger.exception('商品图压缩失败 image_id=%s', image_id)
 
-        record = DishImage(
-            dish=dish,
-            seller_id=dish.seller_id,
-            display_code=code,
-            sort_index=sort_index,
-        )
-        filename = f'{code}-{sort_index}.jpg'
-        record.image.save(filename, ContentFile(jpeg_bytes), save=True)
+    import sys
 
-    return None
+    if any(arg == 'test' for arg in sys.argv):
+        _job()
+        return
+    threading.Thread(target=_job, daemon=True, name=f'yc-dish-img-{image_id}').start()
+
+
+def compress_dish_image_by_id(image_id) -> bool:
+    """将已落盘的原图压缩为 JPEG；失败时保留原图并写日志。返回是否压缩成功。"""
+    from .models import DishImage
+
+    record = DishImage.objects.filter(image_id=image_id).select_related('dish').first()
+    if not record or not record.image:
+        return False
+    return compress_dish_image_record(record)
+
+
+def compress_dish_image_record(record) -> bool:
+    """压缩单条商品图记录；成功则替换为 .jpg 并更新库。"""
+    code = normalize_display_code(record.display_code)
+    sort_index = record.sort_index
+    old_rel = _normalize_relpath(record.image.name)
+    old_abs = _media_root() / old_rel
+    if not old_abs.is_file():
+        return False
+
+    try:
+        with old_abs.open('rb') as fh:
+            jpeg_bytes = compress_image_to_jpeg_bytes(fh)
+    except Exception:
+        logger.warning('商品图无法压缩，保留原图：%s', old_rel, exc_info=True)
+        return False
+
+    new_rel = _rel_path_for(code, sort_index, 'jpg')
+    new_abs = _media_root() / new_rel
+    new_abs.parent.mkdir(parents=True, exist_ok=True)
+    new_abs.write_bytes(jpeg_bytes)
+    if old_abs.resolve() != new_abs.resolve() and old_abs.is_file():
+        old_abs.unlink(missing_ok=True)
+
+    if record.image.name != new_rel:
+        record.image.name = new_rel
+        record.save(update_fields=['image'])
+    return True
 
 
 def delete_all_images_for_dish(dish) -> None:
