@@ -7,11 +7,13 @@ from django.db import models
 from .dispatch_helpers import get_delivery_handoff_mode
 from .models import BuyOrder, OrderWaiterDishServeLog, User
 from .order_progress_helpers import (
-    build_progress_groups,
+    build_dual_progress_groups,
     count_progress_units,
+    dish_serve_fully_done,
     fill_all_progress_units,
-    find_markable_line,
+    find_markable_serve_line,
     find_undo_line,
+    has_servable_units,
     norm_dish_id,
     normalize_dish_items as normalize_dish_items_base,
 )
@@ -73,10 +75,8 @@ def count_order_units(dish_items: list | None) -> tuple[int, int]:
 
 
 def build_dish_groups(dish_items: list | None) -> list[dict]:
-    """
-    按菜品 ID 合并展示（不同价档合并为一组），统计总份数与已服务份数。
-    """
-    return build_progress_groups(dish_items, 'served_count', 'served_qty')
+    """按菜品合并：总份数、已备好、已交付。"""
+    return build_dual_progress_groups(dish_items)
 
 
 def get_serve_unit_label(order: BuyOrder) -> str:
@@ -165,9 +165,11 @@ def query_waiter_active_orders(seller_id: str, *, sort_mode: str = 'newest'):
     return order_queryset_by_created(qs, sort_mode)
 
 
-def _find_markable_line(items: list[dict], dish_id: str) -> dict | None:
-    """找还可 +1 的一份所在明细行"""
-    return find_markable_line(items, dish_id, 'served_count')
+def _serve_blocked_message(order: BuyOrder) -> str:
+    """后厨未备好时的提示。"""
+    if order.fulfillment_type == 'delivery' and get_delivery_handoff_mode(order.seller_id) == 'waiter':
+        return '后厨尚未备好这一份，暂不能交给骑手'
+    return '后厨尚未备好这一份，暂不能交付'
 
 
 def _find_undo_line(items: list[dict], dish_id: str) -> dict | None:
@@ -231,22 +233,13 @@ def mark_dish_unit_served(
     *,
     operator_username: str,
 ) -> tuple[bool, str]:
-    """标记某道菜再上一份/交一份"""
+    """标记某道菜再上一份/交一份（须后厨先备好）。"""
     items, struct_changed = normalize_dish_items(order.dish_items)
-    if order.fulfillment_type == 'delivery' and get_delivery_handoff_mode(order.seller_id) == 'waiter':
-        target = _norm_dish_id(dish_id)
-        prepared_total = 0
-        served_total = 0
-        for row in items:
-            if _norm_dish_id(str(row.get('dish_id', ''))) != target:
-                continue
-            prepared_total += int(row.get('prepared_count') or 0)
-            served_total += int(row.get('served_count') or 0)
-        if prepared_total <= served_total:
-            return False, '后厨尚未备好这一份，暂不能交给骑手'
-    line = _find_markable_line(items, dish_id)
+    line = find_markable_serve_line(items, dish_id)
     if not line:
-        return False, '该菜品已全部标记，无需重复操作'
+        if dish_serve_fully_done(items, dish_id):
+            return False, '该菜品已全部标记，无需重复操作'
+        return False, _serve_blocked_message(order)
 
     line['served_count'] = int(line.get('served_count') or 0) + 1
     order.dish_items = items
@@ -323,14 +316,11 @@ def mark_all_dish_served(
     *,
     operator_username: str,
 ) -> tuple[bool, str]:
-    """服务员一键全部交付/上桌（仅交付已备好份数）。"""
+    """服务员一键全部交付/上桌（仅交付后厨已备好份数）。"""
     items, struct_changed = normalize_dish_items(order.dish_items)
-    if order.fulfillment_type == 'delivery' and get_delivery_handoff_mode(order.seller_id) == 'waiter':
-        marked = fill_all_progress_units(items, 'served_count', cap_field='prepared_count')
-    else:
-        marked = fill_all_progress_units(items, 'served_count')
+    marked = fill_all_progress_units(items, 'served_count', cap_field='prepared_count')
     if marked <= 0:
-        return False, '没有可交付的商品，请先备好'
+        return False, '没有可交付的商品，请后厨先备好'
 
     order.dish_items = items
     groups = build_dish_groups(items)
@@ -372,15 +362,9 @@ def all_dishes_served(order: BuyOrder) -> bool:
 
 
 def waiter_can_mark_all_served(order: BuyOrder) -> bool:
-    """是否可一键全部交付/上桌。"""
+    """是否可一键全部交付/上桌（须后厨已有备好份数）。"""
     items, _ = normalize_dish_items(order.dish_items)
-    if order.fulfillment_type == 'delivery' and get_delivery_handoff_mode(order.seller_id) == 'waiter':
-        for line in items:
-            if int(line.get('served_count') or 0) < int(line.get('prepared_count') or 0):
-                return True
-        return False
-    total, served = count_order_units(order.dish_items)
-    return total > 0 and served < total
+    return has_servable_units(items)
 
 
 def waiter_can_collect_payment(order: BuyOrder) -> bool:

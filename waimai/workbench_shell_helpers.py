@@ -15,6 +15,13 @@ def _core_shell() -> dict:
             '👀 当前为<strong>只读</strong>：您可查看订单，'
             '改状态或确认收款需由店主勾选对应权限。'
         ),
+        'tab_cashier': '收银台',
+        'view_cashier_title': '实体收银台',
+        'cashier_empty': '今天没有待支付订单。',
+        'cashier_readonly_hint': (
+            '👀 当前为<strong>只读</strong>：您可查看待支付列表，'
+            '收款操作需由店主勾选「收银台」权限。'
+        ),
         'tab_waiter': '前台',
         'tab_kitchen': '备货',
         'tab_rider': '配送',
@@ -84,6 +91,16 @@ def build_workbench_shell(seller_id: str) -> dict:
             ))
             extra = {**extra, 'enabled_views': merged}
         shell.update(extra)
+
+    # 实体收银台：主体通用，不绑业态插件
+    from .payments.core import get_payment_settings
+
+    pay_settings = get_payment_settings(seller_id)
+    if pay_settings.enable_cashier:
+        views = list(shell.get('enabled_views') or [])
+        if 'cashier' not in views:
+            views.append('cashier')
+        shell['enabled_views'] = views
 
     # 仅当饮食业态前台/备货面板出现时，收起主体「订单处理」
     # （仅开履约配送时仍保留订单台，方便干洗自送等业态）

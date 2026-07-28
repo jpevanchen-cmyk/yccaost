@@ -1,0 +1,27 @@
+{% extends 'waimai/onboarding/preview_base.html' %}
+{% load yc_time %}
+
+{% block onboarding_preview_body %}
+<p class="page-desc">登录买家账号后，在「我的订单」可查看各店订单状态、金额与详情入口。</p>
+<p class="card-meta">以下为「{{ shop_name }}」的示例订单样式（演示数据，非您的个人订单）。</p>
+
+{% if orders %}
+{% for order in orders %}
+<div class="card onboarding-readonly-card"{% if forloop.first %} data-yc-tour="buyer-order-sample"{% endif %}>
+    <div class="order-card-top">
+        <div>
+            <div class="order-card-id">订单号：{{ order.get_display_order_no }}</div>
+            <div class="card-meta" style="margin-top:4px;">{{ shop_name }} · {{ order.created_at|beijing:"m-d H:i" }}</div>
+        </div>
+        <div class="order-card-amount">¥{{ order.total_amount }}</div>
+    </div>
+    <div style="margin-top:8px;">
+        <span class="badge badge-default">{{ order.get_payment_status_display }}</span>
+        <span class="badge badge-order-prep" style="margin-left:6px;">{{ order.get_order_status_display }}</span>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<p class="card-meta">暂无示例订单。</p>
+{% endif %}
+{% endblock %}

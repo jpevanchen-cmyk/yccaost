@@ -49,6 +49,7 @@ PERM_ORDERS_VIEW = 'orders.view'
 PERM_ORDERS_UPDATE_STATUS = 'orders.update_status'
 PERM_ORDERS_CONFIRM_PAYMENT = 'orders.confirm_payment'
 PERM_ORDERS_CONTACT = 'orders.contact'
+PERM_ORDERS_CASHIER = 'orders.cashier'
 PERM_DINING_WAITER = 'dining.waiter'
 PERM_DINING_KITCHEN = 'dining.kitchen'
 # 配送属于履约能力；由履约插件贡献权限与页签（编号不绑死饮食）。
@@ -77,7 +78,12 @@ CORE_STAFF_PERMISSION_DEFINITIONS = [
     {
         'code': PERM_ORDERS_CONFIRM_PAYMENT,
         'label': '可确认收款',
-        'help_text': '可确认现金等到店收款；网上支付仍由系统自动到账',
+        'help_text': '可确认现金等到店收款（订单台兜底）；日常现场收款请用「收银台」权限',
+    },
+    {
+        'code': PERM_ORDERS_CASHIER,
+        'label': '收银台',
+        'help_text': '可打开工作台「收银台」Tab，对当天待支付订单现场收款',
     },
     {
         'code': PERM_ORDERS_CONTACT,
@@ -129,6 +135,7 @@ def staff_permission_codes(user) -> set[str]:
             PERM_DINING_WAITER,
             PERM_CANCEL_ORDER,
             PERM_FULFILLMENT_CASH_MANAGE,
+            PERM_ORDERS_CASHIER,
             *CORE_ORDER_DESK_PERMISSIONS,
         },
         'waiter': {

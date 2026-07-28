@@ -1,0 +1,155 @@
+{# 菜单清单卡片正文（体验 AJAX 刷新与 products 页共用） #}
+        <p class="page-desc" data-yc-tour="menu-intro">
+            切换{{ product_shell.catalog_word }}前须无未结束订单。客人店铺页以<strong>使用中</strong>的{{ product_shell.catalog_word }}为准。
+            <span data-yc-tour="menu-active-state">当前使用中：{% if active_profile %}<strong>{{ active_profile.name }}</strong>{% else %}未选（客人见全部上架商品）{% endif %}</span>
+            {% if active_profile %}
+            {% if experience_print_qr_url %}
+            · <a href="{{ experience_print_qr_url }}" data-unsaved-skip data-yc-tour="menu-print-qr-link">批量打印本清单商品二维码</a>
+            {% elif not experience_preview %}
+            · <a href="{% if onboarding_preview %}{% url 'onboarding_seller_print_qr' %}{% else %}{% url 'seller_product_qr_print' %}{% endif %}" target="_blank" rel="noopener" data-yc-tour="menu-print-qr-link">批量打印本清单商品二维码</a>
+            {% endif %}
+            {% endif %}
+        </p>
+        {% if selected_profile and active_profile and selected_profile.profile_id != active_profile.profile_id %}
+        <p class="msg-warn">当前查看的是「{{ selected_profile.name }}」，客人店铺页仍以「{{ active_profile.name }}」为准；改完后请「切换使用」。</p>
+        {% elif not active_profile %}
+        <p class="msg-warn">尚未有使用中的{{ product_shell.catalog_word }}，客人店铺页不会按下方「展示」设置过滤会员价/特价；请先点「切换使用」。</p>
+        {% endif %}
+        <p class="card-meta">说明：<strong>商品管理</strong>里设定是否<strong>允许</strong>会员价、特价；<strong>本{{ product_shell.catalog_word }}</strong>里设定是否<strong>对客人展示</strong>。两项都满足且本{{ product_shell.catalog_word }}已「切换使用」后，店铺页才会出现对应价格按钮。</p>
+        <form method="POST" class="seller-inline-form menu-profile-create-form"{% if not experience_writable %} data-unsaved-guard{% endif %} data-yc-tour="menu-create-form">
+            {% csrf_token %}
+            {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
+            <input type="hidden" name="create_menu_profile" value="1">
+            <label>新建{{ product_shell.catalog_word }} <input type="text" name="profile_name" placeholder="{{ product_shell.catalog_create_placeholder }}" required data-yc-tour="menu-profile-name"></label>
+            {% if menu_profiles %}
+            <label>复制自（可不选）
+                <select name="copy_from_profile_id" data-yc-tour="menu-copy-select">
+                    <option value="" data-yc-tour="menu-copy-new-option">全新（纳入全部商品）</option>
+                    {% for p in menu_profiles %}
+                    <option value="{{ p.profile_id }}" {% if active_profile and active_profile.profile_id == p.profile_id %}data-yc-tour="menu-copy-active-option"{% endif %}>{{ p.name }}{% if active_profile and active_profile.profile_id == p.profile_id %}（使用中）{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% endif %}
+            <button type="submit" class="btn" data-yc-tour="menu-create-submit">创建</button>
+        </form>
+        {% if menu_profiles %}
+        <form method="GET" class="seller-inline-form menu-profile-picker-form" style="margin-top:12px;">
+            <label>选择{{ product_shell.catalog_word }}
+                <select name="profile" id="menu-profile-select" data-yc-tour="menu-profile-select">
+                    {% for p in menu_profiles %}
+                    <option value="{{ p.profile_id }}" {% if selected_profile and selected_profile.profile_id == p.profile_id %}selected{% endif %}>
+                        {{ p.name }}{% if active_profile and active_profile.profile_id == p.profile_id %}（使用中）{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <span class="card-meta">切换后下方显示该清单详情；默认打开「使用中」的清单。</span>
+        </form>
+        {% if selected_profile %}
+        <div class="menu-profile-detail" id="menu-profile-detail">
+            <div class="menu-profile-detail-head">
+                <strong>{{ selected_profile.name }}</strong>
+                <form method="POST" style="display:inline;margin-left:8px;">
+                    {% csrf_token %}
+                    {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
+                    <input type="hidden" name="activate_menu_profile" value="1">
+                    <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                    <button type="submit" class="btn btn-sm" data-yc-tour="menu-activate-btn"
+                        {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}disabled{% endif %}>
+                        {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}使用中{% else %}切换使用{% endif %}
+                    </button>
+                </form>
+                <form method="POST" class="menu-profile-delete-form" style="display:inline;margin-left:4px;">
+                    {% csrf_token %}
+                    {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
+                    <input type="hidden" name="delete_menu_profile" value="1">
+                    <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                    <button type="submit" class="btn btn-sm btn-danger" data-yc-tour="menu-delete-btn" data-profile-name="{{ selected_profile.name }}"
+                        {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}disabled title="使用中的清单不能删除"{% endif %}>
+                        删除
+                    </button>
+                </form>
+            </div>
+            {% if selected_profile.items.all %}
+            <table class="seller-table menu-item-table" data-yc-tour="menu-item-table">
+                <thead>
+                    <tr>
+                        <th>{{ product_shell.item_label }}</th>
+                        <th>本清单上架</th>
+                        <th>展示会员价</th>
+                        <th>展示特价</th>
+                        <th>可售上限</th>
+                        <th>已售</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for item in selected_profile.items.all %}
+                <tr>
+                    <td>{{ item.dish.name }}</td>
+                    <td>
+                        <form method="POST" class="menu-item-toggle-form">
+                            {% csrf_token %}
+                            {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
+                            <input type="hidden" name="toggle_menu_item_listed" value="1">
+                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <button type="submit" class="btn btn-sm {% if item.is_listed %}btn-green{% else %}btn-outline{% endif %}"{% if tour_demo_menu_item_id and item.item_id == tour_demo_menu_item_id %} data-yc-tour="menu-item-listed-toggle"{% endif %}>
+                                {% if item.is_listed %}上架中{% else %}已下架{% endif %}
+                            </button>
+                        </form>
+                    </td>
+                    <td>
+                        {% if item.dish.member_price_enabled %}
+                        <form method="POST" class="menu-item-toggle-form">
+                            {% csrf_token %}
+                            {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
+                            <input type="hidden" name="toggle_menu_item_member" value="1">
+                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <button type="submit" class="btn btn-sm {% if item.member_price_listed %}btn-green{% else %}btn-outline{% endif %}"{% if tour_demo_menu_item_id and item.item_id == tour_demo_menu_item_id %} data-yc-tour="menu-item-member-toggle"{% endif %}>
+                                {% if item.member_price_listed %}展示{% else %}不展示{% endif %}
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="card-meta">未允许</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.dish.special_price_enabled %}
+                        <form method="POST" class="menu-item-toggle-form">
+                            {% csrf_token %}
+                            {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
+                            <input type="hidden" name="toggle_menu_item_special" value="1">
+                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <button type="submit" class="btn btn-sm {% if item.special_price_listed %}btn-green{% else %}btn-outline{% endif %}"{% if tour_demo_menu_item_id and item.item_id == tour_demo_menu_item_id %} data-yc-tour="menu-item-special-toggle"{% endif %}>
+                                {% if item.special_price_listed %}展示{% else %}不展示{% endif %}
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="card-meta">未允许</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" class="menu-item-cap-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="save_menu_item_cap" value="1">
+                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <input type="number" name="sales_cap" min="1" placeholder="不限"
+                                value="{% if item.sales_cap %}{{ item.sales_cap }}{% endif %}" style="width:72px;">
+                            <button type="submit" class="btn btn-sm">保存</button>
+                        </form>
+                    </td>
+                    <td>{{ item.sold_count }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="card-meta">本清单尚无商品，请先在「添加新商品」中创建。</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% endif %}

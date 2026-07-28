@@ -1,0 +1,334 @@
+/* 新版新手体验（试运行）：弹窗与引导卡片样式（与旧 onboarding-modal / yc-tour 区分） */
+
+.experience-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10140;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    pointer-events: none;
+}
+.experience-modal[hidden] {
+    display: none !important;
+}
+.experience-modal:not([hidden]) .experience-box {
+    pointer-events: auto;
+}
+.experience-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    pointer-events: auto;
+}
+.experience-box {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
+    border: 2px solid #c5e1a5;
+    background: #fff;
+}
+.experience-drag-handle {
+    cursor: move;
+    touch-action: none;
+    user-select: none;
+    margin: -4px -4px 10px;
+    padding: 4px 4px 0;
+}
+.experience-drag-hint {
+    display: block;
+    font-size: 11px;
+    color: var(--yc-orange, #e65100);
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.experience-box-title {
+    margin: 0 0 10px;
+    font-size: 1.15rem;
+}
+.experience-step-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 50vh;
+    overflow-y: auto;
+    margin-bottom: 12px;
+}
+.experience-step-picker-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    padding: 12px;
+    border: 1px solid var(--yc-border, #e0e0e0);
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+}
+.experience-step-picker-item:hover,
+.experience-step-picker-item:focus-visible {
+    border-color: var(--yc-orange, #e65100);
+    background: #fff8f0;
+}
+.experience-step-picker-num {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    border-radius: 50%;
+    background: var(--yc-orange, #e65100);
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+}
+.experience-step-picker-label {
+    flex: 1;
+    font-weight: 600;
+    line-height: 1.35;
+}
+.experience-zone-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.experience-graduate-icon {
+    font-size: 2rem;
+    text-align: center;
+    margin-bottom: 8px;
+}
+.experience-next-hint {
+    margin: 0 0 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--yc-green, #2e7d32);
+}
+
+body.yc-exp-tour-active {
+    overflow: hidden;
+}
+#yc-exp-tour-root {
+    position: fixed;
+    inset: 0;
+    z-index: 10150;
+    pointer-events: none;
+}
+#yc-exp-tour-root:not([hidden]) {
+    pointer-events: none;
+}
+#yc-exp-tour-root[hidden] {
+    display: none !important;
+}
+.yc-exp-tour-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+}
+.yc-exp-tour-spotlight {
+    position: fixed;
+    z-index: 10151;
+    border: 2px solid var(--yc-orange, #e65100);
+    border-radius: 8px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}
+.yc-exp-tour-spotlight[hidden] {
+    display: none !important;
+}
+.yc-exp-tour-card {
+    position: fixed;
+    z-index: 10152;
+    left: 12px;
+    top: 18vh;
+    transform: none;
+    width: min(420px, calc(100vw - 24px));
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+    pointer-events: auto;
+    border: 2px solid #c5e1a5;
+    cursor: default;
+}
+.yc-exp-tour-card .yc-exp-tour-title,
+.yc-exp-tour-card .yc-exp-tour-progress {
+    cursor: move;
+    touch-action: none;
+}
+.yc-exp-tour-progress {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--yc-orange, #e65100);
+}
+.yc-exp-tour-progress::before {
+    content: '⋮⋮ 可拖动 · ';
+    font-weight: 700;
+}
+.yc-exp-tour-title {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+}
+.yc-exp-tour-body {
+    margin: 0 0 10px;
+    line-height: 1.55;
+}
+.yc-exp-tour-tips {
+    margin: 0 0 10px 18px;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.yc-exp-tour-tips[hidden],
+.yc-exp-tour-warn[hidden],
+.yc-exp-tour-body[hidden] {
+    display: none !important;
+}
+.yc-exp-tour-warn {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    background: #fdecea;
+    border-left: 3px solid #d32f2f;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #b71c1c;
+}
+.yc-exp-tour-auto-count {
+    margin: 0 0 10px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--yc-orange, #e65100);
+}
+.yc-exp-tour-auto-count[hidden] {
+    display: none;
+}
+.yc-exp-tour-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.yc-exp-tour-no-auto {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    font-size: 13px;
+    line-height: 1.4;
+    cursor: pointer;
+    user-select: none;
+}
+.yc-exp-tour-no-auto input {
+    margin: 0;
+}
+.yc-exp-tour-nav-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.yc-exp-tour-nav-actions .btn {
+    flex: 1 1 0;
+    margin: 0;
+}
+.yc-exp-tour-prev:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.experience-home-page .experience-zone {
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+.onboarding-zone-actions .btn-experience-trial {
+    margin-top: 8px;
+}
+
+/* 第 6 大步：全屏截图演示（隐藏顶栏、底栏、标题等，只留示意图） */
+body.yc-exp-seller-6-screenshots .site-top,
+body.yc-exp-seller-6-screenshots .page-back-btn,
+body.yc-exp-seller-6-screenshots .onboarding-preview-badge,
+body.yc-exp-seller-6-screenshots .seller-header,
+body.yc-exp-seller-6-screenshots .seller-tabs-desktop,
+body.yc-exp-seller-6-screenshots .seller-tabs-mobile,
+body.yc-exp-seller-6-screenshots .seller-panel-fold:not(#experience-s6-demo) {
+    display: none !important;
+}
+body.yc-exp-seller-6-screenshots .content {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    max-width: none;
+}
+body.yc-exp-seller-6-screenshots .experience-s6-demo-fullscreen {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 8px 24px;
+}
+.experience-s6-demo-shot {
+    margin: 0 0 14px;
+    padding: 0;
+}
+.experience-s6-demo-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+    background: #fff;
+}
+/* 第 6 大步：说明框尽量窄一些，少挡截图 */
+body.yc-exp-seller-6-screenshots .yc-exp-tour-card {
+    width: min(360px, calc(100vw - 20px));
+    max-height: 42vh;
+}
+
+/* 第 5 大步第 12 小步：只显示固定截图，说明框放右侧空白 */
+body.yc-exp-seller-5-step12-screenshots .site-top,
+body.yc-exp-seller-5-step12-screenshots .page-back-btn,
+body.yc-exp-seller-5-step12-screenshots .onboarding-preview-badge,
+body.yc-exp-seller-5-step12-screenshots .seller-header,
+body.yc-exp-seller-5-step12-screenshots .seller-tabs-desktop,
+body.yc-exp-seller-5-step12-screenshots .seller-tabs-mobile,
+body.yc-exp-seller-5-step12-screenshots .seller-panel-fold,
+body.yc-exp-seller-5-step12-screenshots #experience-s6-demo {
+    display: none !important;
+}
+body.yc-exp-seller-5-step12-screenshots .experience-s5-step12-fullscreen {
+    display: block !important;
+}
+body.yc-exp-seller-5-step12-screenshots .content {
+    padding: 8px;
+    max-width: none;
+}
+.experience-s5-step12-fullscreen {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 8px 24px;
+}
+.experience-s5-step12-fullscreen[hidden] {
+    display: none !important;
+}
+.experience-s5-step12-shot {
+    margin: 0;
+    padding: 0;
+    max-width: 620px;
+}
+.experience-s5-step12-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+    background: #fff;
+}
+body.yc-exp-seller-5-step12-screenshots .yc-exp-tour-card {
+    width: min(340px, calc(100vw - 24px));
+    max-height: 70vh;
+}

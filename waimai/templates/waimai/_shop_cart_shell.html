@@ -4,7 +4,7 @@
 </aside>
 
 {% if cart_has_lines %}
-<div class="cart-bar is-visible" id="cart-bar">
+<div class="cart-bar is-visible" id="cart-bar" data-yc-tour="shop-cart-bar">
     <button type="button" class="cart-bar-info" id="cart-open-btn" data-cart-open>
         🛒 共 <strong>{{ cart_count }}</strong> 件 · <strong>¥{{ cart_total }}</strong>
         <span style="font-size:12px;color:#ccc;margin-left:6px;">点击查看</span>

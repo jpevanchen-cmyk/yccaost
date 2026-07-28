@@ -453,7 +453,9 @@ def build_server_home_view_context(request=None) -> dict:
         'order_nav_mode': '',
         'brand_title': site.site_name or '本服务器',
     }
-    return enrich_server_home_context(ctx)
+    ctx = enrich_server_home_context(ctx)
+    from .onboarding_helpers import enrich_server_home_onboarding
+    return enrich_server_home_onboarding(ctx)
 
 
 def build_home_view_context(page, request=None) -> dict:

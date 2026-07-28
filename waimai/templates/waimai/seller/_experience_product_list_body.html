@@ -1,0 +1,55 @@
+{# 商品管理列表正文（体验 AJAX 刷新与 products 页共用） #}
+        <p class="card-meta">{{ product_shell.product_help }}</p>
+        {% for dish in dishes %}
+        {% with dish_pick=dish.dish_id.hex|slice:":8" %}
+        <div class="seller-dish-row" id="dish-{{ dish_pick }}"
+            {% if tour_demo_dish_edit_pick and dish_pick == tour_demo_dish_edit_pick %}data-yc-tour="demo-dish-row"{% elif forloop.first %}data-yc-tour="product-sample-row"{% endif %}>
+            <div class="seller-dish-summary">
+                <strong>{{ dish.name }}</strong>
+                <span class="badge badge-pay-paid">通用 ¥{{ dish.price }}</span>
+                {% if dish.member_price_enabled %}<span class="badge badge-order-prep">会员价</span>{% endif %}
+                {% if dish.special_price_enabled %}<span class="badge badge-default">特价</span>{% endif %}
+                {% if dish.is_active %}<span class="badge badge-pay-paid">上架</span>{% else %}<span class="badge badge-default">下架</span>{% endif %}
+                {% if dish.display_code %}<span class="badge badge-default">编号 {{ dish.display_code|upper }}</span>{% endif %}
+                {% if dish.image_quota.dish_image_used %}<span class="badge badge-order-prep">{{ dish.image_quota.dish_image_used }} 图</span>{% endif %}
+                <div class="card-meta">排序 {{ dish.sort_order }}</div>
+            </div>
+            <div class="seller-dish-actions">
+                <a href="?edit={{ dish_pick }}{% if experience_tour_query %}{% for k,v in experience_tour_query.items %}&amp;{{ k }}={{ v }}{% endfor %}{% endif %}#edit-{{ dish_pick }}" class="btn btn-sm"
+                    {% if tour_demo_dish_edit_pick and dish_pick == tour_demo_dish_edit_pick %}data-yc-tour="demo-dish-edit-btn"{% elif forloop.first %}data-yc-tour="product-edit-btn"{% endif %}>编辑</a>
+                <form method="POST" class="dish-delete-form" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="delete_dish" value="1">
+                    <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                    <button type="submit" class="btn btn-sm btn-danger" data-dish-name="{{ dish.name }}">删除</button>
+                </form>
+            </div>
+            {% if edit_dish_id == dish_pick %}
+            <form method="POST" enctype="multipart/form-data" class="seller-form-stack product-edit-form" id="edit-{{ dish_pick }}"{% if not experience_writable %} data-unsaved-guard{% endif %}
+                {% if tour_demo_dish_edit_pick and dish_pick == tour_demo_dish_edit_pick %}data-yc-tour="demo-dish-edit-panel"{% else %}data-yc-tour="product-edit-panel"{% endif %}>
+                {% csrf_token %}
+                {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
+                <input type="hidden" name="edit_dish" value="1">
+                <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                <label>名称 <input type="text" name="name" value="{{ dish.name }}" required></label>
+                <label>通用价格 <input type="number" name="price" step="0.01" min="0.01" value="{{ dish.price }}" required></label>
+                <label>{{ product_shell.sort_help }}<input type="number" name="sort_order" value="{{ dish.sort_order }}"></label>
+                {% include 'waimai/seller/_product_description_fields.html' with dish=dish only %}
+                {% include 'waimai/seller/_tier_price_block.html' with prefix='member' title='会员价' hint='须登录买家可购。' dish=dish only %}
+                {% include 'waimai/seller/_tier_price_block.html' with prefix='special' title='特价' hint='须登录；受全店特价上限约束。' dish=dish only %}
+                <button type="submit" class="btn btn-block"
+                    {% if tour_demo_dish_edit_pick and dish_pick == tour_demo_dish_edit_pick %}data-yc-tour="demo-dish-edit-save"{% endif %}>保存修改</button>
+            </form>
+            {% if not experience_writable %}
+            {% include 'waimai/seller/_product_image_upload_fields.html' with dish=dish dish_image_max=dish.image_quota.dish_image_max dish_image_max_mb=dish_image_max_mb dish_image_used=dish.image_quota.dish_image_used dish_image_remaining=dish.image_quota.dish_image_remaining only %}
+            {% include 'waimai/seller/_product_image_manage.html' with dish=dish dish_image_max=dish.image_quota.dish_image_max dish_image_used=dish.image_quota.dish_image_used %}
+            {% if edit_scan_qr_rows %}
+            {% include 'waimai/seller/_product_scan_qr.html' with dish=dish scan_qr_rows=edit_scan_qr_rows %}
+            {% endif %}
+            {% endif %}
+            {% endif %}
+        </div>
+        {% endwith %}
+        {% empty %}
+        <p class="card-meta">尚无商品，请在上方上架。</p>
+        {% endfor %}

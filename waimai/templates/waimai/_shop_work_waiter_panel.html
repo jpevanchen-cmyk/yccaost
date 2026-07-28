@@ -16,6 +16,8 @@
 </p>
 {% endif %}
 
+<p class="card-meta" data-yc-tour="work-waiter-action" style="margin-bottom:10px;">服务员操作区：接待、交付、协助收款与派单。</p>
+
 {% if orders %}
     {% for row in orders %}
     {% with order=row.order %}
@@ -49,11 +51,12 @@
             <div class="line-item" style="flex-wrap:wrap;gap:8px;padding:10px 0;border-bottom:1px solid #eee;">
                 <div style="flex:1;min-width:140px;">
                     <strong>{{ dish.name }}</strong>
-                    <div class="card-meta">已{{ row.serve_label }} {{ dish.served_qty }}/{{ dish.total_qty }}</div>
+                    <div class="card-meta">已{{ workbench_shell.prep_word }} {{ dish.prepared_qty }}/{{ dish.total_qty }} · 已{{ row.serve_label }} {{ dish.served_qty }}/{{ dish.total_qty }}</div>
                 </div>
                 {% if can_operate %}
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
                     {% if dish.served_qty < dish.total_qty %}
+                        {% if dish.served_qty < dish.prepared_qty %}
                     <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
                         {% csrf_token %}
                         <input type="hidden" name="mark_dish_unit" value="1">
@@ -61,6 +64,9 @@
                         <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
                         <button type="submit" class="btn btn-sm btn-orange">+1 {{ workbench_shell.unit_label }}{{ row.serve_label }}</button>
                     </form>
+                        {% else %}
+                    <span class="card-meta">待后厨{{ workbench_shell.prep_word }}</span>
+                        {% endif %}
                     {% endif %}
                     {% if dish.served_qty > 0 %}
                     <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>

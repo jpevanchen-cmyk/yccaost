@@ -6,14 +6,17 @@
 <div class="product-qr-print-page" id="product-qr-print-page">
     <div class="product-qr-print-toolbar no-print">
         <h2 style="margin:0 0 8px;">🖨 批量打印商品二维码</h2>
-        <p class="card-meta" style="margin:0 0 12px;">
+        <p class="card-meta" style="margin:0 0 12px;" data-yc-tour="print-qr-intro">
             以下为本店<strong>使用中清单</strong>
             {% if active_profile %}「{{ active_profile.name }}」{% endif %}
             内、已上架且可扫码的商品；每个可用档位各一张码。顾客须登录买家账号扫码加购。
         </p>
+        <p class="card-meta msg-warn" style="margin:0 0 12px;" data-yc-tour="print-qr-g18-hint">
+            规划 · 收银结账码（G1-8）：「扫货后至收银台出示结账码统一算账」尚未上线；当前 G1-6/7 已支持扫商品码加购。
+        </p>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-            <button type="button" class="btn btn-green" onclick="window.print()">打印本页</button>
-            <a href="{% url 'seller_panel_section' 'products' %}" class="btn btn-outline">返回商品管理</a>
+            <button type="button" class="btn btn-green" onclick="window.print()" data-yc-tour="print-qr-btn">打印本页</button>
+            <a href="{% if experience_products_url %}{{ experience_products_url }}{% elif onboarding_preview %}{% url 'onboarding_seller_products' %}{% else %}{% url 'seller_panel_section' 'products' %}{% endif %}" class="btn btn-outline" data-unsaved-skip>返回商品管理</a>
         </div>
         {% if not print_cards %}
         <p class="msg-warn">当前使用中清单里没有可打印的商品（须有展示编号且至少一个档位可售）。</p>

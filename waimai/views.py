@@ -335,6 +335,7 @@ def shop_work(request, shop_code):
 
         from .staff_account_helpers import (
             PERM_DINING_RIDER,
+            PERM_ORDERS_CASHIER,
             is_shop_staff_account,
             staff_has_any_order_desk_permission,
             staff_job_title,
@@ -353,6 +354,13 @@ def shop_work(request, shop_code):
             and not staff_has_any_order_desk_permission(work_user)
         ):
             enabled_views = [view for view in enabled_views if view != 'orders']
+
+        if (
+            'cashier' in enabled_views
+            and work_user.role != 'seller'
+            and not staff_has_permission(work_user, PERM_ORDERS_CASHIER)
+        ):
+            enabled_views = [view for view in enabled_views if view != 'cashier']
 
         current_view = (request.GET.get('view') or default_work_view(work_user)).strip()
         if current_view not in enabled_views:
@@ -405,6 +413,7 @@ def shop_work(request, shop_code):
             'enabled_work_views': enabled_views,
             'form_action': form_action,
             'tab_orders_url': _work_url('orders'),
+            'tab_cashier_url': _work_url('cashier'),
             'tab_waiter_url': _work_url('waiter'),
             'tab_kitchen_url': _work_url('kitchen'),
             'tab_rider_url': _work_url('rider'),
@@ -412,6 +421,7 @@ def shop_work(request, shop_code):
             'sort_newest_url': _work_url(current_view, 'newest'),
             'sort_oldest_url': _work_url(current_view, 'oldest'),
             'can_operate_orders': perms.get('orders', False),
+            'can_operate_cashier': perms.get('cashier', False),
             'can_open_orders': can_open_orders,
             'can_operate_waiter': perms['waiter'],
             'can_operate_kitchen': perms['kitchen'],
@@ -483,6 +493,12 @@ def shop_work(request, shop_code):
         elif current_view == 'rider':
             context.update(build_rider_board_context(
                 work_user, seller_id, sort_mode=work_order_sort,
+            ))
+        elif current_view == 'cashier':
+            from .cashier_helpers import build_cashier_context
+
+            context.update(build_cashier_context(
+                seller_id, work_user=work_user, request=request,
             ))
         return render(request, 'waimai/shop_work_hub.html', context)
 
@@ -660,6 +676,17 @@ def shop_work_order(request, shop_code, order_id):
         mark_order_messages_read(order, work_user)
 
     from .workbench_shell_helpers import build_workbench_shell
+    from .order_qr_helpers import order_cashier_qr_template_context
+
+    qr_ctx = order_cashier_qr_template_context(
+        request,
+        order,
+        shop_code=code,
+        print_url=reverse(
+            'shop_work_cashier_order_print',
+            kwargs={'shop_code': code, 'order_id': order.order_id},
+        ),
+    )
 
     return render(request, 'waimai/shop_work_order.html', {
         'shop_profile': shop_profile,
@@ -675,6 +702,155 @@ def shop_work_order(request, shop_code, order_id):
         'back_url': build_shop_work_path(code, view='orders'),
         'shop_work_logout_url': reverse('shop_work_logout', kwargs={'shop_code': code}),
         'workbench_shell': build_workbench_shell(seller_id),
+        **qr_ctx,
+    })
+
+
+def _shop_work_cashier_auth(request, shop_code: str):
+    """收银台微信页：校验工作台登录与收银权限。"""
+    from .shop_work_auth import get_shop_work_user
+    from .shop_work_helpers import (
+        build_shop_work_path,
+        get_shop_profile_by_code,
+        user_belongs_to_shop,
+    )
+    from .staff_account_helpers import PERM_ORDERS_CASHIER, staff_has_permission
+
+    shop_profile = get_shop_profile_by_code(shop_code)
+    if not shop_profile:
+        return None, None, None, redirect('directory')
+
+    code = (shop_profile.shop_code or '').strip()
+    seller_id = shop_profile.seller_id
+    work_user = get_shop_work_user(request)
+    if not work_user or not user_belongs_to_shop(work_user, seller_id):
+        messages.error(request, '请先登录本店工作台')
+        return None, None, None, redirect(build_shop_work_path(code, view='cashier'))
+    if not staff_has_permission(work_user, PERM_ORDERS_CASHIER):
+        messages.error(request, '您没有收银台操作权限')
+        return None, None, None, redirect(build_shop_work_path(code, view='cashier'))
+    return shop_profile, work_user, seller_id, None
+
+
+def shop_work_cashier_wechat(request, shop_code, order_id):
+    """收银台：微信 Native 扫码收款页（工作台内）。"""
+    from .cashier_helpers import cashier_wechat_page_context
+    from .shop_work_helpers import build_shop_work_path
+
+    shop_profile, work_user, seller_id, denied = _shop_work_cashier_auth(request, shop_code)
+    if denied:
+        return denied
+
+    order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
+    if order.payment_status == 'paid':
+        messages.success(request, '该订单已收款')
+        return redirect(build_shop_work_path(shop_profile.shop_code, view='cashier'))
+
+    ctx, err = cashier_wechat_page_context(
+        order, seller_id, client_ip=_client_ip(request),
+    )
+    if err:
+        messages.error(request, err)
+        return redirect(build_shop_work_path(shop_profile.shop_code, view='cashier'))
+
+    code = (shop_profile.shop_code or '').strip()
+    ctx.update({
+        'shop_profile': shop_profile,
+        'shop_work_code': code,
+        'work_user': work_user,
+        'cashier_back_url': build_shop_work_path(code, view='cashier'),
+        'cashier_status_url': reverse(
+            'shop_work_cashier_wechat_status',
+            kwargs={'shop_code': code, 'order_id': order.order_id},
+        ),
+    })
+    return render(request, 'waimai/shop_work_cashier_wechat.html', ctx)
+
+
+@require_GET
+def shop_work_cashier_wechat_status(request, shop_code, order_id):
+    """收银台微信扫码页：轮询是否已支付。"""
+    from .audit_helpers import audit_order_status
+    from .payments import poll_wechat_payment
+    from .shop_work_helpers import build_shop_work_path
+
+    shop_profile, work_user, seller_id, denied = _shop_work_cashier_auth(request, shop_code)
+    if denied:
+        return JsonResponse({'paid': False})
+
+    order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
+    back = build_shop_work_path(shop_profile.shop_code, view='cashier')
+    if order.payment_status == 'paid':
+        return JsonResponse({'paid': True, 'redirect': back})
+
+    was_paid = False
+    if poll_wechat_payment(order):
+        order.refresh_from_db()
+        was_paid = order.payment_status == 'paid'
+    else:
+        order.refresh_from_db()
+        was_paid = order.payment_status == 'paid'
+
+    if was_paid:
+        audit_order_status(
+            order=order,
+            actor=work_user,
+            summary=f'收银台微信收款 {order.get_display_order_no()} · ¥{order.total_amount}',
+            request=request,
+        )
+        return JsonResponse({
+            'paid': True,
+            'redirect': build_shop_work_path(shop_profile.shop_code, view='cashier'),
+        })
+    return JsonResponse({'paid': False})
+
+
+def shop_work_cashier_order_print(request, shop_code, order_id):
+    """收银台：打印订单码小票（待支付单）。"""
+    from .order_qr_helpers import build_order_cashier_qr_bundle
+    from .shop_work_helpers import build_shop_work_path
+
+    shop_profile, work_user, seller_id, denied = _shop_work_cashier_auth(request, shop_code)
+    if denied:
+        return denied
+
+    order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
+    code = (shop_profile.shop_code or '').strip()
+    qr_bundle = build_order_cashier_qr_bundle(request, order, code)
+    if not qr_bundle:
+        messages.error(request, '该订单不可打印收银码（须为今天待支付且已启用收银台）')
+        return redirect(build_shop_work_path(code, view='cashier'))
+
+    return render(request, 'waimai/order_cashier_qr_print.html', {
+        'order': order,
+        'qr_bundle': qr_bundle,
+        'shop_name': shop_profile.shop_name,
+        'back_url': build_shop_work_path(code, view='cashier'),
+    })
+
+
+@login_required
+def seller_order_cashier_qr_print(request, order_id):
+    """卖家后台：打印订单码小票。"""
+    from .order_qr_helpers import build_order_cashier_qr_bundle, resolve_shop_code_for_order
+
+    if request.user.role != 'seller':
+        messages.error(request, '只有店主可以打印订单码')
+        return redirect('seller_panel_section', section='orders')
+
+    order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=request.user.username)
+    shop_code = resolve_shop_code_for_order(order)
+    qr_bundle = build_order_cashier_qr_bundle(request, order, shop_code)
+    if not qr_bundle:
+        messages.error(request, '该订单不可打印收银码（须为待支付且已启用实体收银台）')
+        return redirect('order_detail', order_id=order.order_id)
+
+    shop_profile = ShopProfile.objects.filter(seller_id=order.seller_id).first()
+    return render(request, 'waimai/order_cashier_qr_print.html', {
+        'order': order,
+        'qr_bundle': qr_bundle,
+        'shop_name': shop_profile.shop_name if shop_profile else '',
+        'back_url': reverse('order_detail', kwargs={'order_id': order.order_id}),
     })
 
 
@@ -2422,6 +2598,7 @@ def order_detail(request, order_id):
     order_messages = list(order.messages.order_by('created_at')) if can_chat else []
 
     from .order_shell_helpers import build_order_shell
+    from .order_qr_helpers import order_cashier_qr_template_context, resolve_shop_code_for_order
 
     order_shell = build_order_shell(order)
     # 游客详情页：堂食现金提示按查看角色微调（结账后不可见本机订单）
@@ -2433,6 +2610,19 @@ def order_detail(request, order_id):
                 '结账后本机将不再保留本桌订单查看（有问题请以店内小票为准）。'
             ),
         }
+
+    shop_code_for_qr = resolve_shop_code_for_order(order)
+    qr_print_url = ''
+    qr_buyer_hint = viewer_role in ('buyer', 'guest')
+    if viewer_role == 'seller':
+        qr_print_url = reverse('seller_order_cashier_qr_print', kwargs={'order_id': order.order_id})
+    qr_ctx = order_cashier_qr_template_context(
+        request,
+        order,
+        shop_code=shop_code_for_qr,
+        print_url=qr_print_url,
+        show_buyer_hint=qr_buyer_hint,
+    )
 
     return render(request, 'waimai/order_detail.html', {
         'order': order,
@@ -2456,4 +2646,5 @@ def order_detail(request, order_id):
         'shop_work_code': '',
         'shop_work_back_url': '',
         'guest_shop_back_url': f'/shop/?seller_id={order.seller_id}' if viewer_role == 'guest' else '',
+        **qr_ctx,
     })

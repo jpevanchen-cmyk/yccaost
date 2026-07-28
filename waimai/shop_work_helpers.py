@@ -10,8 +10,8 @@ from .staff_account_helpers import ALL_STAFF_ROLES
 
 # 兼容旧引用；员工角色只以 staff_account_helpers 的定义为准。
 SHOP_STAFF_ROLES = ALL_STAFF_ROLES
-# orders = 主体通用订单台；其余为业态插件 Tab
-WORK_VIEWS = ('orders', 'waiter', 'kitchen', 'rider')
+# orders = 主体通用订单台；cashier = 实体收银台；其余为业态插件 Tab
+WORK_VIEWS = ('orders', 'cashier', 'waiter', 'kitchen', 'rider')
 SESSION_SHOP_WORK_CODE = 'shop_work_code'
 
 
@@ -56,6 +56,7 @@ def work_permissions(user) -> dict[str, bool]:
         PERM_DINING_KITCHEN,
         PERM_DINING_RIDER,
         PERM_DINING_WAITER,
+        PERM_ORDERS_CASHIER,
         PERM_ORDERS_CONFIRM_PAYMENT,
         PERM_ORDERS_UPDATE_STATUS,
         staff_has_any_order_desk_permission,
@@ -63,7 +64,7 @@ def work_permissions(user) -> dict[str, bool]:
     )
 
     if user.role == 'seller':
-        return {'orders': True, 'waiter': True, 'kitchen': True, 'rider': True}
+        return {'orders': True, 'cashier': True, 'waiter': True, 'kitchen': True, 'rider': True}
     can_orders_write = (
         staff_has_permission(user, PERM_ORDERS_UPDATE_STATUS)
         or staff_has_permission(user, PERM_ORDERS_CONFIRM_PAYMENT)
@@ -71,6 +72,7 @@ def work_permissions(user) -> dict[str, bool]:
     return {
         # 能打开订单台：任一细权限；写入由面板内按钮再判
         'orders': staff_has_any_order_desk_permission(user) and can_orders_write,
+        'cashier': staff_has_permission(user, PERM_ORDERS_CASHIER),
         'waiter': staff_has_permission(user, PERM_DINING_WAITER),
         'kitchen': staff_has_permission(user, PERM_DINING_KITCHEN),
         'rider': staff_has_permission(user, PERM_DINING_RIDER),

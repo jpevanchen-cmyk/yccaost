@@ -206,9 +206,25 @@
         resumePendingNavigation();
     }
 
+    function clearAllDirty() {
+        document.querySelectorAll('form[data-unsaved-guard]').forEach(function (f) {
+            f.setAttribute('data-unsaved-initial', serializeForm(f));
+            setDirty(f, false);
+        });
+        lastDirtyForm = null;
+    }
+
+    function registerForm(form) {
+        if (form && form.hasAttribute('data-unsaved-guard')) {
+            initGuardedForm(form);
+        }
+    }
+
     window.ycSellerUnsavedGuard = {
         confirmLeave: confirmLeave,
         isDirty: function () { return !!getDirtyForm(); },
+        clearAllDirty: clearAllDirty,
+        registerForm: registerForm,
         // 桌台/虚拟码批量操作是明确提交，不应被误判成离开网页。
         allowNextUnload: function () { allowNextUnload = true; },
     };

@@ -1,36 +1,51 @@
 {% extends 'waimai/base.html' %}
 {% load static %}
 
-{% block body_class %}seller-page{% endblock %}
+{% block body_class %}seller-page{% if onboarding_preview %} onboarding-preview-page{% endif %}{% if experience_writable %} yc-exp-writable{% endif %}{% if experience_seller6_screenshots %} yc-exp-seller-6-screenshots{% endif %}{% endblock %}
 
 {% block page_back %}
+{% if onboarding_preview %}
+{% include 'waimai/_page_back.html' with back_url=home_url back_label="返回服务器主页" %}
+{% else %}
 {% include 'waimai/_page_back.html' with back_url="/" back_label="返回主页" %}
+{% endif %}
 {% endblock %}
 
 {% block content %}
+{% if onboarding_preview %}
+<p class="onboarding-preview-badge card-meta" data-yc-tour="preview-banner" style="margin-bottom:8px;">
+    {% if experience_writable %}
+    🌱 可写演示 · {{ shop_profile.shop_name|default:official_shop.shop_name }} · 演示数据体验结束后自动清理
+    {% else %}
+    🌱 只读演示 · {{ shop_profile.shop_name|default:official_shop.shop_name }} · 不会保存任何修改
+    {% endif %}
+</p>
+{% endif %}
 <div class="seller-header">
-    <h1 class="page-title">📦 店铺管理</h1>
+    <h1 class="page-title">📦 店铺管理{% if onboarding_preview %}（演示）{% endif %}</h1>
     <p class="page-desc">店铺ID：<strong>{{ seller_id }}</strong>{% if shop_profile %} · {{ shop_profile.shop_name }}{% endif %}</p>
 </div>
 
 {# 电脑：顶部 Tab（由核心 + 已启用插件拼装） #}
 <nav class="seller-tabs-desktop" aria-label="店铺管理">
     {% for item in seller_nav_items %}
-    <a href="{% url 'seller_panel_section' item.section %}"
+    <a href="{% if onboarding_preview %}{{ item.href }}{% else %}{% url 'seller_panel_section' item.section %}{% endif %}"
        class="seller-nav-link {% if section == item.section %}active{% endif %}">
         {{ item.icon }} {{ item.label }}{% if item.section == 'orders' and shop_unread_msg_total %}<span class="seller-nav-badge" title="未读顾客沟通">{{ shop_unread_msg_total }}</span>{% endif %}
     </a>
     {% endfor %}
 </nav>
 
+{% if not onboarding_preview %}
 {% include 'waimai/seller/_unsaved_modal.html' %}
+{% endif %}
 
 {% block seller_content %}{% endblock %}
 
 {# 手机：底部 Tab #}
 <nav class="seller-tabs-mobile" aria-label="店铺管理">
     {% for item in seller_nav_items %}
-    <a href="{% url 'seller_panel_section' item.section %}"
+    <a href="{% if onboarding_preview %}{{ item.href }}{% else %}{% url 'seller_panel_section' item.section %}{% endif %}"
        class="seller-tab {% if section == item.section %}active{% endif %}">
         <span class="seller-tab-icon">
             {% if item.section == 'orders' %}
@@ -43,11 +58,17 @@
     </a>
     {% endfor %}
 </nav>
+
+{% if onboarding_readonly %}
+{% include 'waimai/onboarding/_readonly_guard.html' %}
+{% endif %}
 {% endblock %}
 
 {% block pre_mobile_js %}
 <script src="{% static 'waimai/seller_panel_fold.js' %}?v=3"></script>
+{% if not onboarding_readonly %}
 <script src="{% static 'waimai/seller_unsaved_guard.js' %}?v=2"></script>
+{% endif %}
 <script src="{% static 'waimai/home_block_editor.js' %}?v=2"></script>
 {% if section == 'products' %}
 <script src="{% static 'waimai/product_image_upload.js' %}?v=2"></script>

@@ -1,0 +1,157 @@
+{# 实体收银台：当天待支付列表 + 现场收款 #}
+{% load yc_time %}
+
+{% if messages %}
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}msg-err{% else %}msg-ok{% endif %}" style="margin-bottom:12px;">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<p class="card-meta" style="margin:0 0 12px;">
+    只显示<strong>今天</strong>的<strong>待支付</strong>订单。确认收款后订单进入<strong>待备货</strong>，后厨/前台在各岗位 Tab 手动备货与交付。
+    {% if not cashier_can_collect %}
+    {{ workbench_shell.cashier_readonly_hint|safe }}
+    {% endif %}
+</p>
+
+<p class="card-meta" style="margin:0 0 12px;padding:10px 12px;background:#f7f7f7;border-radius:8px;">
+    <strong>找单：</strong>手机扫顾客<strong>二维码</strong>（打开本页并定位订单）；
+    普通扫码枪扫<strong>条形码</strong>（光标放在下方搜索框，扫完自动填入订单号）。
+    {% if cashier_search_q %}
+    当前已按「{{ cashier_search_q }}」筛选。
+    {% endif %}
+</p>
+
+<form method="get" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+    <input type="hidden" name="view" value="cashier">
+    <input type="text" name="q" value="{{ cashier_search_q }}" maxlength="80"
+           placeholder="订单号关键词（如短号或完整展示号）" style="flex:1;min-width:180px;">
+    <button type="submit" class="btn btn-sm btn-outline">搜索</button>
+    {% if cashier_search_q %}
+    <a class="btn btn-sm btn-outline" href="{{ tab_cashier_url }}">清除搜索</a>
+    {% endif %}
+</form>
+
+{% if cashier_search_empty %}
+<p class="card-meta">今天待支付订单里没有匹配「{{ cashier_search_q }}」的结果。</p>
+{% elif cashier_empty %}
+<p class="card-meta">{{ workbench_shell.cashier_empty }}</p>
+{% else %}
+
+<p class="card-meta" style="margin:0 0 10px;">
+    共 {{ cashier_total_count }} 单待支付
+    {% if cashier_has_other_pages %} · 第 {{ cashier_page_obj.number }} / {{ cashier_page_obj.paginator.num_pages }} 页{% endif %}
+    · 每页 {{ cashier_page_size }} 条
+</p>
+
+{% for row in cashier_rows %}
+{% with order=row.order %}
+<div class="line-item" style="display:block;border-bottom:1px solid #eee;padding:14px 0;">
+    <div style="margin-bottom:8px;">
+        <strong>订单 {{ order.get_display_order_no }}</strong>
+        · {{ row.fulfillment_label }}
+        · ¥{{ order.total_amount }}
+        <div class="card-meta" style="margin-top:4px;">
+            {{ order.created_at|beijing:"H:i" }} 下单
+            {% if order.buyer_id %} · 买家 {{ order.buyer_id }}{% endif %}
+            {% if order.table_label %} · {{ workbench_shell.table_caption }} {{ order.table_label }}{% endif %}
+        </div>
+        {% if row.dish_summary %}
+        <div class="card-meta" style="margin-top:4px;">{{ row.dish_summary }}</div>
+        {% endif %}
+    </div>
+
+    {% if cashier_can_collect %}
+    <form method="post" action="{{ form_action }}" style="margin-top:8px;"
+          onsubmit="return confirm('确认按填写金额收款？');">
+        {% csrf_token %}
+        <input type="hidden" name="cashier_action" value="collect">
+        <input type="hidden" name="order_id" value="{{ order.order_id }}">
+
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:8px;">
+            <label style="min-width:140px;">
+                收款方式<br>
+                <select name="pay_mode" class="cashier-pay-mode" required style="margin-top:4px;">
+                    {% if cashier_enable_cash %}
+                    <option value="cash">现金</option>
+                    {% endif %}
+                    <option value="external"{% if not cashier_enable_cash %} selected{% endif %}>手动登记 · 外部门店收款</option>
+                </select>
+            </label>
+            <label style="min-width:120px;">
+                实收金额（元）<br>
+                <input type="number" name="collected_amount" step="0.01" min="0.01"
+                       value="{{ order.total_amount }}" required style="margin-top:4px;width:120px;">
+            </label>
+        </div>
+
+        <div class="cashier-channel-row" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+            <label style="min-width:160px;">
+                渠道（手动登记时）<br>
+                <select name="cashier_channel" style="margin-top:4px;">
+                    <option value="">— 选常用 —</option>
+                    {% for ch in cashier_channel_options %}
+                    <option value="{{ ch }}">{{ ch }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label style="flex:1;min-width:160px;">
+                或自由输入新渠道<br>
+                <input type="text" name="cashier_channel_custom" maxlength="32" placeholder="例如：店外 POS" style="margin-top:4px;width:100%;">
+            </label>
+        </div>
+
+        <div style="margin-bottom:8px;">
+            <label style="display:block;">
+                少收/抹零原因（实收少于应付且您有管理权限时必填）<br>
+                <input type="text" name="shortfall_reason" maxlength="200" placeholder="普通收银员少收须找店长授权"
+                       style="margin-top:4px;width:100%;max-width:420px;">
+            </label>
+        </div>
+
+        <button type="submit" class="btn btn-sm btn-green">确认收款</button>
+        <a class="btn btn-sm btn-outline" href="{% url 'shop_work_order' shop_work_code order.order_id %}">查看订单</a>
+        <a class="btn btn-sm btn-outline" href="{% url 'shop_work_cashier_order_print' shop_work_code order.order_id %}" target="_blank" rel="noopener">打印订单码</a>
+    </form>
+    {% if cashier_enable_wechat %}
+    <form method="post" action="{{ form_action }}" style="margin-top:8px;">
+        {% csrf_token %}
+        <input type="hidden" name="cashier_action" value="start_wechat">
+        <input type="hidden" name="order_id" value="{{ order.order_id }}">
+        <button type="submit" class="btn btn-sm btn-wechat">微信扫码收款</button>
+    </form>
+    {% elif cashier_wechat_hint %}
+    <p class="card-meta" style="margin-top:8px;">{{ cashier_wechat_hint }}</p>
+    {% endif %}
+    {% if cashier_enable_simulate %}
+    <form method="post" action="{{ form_action }}" style="margin-top:8px;"
+          onsubmit="return confirm('演示支付不扣真钱，确认模拟本单已付？');">
+        {% csrf_token %}
+        <input type="hidden" name="cashier_action" value="simulate_pay">
+        <input type="hidden" name="order_id" value="{{ order.order_id }}">
+        <button type="submit" class="btn btn-sm btn-outline">演示支付（不扣真钱）</button>
+    </form>
+    {% elif cashier_simulate_hint %}
+    <p class="card-meta" style="margin-top:8px;">{{ cashier_simulate_hint }}</p>
+    {% endif %}
+    {% else %}
+    <a class="btn btn-sm btn-outline" href="{% url 'shop_work_order' shop_work_code order.order_id %}">查看订单</a>
+    {% endif %}
+</div>
+{% endwith %}
+{% endfor %}
+
+{% if cashier_has_other_pages %}
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+    {% if cashier_page_obj.has_previous %}
+    <a class="btn btn-sm btn-outline"
+       href="{{ tab_cashier_url }}&page={{ cashier_page_obj.previous_page_number }}{% if cashier_search_q %}&q={{ cashier_search_q|urlencode }}{% endif %}">上一页</a>
+    {% endif %}
+    {% if cashier_page_obj.has_next %}
+    <a class="btn btn-sm btn-outline"
+       href="{{ tab_cashier_url }}&page={{ cashier_page_obj.next_page_number }}{% if cashier_search_q %}&q={{ cashier_search_q|urlencode }}{% endif %}">下一页</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endif %}

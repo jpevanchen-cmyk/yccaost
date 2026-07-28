@@ -1,10 +1,11 @@
 from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
-from django.urls import path
+from django.urls import path, include
 
 from waimai import views
 from waimai import owner_views as views_owner
+from waimai import onboarding_views
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -21,6 +22,21 @@ urlpatterns = [
         's/<str:shop_code>/work/order/<uuid:order_id>/',
         views.shop_work_order,
         name='shop_work_order',
+    ),
+    path(
+        's/<str:shop_code>/work/cashier/wechat/<uuid:order_id>/',
+        views.shop_work_cashier_wechat,
+        name='shop_work_cashier_wechat',
+    ),
+    path(
+        's/<str:shop_code>/work/cashier/wechat/<uuid:order_id>/status/',
+        views.shop_work_cashier_wechat_status,
+        name='shop_work_cashier_wechat_status',
+    ),
+    path(
+        's/<str:shop_code>/work/cashier/print/<uuid:order_id>/',
+        views.shop_work_cashier_order_print,
+        name='shop_work_cashier_order_print',
     ),
     path('owner-hub/', views.owner_hub, name='owner_hub'),
     # 服务器设置（通用）；旧 /owner/ 路径兼容跳转
@@ -64,6 +80,29 @@ urlpatterns = [
     path('pay/wechat/notify/', views.wechat_pay_notify, name='wechat_pay_notify'),
     path('order-history/', views.order_history, name='order_history'),
     path('order/<uuid:order_id>/', views.order_detail, name='order_detail'),
+    path(
+        'seller-panel/orders/cashier-qr/<uuid:order_id>/',
+        views.seller_order_cashier_qr_print,
+        name='seller_order_cashier_qr_print',
+    ),
+    path('onboarding/preview/seller/operating/', onboarding_views.onboarding_preview_seller_operating, name='onboarding_seller_operating'),
+    path('onboarding/preview/seller/products/', onboarding_views.onboarding_preview_seller_products, name='onboarding_seller_products'),
+    path('onboarding/preview/seller/print-qr/', onboarding_views.onboarding_preview_seller_print_qr, name='onboarding_seller_print_qr'),
+    path('onboarding/preview/seller/workbench/', onboarding_views.onboarding_preview_seller_workbench_manage, name='onboarding_seller_workbench_manage'),
+    path('onboarding/preview/work/login/', onboarding_views.onboarding_preview_work_login, name='onboarding_work_login'),
+    path('onboarding/preview/work/<str:view>/', onboarding_views.onboarding_preview_work_hub, name='onboarding_work_hub'),
+    path('onboarding/preview/seller/orders/', onboarding_views.onboarding_preview_seller_orders, name='onboarding_seller_orders'),
+    path(
+        'onboarding/preview/seller/orders/<uuid:order_id>/',
+        onboarding_views.onboarding_preview_seller_order_detail,
+        name='onboarding_seller_order_detail',
+    ),
+    path('onboarding/preview/seller/payment/', onboarding_views.onboarding_preview_seller_payment, name='onboarding_seller_payment'),
+    path('onboarding/preview/seller/homepage/', onboarding_views.onboarding_preview_seller_homepage, name='onboarding_seller_homepage'),
+    path('onboarding/preview/seller/dine/', onboarding_views.onboarding_preview_seller_dine, name='onboarding_seller_dine'),
+    path('onboarding/preview/seller/delivery/', onboarding_views.onboarding_preview_seller_delivery, name='onboarding_seller_delivery'),
+    path('onboarding/preview/buyer/orders/', onboarding_views.onboarding_preview_buyer_orders, name='onboarding_buyer_orders'),
+    path('experience/', include('waimai.onboarding.urls')),
 ]
 
 # 服务器拥有者私人工具包 URL（未开启时不注册）

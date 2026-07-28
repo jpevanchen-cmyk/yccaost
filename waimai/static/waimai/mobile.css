@@ -1867,6 +1867,14 @@ body.seller-page .content {
     border: none;
 }
 
+.btn-danger:disabled,
+.btn-danger[disabled] {
+    background: #bdbdbd;
+    color: #757575;
+    cursor: not-allowed;
+    opacity: 0.92;
+}
+
 .scan-paths-fold {
     margin-top: 14px;
     font-size: 13px;
@@ -3071,6 +3079,229 @@ ul.errorlist li {
 }
 .guestbook-owner-footer p:last-child {
     margin-bottom: 0;
+}
+
+/* —— H4 新手体验引导 —— */
+.onboarding-zone-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+}
+.onboarding-zone-actions .btn-block {
+    width: 100%;
+}
+.onboarding-step-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 12px 0 4px;
+    max-height: 42vh;
+    overflow-y: auto;
+}
+.onboarding-step-picker-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    text-align: left;
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+}
+.onboarding-step-picker-item:hover,
+.onboarding-step-picker-item:focus-visible {
+    border-color: var(--yc-orange, #e67e22);
+    background: #fffaf5;
+    outline: none;
+}
+.onboarding-step-picker-num {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--yc-orange, #e67e22);
+    min-width: 2.2em;
+    margin-top: 2px;
+}
+.onboarding-step-picker-label {
+    flex: 1;
+    font-weight: 600;
+    line-height: 1.35;
+}
+.onboarding-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+.onboarding-modal[hidden] {
+    display: none !important;
+}
+.onboarding-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+}
+.onboarding-box {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+.onboarding-box-title {
+    margin: 0 0 10px;
+    font-size: 1.15rem;
+}
+.onboarding-step-badge {
+    margin: 0 0 6px;
+    font-size: 12px;
+    color: var(--yc-orange, #e67e22);
+    font-weight: 700;
+}
+.onboarding-step-body {
+    margin-bottom: 14px;
+}
+.onboarding-graduate-icon {
+    font-size: 2rem;
+    text-align: center;
+    margin-bottom: 8px;
+}
+.onboarding-next-hint {
+    margin: 0 0 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--yc-green, #2e7d32);
+}
+.onboarding-preview-banner {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    background: #f1f8e9;
+    border: 1px solid #c5e1a5;
+}
+.onboarding-preview-badge {
+    margin: 0 0 6px;
+    font-weight: 700;
+    font-size: 14px;
+}
+.onboarding-readonly-card {
+    margin-bottom: 10px;
+    pointer-events: none;
+    user-select: none;
+}
+.onboarding-readonly-card a,
+.onboarding-readonly-card button,
+.onboarding-readonly-card input,
+.onboarding-readonly-card select,
+.onboarding-readonly-card textarea {
+    pointer-events: none;
+}
+
+/* 幻灯片式小步演示：遮罩 + 高亮框 + 说明卡片 */
+body.yc-tour-active {
+    overflow: hidden;
+}
+#yc-tour-root {
+    position: fixed;
+    inset: 0;
+    z-index: 10150;
+    pointer-events: none;
+}
+#yc-tour-root:not([hidden]) {
+    pointer-events: auto;
+}
+#yc-tour-root[hidden] {
+    display: none !important;
+}
+.yc-tour-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.12);
+}
+.yc-tour-spotlight {
+    position: fixed;
+    z-index: 10151;
+    border: 3px solid var(--yc-orange, #e67e22);
+    border-radius: 10px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.58);
+    transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease;
+    pointer-events: none;
+}
+.yc-tour-spotlight[hidden] {
+    display: none !important;
+}
+.yc-tour-card {
+    position: fixed;
+    z-index: 10152;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(420px, calc(100vw - 24px));
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+    pointer-events: auto;
+}
+.yc-tour-progress {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--yc-orange, #e67e22);
+}
+.yc-tour-title {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+}
+.yc-tour-body {
+    margin: 0 0 10px;
+    line-height: 1.55;
+}
+.yc-tour-tips {
+    margin: 0 0 10px;
+    padding: 10px 12px 10px 28px;
+    background: #fff8e6;
+    border: 1px solid #f0d78c;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.yc-tour-tips[hidden],
+.yc-tour-warn[hidden],
+.yc-tour-body[hidden] {
+    display: none !important;
+}
+.yc-tour-warn {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    background: #fdecea;
+    border-left: 3px solid #d32f2f;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #b71c1c;
+}
+.yc-tour-auto-count {
+    margin: 0 0 10px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--yc-orange, #e65100);
+}
+.yc-tour-auto-count[hidden] {
+    display: none;
+}
+.yc-tour-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 /* —— 主页积木后台：上下两块编辑 —— */

@@ -145,6 +145,8 @@ TEMPLATES = [
                 'waimai.context_processors.experience_site',
                 'waimai.context_processors.site_compliance',
                 'waimai.context_processors.site_branding',
+                'waimai.context_processors.onboarding_boot',
+                'waimai.onboarding.context.experience_boot',
                 'waimai.context_processors_owner.visitor_tracking',
                 'waimai.context_processors_owner.server_plugin_nav',
             ],

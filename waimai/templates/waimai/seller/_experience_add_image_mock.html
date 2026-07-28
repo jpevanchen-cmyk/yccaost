@@ -1,0 +1,10 @@
+{# 第 5 大步添加区：外观与真实「选择文件」上传区一致（观摩用，不可操作） #}
+<div class="product-image-upload-block" data-yc-tour="add-image">
+    <label class="product-image-upload-label">添加商品图片（最多 {{ dish_image_max|default:10 }} 张）</label>
+    <input type="file" name="dish_images" class="product-image-file-input" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple disabled aria-disabled="true">
+    <p class="card-meta">
+        支持 PNG、JPG、WEBP、GIF；单张不超过 {{ dish_image_max_mb|default:5 }} MB。选好图片后点本页下方<strong>「添加商品」</strong>，会随商品一起<strong>一张一张</strong>上传（压缩在服务器后台进行）。
+        文件将保存为「展示编号-序号」格式（如 A001-1）。
+    </p>
+    <input type="hidden" name="experience_demo_image" id="experience-demo-image-flag" value="1">
+</div>

@@ -1,40 +1,45 @@
 {% load staff_account %}
 {# 目标态子账号：管理职务 / 普通员工 + 自填职务名 + 权限清单 #}
 {% include 'waimai/seller/_panel_fold.html' with fold_id='management-staff-create' fold_title='👔 新建管理职务' %}
-    <p class="card-meta">
+    <div data-yc-tour="fold-mgmt-staff">
+    <p class="card-meta" data-yc-tour="mgmt-staff-intro">
         「店长、经理、大堂经理」都属于管理职务。职务名称由店主填写，
         能做什么以勾选权限为准，不再由“店长”二字自动决定。
     </p>
-    <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+    <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard data-yc-tour="mgmt-staff-form">
         {% csrf_token %}
         <input type="hidden" name="create_staff_account" value="1">
         {{ management_staff_form.as_p }}
-        <button type="submit" class="btn btn-green btn-block">创建管理职务账号</button>
+        <button type="submit" class="btn btn-green btn-block" data-yc-tour="mgmt-staff-submit">创建管理职务账号</button>
     </form>
+    </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 
 {% include 'waimai/seller/_panel_fold.html' with fold_id='employee-staff-create' fold_title='🪪 新建普通员工' %}
-    <p class="card-meta">
+    <div data-yc-tour="fold-emp-staff">
+    <p class="card-meta" data-yc-tour="emp-staff-intro">
         普通员工的职务名称可自行填写。已启用的业态插件会提供常用模板；
         选择模板后仍可调整名称与权限。
     </p>
-    <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
+    <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard data-yc-tour="emp-staff-form">
         {% csrf_token %}
         <input type="hidden" name="create_staff_account" value="1">
         {{ employee_staff_form.as_p }}
-        <button type="submit" class="btn btn-green btn-block">创建普通员工账号</button>
+        <button type="submit" class="btn btn-green btn-block" data-yc-tour="emp-staff-submit">创建普通员工账号</button>
     </form>
+    </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 
 {% include 'waimai/seller/_panel_fold.html' with fold_id='staff-account-list' fold_title='👥 子账号与权限' fold_open=True %}
+    <div data-yc-tour="fold-staff-list">
     <p class="card-meta">
         这里统一维护账号类别、职务名称与权限。停用插件不会删除员工或已存权限；
         重新启用后可继续使用。
     </p>
     {% if staff_account_rows %}
         {% for row in staff_account_rows %}
-        <details class="detail-collapse" style="margin-top:10px;">
-            <summary>
+        <details class="detail-collapse" style="margin-top:10px;" {% if forloop.first %}open data-yc-tour="staff-account-expand"{% endif %}>
+            <summary data-yc-tour="{% if forloop.first %}staff-account-row{% endif %}">
                 {{ row.account_type_label }} · <strong>{{ row.job_title }}</strong>
                 · {{ row.user.username|staff_display }}
                 {% if row.user.is_active %}
@@ -43,19 +48,19 @@
                 <span class="badge badge-default">已停用</span>
                 {% endif %}
             </summary>
-            <div class="detail-collapse-body">
+            <div class="detail-collapse-body" data-yc-tour="{% if forloop.first %}staff-edit-permissions{% endif %}">
                 <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
                     {% csrf_token %}
                     <input type="hidden" name="edit_staff_account" value="1">
                     <input type="hidden" name="staff_username" value="{{ row.user.username }}">
                     {{ row.edit_form.as_p }}
-                    <button type="submit" class="btn btn-green">保存职务与权限</button>
+                    <button type="submit" class="btn btn-green" data-yc-tour="{% if forloop.first %}staff-edit-save{% endif %}">保存职务与权限</button>
                 </form>
                 <form method="POST" class="seller-inline-form" style="margin-top:10px;">
                     {% csrf_token %}
                     <input type="hidden" name="toggle_staff_account" value="1">
                     <input type="hidden" name="staff_username" value="{{ row.user.username }}">
-                    <button type="submit" class="btn btn-sm btn-outline">
+                    <button type="submit" class="btn btn-sm btn-outline" data-yc-tour="{% if forloop.first %}staff-toggle-active{% endif %}">
                         {% if row.user.is_active %}停用账号{% else %}重新启用{% endif %}
                     </button>
                 </form>
@@ -65,4 +70,5 @@
     {% else %}
         <p class="card-meta">还没有员工子账号。</p>
     {% endif %}
+    </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}

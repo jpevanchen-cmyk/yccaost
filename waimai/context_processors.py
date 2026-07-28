@@ -1,5 +1,7 @@
 # 全站模板：店铺工作台导航与独立登录身份、会话守护配置
 
+import json
+
 
 def nav_shop_work(request):
     """工作台站点标记、店码、工作台登录用户（与生态 user 分开）"""
@@ -127,5 +129,36 @@ def site_branding(request):
         'site_brand_image_url': brand_image_url,
         'show_owner_console_link': show_server_settings,  # 模板兼容旧变量名
         'show_server_settings_link': show_server_settings,
+    }
+
+
+def onboarding_boot(request):
+    """全站注入新手体验引导数据（幻灯片式小步演示需跨页）"""
+    from .onboarding_helpers import build_onboarding_boot_payload, official_shop_ready
+
+    # 新版体验页或 ?exp=1 时不注入旧版 boot，避免双引导
+    if request.GET.get('exp') == '1' or request.path.startswith('/experience/'):
+        ready = official_shop_ready()
+        name = ''
+        if ready:
+            boot = build_onboarding_boot_payload()
+            name = boot['officialShopName']
+        return {
+            'onboarding_enabled': ready,
+            'onboarding_boot_json': '',
+            'official_shop_name': name,
+        }
+
+    if not official_shop_ready():
+        return {
+            'onboarding_enabled': False,
+            'onboarding_boot_json': '',
+            'official_shop_name': '',
+        }
+    boot = build_onboarding_boot_payload()
+    return {
+        'onboarding_enabled': True,
+        'onboarding_boot_json': json.dumps(boot, ensure_ascii=False),
+        'official_shop_name': boot['officialShopName'],
     }
 

@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}野草系统{% endblock %}</title>
     {% if yc_page_view_id %}<meta name="yc-page-view-id" content="{{ yc_page_view_id }}">{% endif %}
-    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=45">
+    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=48">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -32,10 +32,12 @@
             <div class="nav-section-title">导航</div>
             <a href="/">🌿 {{ site_nav_label|default:"店铺名录" }}</a>
             {% if user.is_authenticated and user.role == 'buyer' %}
-                <a href="{% url 'buyer_center' %}">👤 我的</a>
-                <a href="/order-history/">📜 我的订单</a>
+                <a href="{% url 'buyer_center' %}" data-yc-tour="nav-buyer-center">👤 我的</a>
+                <a href="/order-history/" data-yc-tour="nav-order-history">📜 我的订单</a>
             {% endif %}
-            {% if user.is_authenticated and user.role == 'seller' %}
+            {% if experience_preview and shop_order_preview_url %}
+                <a href="{{ shop_order_preview_url }}" data-yc-tour="nav-preview-shop" data-unsaved-skip>👀 预览店铺</a>
+            {% elif user.is_authenticated and user.role == 'seller' %}
                 <a href="/seller-panel/">📦 管理店铺</a>
                 <a href="/shop/?seller_id={{ user.username }}">👀 预览店铺</a>
                 <a href="{% url 'account_password_change' %}">🔐 修改密码</a>
@@ -67,9 +69,9 @@
                     <button type="submit" class="nav-logout-btn">退出登录</button>
                 </form>
             {% elif not on_shop_work_site %}
-                <a href="/accounts/login/">登录</a>
-                <a href="/register/">买家注册</a>
-                <a href="/shop-register/">店铺开通</a>
+                <a href="/accounts/login/" data-yc-tour="nav-login">登录</a>
+                <a href="/register/" data-yc-tour="nav-buyer-register">买家注册</a>
+                <a href="/shop-register/" data-yc-tour="nav-shop-register">店铺开通</a>
             {% else %}
                 <span class="nav-user-line">请在本页登录本店账号</span>
             {% endif %}
@@ -102,6 +104,7 @@
 
     {% block pre_mobile_js %}{% endblock %}
     {% include 'waimai/_flash_modal.html' %}
+    {% include 'waimai/onboarding/_graduate_modal.html' %}
     <script src="{% static 'waimai/mobile.js' %}?v=10"></script>
     {% if session_guard_enabled %}
     <script>
@@ -118,6 +121,17 @@
     <script src="{% static 'waimai/session_guard.js' %}?v=5"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
+    {% if onboarding_boot_json %}
+    <script type="application/json" id="yc-onboarding-boot">{{ onboarding_boot_json|safe }}</script>
+    <script src="{% static 'waimai/onboarding.js' %}?v=9"></script>
+    {% endif %}
+    {% if experience_boot_json %}
+    <link rel="stylesheet" href="{% static 'waimai/onboarding/experience.css' %}?v=1">
+    {% include 'waimai/onboarding/experience/_modals.html' %}
+    <script type="application/json" id="yc-experience-boot">{{ experience_boot_json|safe }}</script>
+    <script src="{% static 'waimai/onboarding/experience_modal.js' %}?v=1"></script>
+    <script src="{% static 'waimai/onboarding/experience.js' %}?v=1"></script>
+    {% endif %}
     {% if yc_track_visitor %}
     <script src="{% static 'owner_toolkit/visitor_beacon.js' %}?v=1"></script>
     {% endif %}

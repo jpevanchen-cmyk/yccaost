@@ -467,6 +467,8 @@ class ShopPaymentSettingsForm(forms.ModelForm):
             'enable_wechat',
             'enable_cash',
             'enable_cod',
+            'enable_cashier',
+            'cashier_page_size',
             'wechat_mch_id',
             'wechat_app_id',
             'wechat_api_key',
@@ -477,6 +479,8 @@ class ShopPaymentSettingsForm(forms.ModelForm):
             'enable_wechat': '开启微信支付（真扣款）',
             'enable_cash': '开启现金支付',
             'enable_cod': '允许外卖现金货到付款',
+            'enable_cashier': '启用实体收银台',
+            'cashier_page_size': '收银台每页显示条数',
             'wechat_mch_id': '微信商户号',
             'wechat_app_id': '微信 AppID',
             'wechat_api_key': '微信 APIv2 密钥',
@@ -485,12 +489,21 @@ class ShopPaymentSettingsForm(forms.ModelForm):
         widgets = {
             'wechat_api_key': forms.PasswordInput(render_value=True),
             'public_site_url': forms.URLInput(attrs={'placeholder': 'https://'}),
+            'cashier_page_size': forms.Select(choices=[(10, '10 条'), (20, '20 条')]),
         }
         help_texts = {
             'public_site_url': '用于微信自动通知；未部署公网时可留空，买家扫码页将自动轮询查单。',
             'enable_simulate': '正式上线前请关闭，避免顾客误用演示支付。',
             'enable_cod': '开启后，外卖顾客可选「现金货到付款」：店家先备货派单，骑手送达时收现金。关闭则外卖不显示现金。',
+            'enable_cashier': '开启后，店铺工作台出现「收银台」Tab，供现场收当天待支付订单。',
+            'cashier_page_size': '仅影响工作台收银台列表分页，与订单管理无关。',
         }
+
+    def clean_cashier_page_size(self):
+        size = self.cleaned_data.get('cashier_page_size')
+        if size not in (10, 20):
+            raise forms.ValidationError('每页条数只能选 10 或 20')
+        return size
 
     def clean(self):
         cleaned = super().clean()

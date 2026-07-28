@@ -1,0 +1,40 @@
+{% extends 'waimai/base.html' %}
+{% block title %}订单码 · 收银台找单 - 野草系统{% endblock %}
+
+{% block content %}
+<div class="order-qr-print-page" id="order-qr-print-page">
+    <div class="no-print" style="margin-bottom:16px;">
+        <h2 class="page-title" style="font-size:20px;">🧾 订单码 · 到店收银</h2>
+        <p class="card-meta" style="margin:0 0 12px;">
+            顾客可出示本页到收银台：手机扫<strong>二维码</strong>；普通扫码枪扫<strong>条形码</strong>（须先点开收银台并把光标放在搜索框）。
+            也可在搜索框输入下方订单号。
+        </p>
+        <button type="button" class="btn btn-green" onclick="window.print()">打印本页</button>
+        {% if back_url %}
+        <a class="btn btn-outline" href="{{ back_url }}" style="margin-left:8px;">返回</a>
+        {% endif %}
+    </div>
+
+    <div class="order-qr-print-card card" style="max-width:320px;margin:0 auto;text-align:center;padding:20px;">
+        {% if shop_name %}
+        <p class="card-meta" style="margin:0 0 8px;">{{ shop_name }}</p>
+        {% endif %}
+        <p style="margin:0 0 4px;font-size:15px;"><strong>{{ qr_bundle.display_no }}</strong></p>
+        <p class="pay-amount" style="margin:8px 0;">¥{{ qr_bundle.amount }}</p>
+        <img src="{{ qr_bundle.qr_data_url }}" alt="订单二维码" width="200" height="200" style="margin:12px auto;display:block;">
+        {% if qr_bundle.barcode_data_url %}
+        <p class="card-meta" style="margin:8px 0 4px;">扫码枪 · 条形码</p>
+        <img src="{{ qr_bundle.barcode_data_url }}" alt="订单条形码" style="max-width:280px;width:100%;height:auto;margin:0 auto;display:block;">
+        {% endif %}
+        <p class="card-meta" style="margin:8px 0 0;word-break:break-all;font-size:12px;">{{ qr_bundle.lookup_url }}</p>
+        <p class="card-meta" style="margin:12px 0 0;">待支付 · 请至收银台扫码或报订单号</p>
+    </div>
+</div>
+
+<style>
+@media print {
+    .no-print { display: none !important; }
+    .order-qr-print-card { border: none; box-shadow: none; }
+}
+</style>
+{% endblock %}

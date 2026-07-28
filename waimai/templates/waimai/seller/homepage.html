@@ -2,7 +2,8 @@
 
 {% block seller_content %}
 {% include 'waimai/seller/_panel_fold.html' with fold_id='home-page-settings' fold_title='🏠 店铺主页总设置' fold_open=True %}
-    <p class="card-meta" style="margin:0 0 12px;">
+    <div data-yc-tour="fold-home-settings">
+    <p class="card-meta" style="margin:0 0 12px;" data-yc-tour="home-auto-read">
         页顶<strong>店名、营业状态、营业时间、地址</strong>会自动读取店铺资料与「堂食营业」设置，不用在这里重复填。
         您只需编辑下面的<strong>简介、公告、进入店铺</strong>，以及可选的<strong>自定义积木</strong>（第一版最多 {{ max_custom_blocks }} 块）。
         网站根地址的<strong>服务器主页</strong>由服务器管理者在「服务器设置」中管理。
@@ -11,39 +12,44 @@
         配图上传名额：本账号已用 <strong>{{ photo_used }}</strong> / {{ photo_max }} 张（单张不超过 {{ photo_max_mb }} MB）。
     </p>
     <p style="margin-bottom:12px;">
-        <a class="btn btn-sm btn-outline" href="{{ showcase_preview_url }}" target="_blank" rel="noopener">预览本店主页</a>
+        <a class="btn btn-sm btn-outline" href="{{ showcase_preview_url }}" target="_blank" rel="noopener" data-yc-tour="home-preview-link">预览本店主页</a>
     </p>
     <form method="post">
         {% csrf_token %}
         <input type="hidden" name="save_home_page_settings" value="1">
         <label class="form-label">顶栏「下单」点击后</label>
-        <select name="order_nav_mode" class="form-input">
+        <select name="order_nav_mode" class="form-input" data-yc-tour="home-nav-mode-select">
             <option value="to_shop" {% if home_page.order_nav_mode == 'to_shop' %}selected{% endif %}>直接进入下单页</option>
             <option value="to_cta_block" {% if home_page.order_nav_mode == 'to_cta_block' %}selected{% endif %}>滚到页内「进入店铺」块</option>
         </select>
         <button type="submit" class="btn btn-primary" style="margin-top:12px;">保存主页设置</button>
     </form>
+    </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 
 {% for block in home_blocks %}
+<div {% if block.block_type == 'intro' %}data-yc-tour="fold-home-intro"{% elif block.block_type == 'notice' %}data-yc-tour="fold-home-notice"{% elif block.block_type == 'order_cta' %}data-yc-tour="fold-home-cta"{% elif block.is_custom %}data-yc-tour="fold-home-custom-block"{% endif %}>
 {% include 'waimai/seller/_panel_fold.html' with fold_id=block.dom_id fold_title=block.fold_title %}
     {% if block.is_custom %}<p class="card-meta" style="margin:0 0 8px;">自定义积木</p>{% endif %}
     {% include 'waimai/seller/_home_block_editor.html' %}
 {% include 'waimai/seller/_panel_fold_end.html' %}
+</div>
 {% endfor %}
 
 {% include 'waimai/seller/_panel_fold.html' with fold_id='custom-blocks-toolbar' fold_title='➕ 自定义积木（添加）' %}
-    <p class="card-meta" style="margin:0 0 10px;">
+    <div data-yc-tour="fold-home-custom">
+        <p class="card-meta" style="margin:0 0 10px;" data-yc-tour="home-add-custom">
         已用 {{ custom_block_count }} / {{ max_custom_blocks }} 块。新加的块会出现在最下面；可写活动介绍、图片、外链等。
     </p>
     {% if can_add_custom_block %}
     <form method="post" style="display:inline;">
         {% csrf_token %}
         <input type="hidden" name="add_custom_block" value="1">
-        <button type="submit" class="btn btn-sm btn-outline">+ 添加一块自定义积木</button>
+        <button type="submit" class="btn btn-sm btn-outline" data-yc-tour="home-add-custom">+ 添加一块自定义积木</button>
     </form>
     {% else %}
     <p class="card-meta" style="margin:0;">已达上限，请删除不需要的块后再添加。</p>
     {% endif %}
+    </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 {% endblock %}

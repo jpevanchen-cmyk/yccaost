@@ -5,18 +5,23 @@
 {% block title %}店铺工作台{% endblock %}
 
 {% block page_back %}
-{% if work_user.role == 'seller' %}
+{% if onboarding_preview %}
+{% include 'waimai/_page_back.html' with back_url=home_url back_label="返回服务器主页" %}
+{% elif work_user.role == 'seller' %}
 {% include 'waimai/_page_back.html' with back_url="/seller-panel/" back_label="返回店铺管理" %}
 {% endif %}
 {% endblock %}
 
 {% block content %}
+{% if onboarding_preview %}
+<p class="onboarding-preview-badge card-meta" data-yc-tour="preview-banner" style="margin-bottom:8px;">🌱 只读演示 · 店铺工作台</p>
+{% endif %}
 <h1 class="page-title">🧭 店铺工作台</h1>
 {% if shop_profile %}
 <p class="page-desc">{{ shop_profile.shop_name }} · {{ work_user_title }} <strong>{{ work_user.username|staff_display }}</strong></p>
 {% endif %}
 {% if is_work_staff %}
-<div class="card" style="padding:12px;margin-bottom:12px;">
+<div class="card" style="padding:12px;margin-bottom:12px;" data-yc-tour="work-status-bar">
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
         <div>
             <strong>当前状态：</strong>
@@ -39,13 +44,20 @@
     <p class="card-meta" style="margin:8px 0 0;">最近变更：{{ work_user.staff_work_status_updated_at|beijing:"Y-m-d H:i" }}</p>
     {% endif %}
 </div>
+{% elif onboarding_preview %}
+<div class="card" style="padding:12px;margin-bottom:12px;" data-yc-tour="work-status-bar">
+    <p class="card-meta">演示以店主身份预览。员工登录后可在此切换<strong>上班 / 休息 / 下班</strong>。</p>
+</div>
 {% endif %}
 
 {% include 'waimai/_duty_order_notify.html' %}
 
-<div class="rider-quick-links" style="margin-bottom:12px;">
+<div class="rider-quick-links" style="margin-bottom:12px;" data-yc-tour="work-view-tabs">
     {% if 'orders' in enabled_work_views %}
     <a class="btn {% if current_view == 'orders' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_orders_url }}">{{ workbench_shell.tab_orders }}</a>
+    {% endif %}
+    {% if 'cashier' in enabled_work_views %}
+    <a class="btn {% if current_view == 'cashier' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_cashier_url }}">{{ workbench_shell.tab_cashier }}</a>
     {% endif %}
     {% if 'waiter' in enabled_work_views %}
     <a class="btn {% if current_view == 'waiter' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_waiter_url }}">{{ workbench_shell.tab_waiter }}</a>
@@ -72,6 +84,7 @@
 </div>
 
 {% if current_view %}
+{% if current_view != 'cashier' %}
 <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-bottom:10px;">
     <span class="card-meta">订单顺序：</span>
     <a class="btn btn-sm {% if work_order_sort == 'newest' %}btn-orange{% else %}btn-outline{% endif %}"
@@ -80,11 +93,15 @@
        href="{{ sort_oldest_url }}">旧单在上</a>
 </div>
 {% endif %}
+{% endif %}
 
-<div class="card" style="padding:14px;">
+<div class="card" style="padding:14px;" data-yc-tour="work-panel-body">
     {% if current_view == 'orders' %}
     <h2 style="margin:0 0 10px;font-size:18px;">📋 {{ workbench_shell.view_orders_title }}</h2>
     {% include 'waimai/_shop_work_orders_panel.html' %}
+    {% elif current_view == 'cashier' %}
+    <h2 style="margin:0 0 10px;font-size:18px;">💵 {{ workbench_shell.view_cashier_title }}</h2>
+    {% include 'waimai/_shop_work_cashier_panel.html' with can_operate=can_operate_cashier form_action=form_action %}
     {% elif current_view == 'waiter' %}
     <h2 style="margin:0 0 10px;font-size:18px;">🍽 {{ workbench_shell.view_waiter_title }}</h2>
     {% include 'waimai/_shop_work_waiter_panel.html' with can_operate=can_operate_waiter form_action=form_action %}
@@ -184,6 +201,10 @@
         <p class="card-meta">暂无本人操作记录。</p>
     {% endif %}
 </div>
+{% endif %}
+<p class="card-meta" style="margin-top:12px;" data-yc-tour="work-audit-hint">查历史订单请到「管理店铺 → 订单管理」；本人操作记录在 Tab 栏可打开。</p>
+{% if onboarding_readonly %}
+{% include 'waimai/onboarding/_readonly_guard.html' %}
 {% endif %}
 {% endblock %}
 

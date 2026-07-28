@@ -816,6 +816,7 @@ class BuyOrder(models.Model):
         ('wechat_simulate', '微信扫码支付（模拟）'),
         ('wechat', '微信支付'),
         ('cash', '现金'),
+        ('external', '外部门店收款'),
         ('card', '信用卡/借记卡'),
     ]
     FULFILLMENT_TYPE_CHOICES = [
@@ -1190,6 +1191,11 @@ class ShopPaymentSettings(models.Model):
         max_length=255, blank=True, default='',
         verbose_name='店铺公网网址',
         help_text='如 https://你的域名.com ，用于拼微信异步通知地址；无公网时可先留空，用轮询查单',
+    )
+    enable_cashier = models.BooleanField(default=False, verbose_name='启用实体收银台')
+    cashier_page_size = models.PositiveSmallIntegerField(default=10, verbose_name='收银台每页条数')
+    cashier_channel_memory = models.JSONField(
+        blank=True, default=list, verbose_name='收银台渠道记忆',
     )
 
     class Meta:

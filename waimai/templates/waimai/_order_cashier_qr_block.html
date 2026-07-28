@@ -1,0 +1,26 @@
+{# 订单码：到店收银台找单（第三期） #}
+{% if order_cashier_qr %}
+<details class="detail-collapse" open>
+    <summary>🧾 到店收银 · 订单码</summary>
+    <div class="detail-collapse-body" style="text-align:center;">
+        <p class="card-meta" style="margin:0 0 12px;">
+            {% if order_cashier_qr_show_buyer_hint %}
+            请到收银台出示下方<strong>二维码</strong>（手机扫）或<strong>条形码</strong>（收银扫码枪），也可直接报订单号 <strong>{{ order_cashier_qr.display_no }}</strong>。
+            {% else %}
+            顾客可出示此码；手机扫二维码会打开收银台并定位到该单。
+            普通扫码枪请扫下方条形码，光标放在收银台搜索框即可填入订单号。
+            {% endif %}
+        </p>
+        <p style="margin:0 0 4px;"><strong>{{ order_cashier_qr.display_no }}</strong> · ¥{{ order_cashier_qr.amount }}</p>
+        <img src="{{ order_cashier_qr.qr_data_url }}" alt="订单二维码" width="180" height="180" style="margin:10px auto;display:block;">
+        {% if order_cashier_qr.barcode_data_url %}
+        <img src="{{ order_cashier_qr.barcode_data_url }}" alt="订单条形码" style="max-width:100%;height:auto;margin:8px auto 0;display:block;">
+        {% endif %}
+        {% if order_cashier_qr_print_url %}
+        <p style="margin:12px 0 0;">
+            <a class="btn btn-sm btn-outline" href="{{ order_cashier_qr_print_url }}" target="_blank" rel="noopener">打印订单码小票</a>
+        </p>
+        {% endif %}
+    </div>
+</details>
+{% endif %}

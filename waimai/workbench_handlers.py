@@ -134,6 +134,15 @@ def handle_shop_work_post(request, seller_id: str, shop_code: str, current_view:
         if response:
             return response
 
+    if current_view == 'cashier' and perms.get('cashier'):
+        from .cashier_handlers import handle_cashier_post
+
+        response = handle_cashier_post(
+            request, seller_id, shop_code, redirect_to=redirect_to, work_user=operator,
+        )
+        if response:
+            return response
+
     messages.error(request, '您没有权限执行此操作')
     return redirect(redirect_to)
 

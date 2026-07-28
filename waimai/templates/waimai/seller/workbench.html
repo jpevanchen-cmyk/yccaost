@@ -4,12 +4,13 @@
 {% block title %}员工工作台管理 - 野草系统{% endblock %}
 
 {% block seller_content %}
-<p class="page-desc" style="margin-bottom:14px;">本店员工登录、岗位账号与协作设置均在此维护。员工请扫下方二维码，<strong>不要</strong>使用野草生态登录页。</p>
+<p class="page-desc" style="margin-bottom:14px;" data-yc-tour="workbench-intro">本店员工登录、岗位账号与协作设置均在此维护。员工请扫下方二维码，<strong>不要</strong>使用野草生态登录页。</p>
 
 {% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-qr' fold_title='📱 工作台登录二维码' fold_open=True %}
+        <div data-yc-tour="fold-workbench-qr">
         <p class="card-meta">贴在员工方便扫码的位置；扫码后输入名字和密码开始上班（可用手机浏览器记住密码）。</p>
         {% if work_login_url %}
-        <p><strong>链接：</strong><a href="{{ work_login_url }}" target="_blank" rel="noopener">{{ work_login_url }}</a></p>
+        <p data-yc-tour="workbench-qr-body"><strong>链接：</strong><a href="{{ work_login_url }}" target="_blank" rel="noopener">{{ work_login_url }}</a></p>
         {% if work_qr_data_url %}
         <p style="margin:12px 0;"><img src="{{ work_qr_data_url }}" alt="工作台登录二维码" style="max-width:220px;border:1px solid #eee;padding:8px;background:#fff;"></p>
         {% endif %}
@@ -25,19 +26,26 @@
         {% else %}
         <p class="msg-err">尚未生成店码，请联系管理员补全店铺资料。</p>
         {% endif %}
+        {% if onboarding_preview %}
+        <p style="margin-top:12px;"><a class="btn btn-sm btn-outline" href="{% url 'onboarding_work_login' %}" data-yc-tour="workbench-open-login-link">打开工作台登录页（演示）</a></p>
+        {% endif %}
+        </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 
 {% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-settings-form' fold_title='⚙️ 工作台协作设置' %}
-        <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard enctype="multipart/form-data">
+        <div data-yc-tour="fold-workbench-settings">
+        <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard enctype="multipart/form-data" data-yc-tour="workbench-settings-hint">
             {% csrf_token %}
             <input type="hidden" name="save_workbench_settings" value="1">
             {{ workbench_settings_form.as_p }}
-            <button type="submit" class="btn btn-green">保存协作设置</button>
+            <button type="submit" class="btn btn-green" data-yc-tour="workbench-settings-save">保存协作设置</button>
         </form>
+        </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 
 {% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-attendance' fold_title='🗂 员工状态与考勤' %}
-        <p class="card-meta">这里可看当前状态、今日上班情况与最近考勤流水；老板也可在此兜底补改。</p>
+        <div data-yc-tour="fold-workbench-attendance">
+        <p class="card-meta" data-yc-tour="workbench-attendance-body">这里可看当前状态、今日上班情况与最近考勤流水；老板也可在此兜底补改。</p>
         <form method="GET" class="seller-panel-form auth-form" style="margin:10px 0 14px;">
             <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;">
                 <label>开始日期<br>{{ attendance_filter_form.date_from }}</label>
@@ -58,7 +66,7 @@
             <input type="hidden" name="date_to" value="{{ attendance_filter_form.date_to.value|default:'' }}">
             <input type="hidden" name="role" value="{{ attendance_filter_form.role.value|default:'' }}">
             <input type="hidden" name="name" value="{{ attendance_filter_form.name.value|default:'' }}">
-            <button type="submit" class="btn btn-outline">导出考勤 CSV</button>
+            <button type="submit" class="btn btn-outline" data-yc-tour="attendance-export">导出考勤 CSV</button>
         </form>
         <div style="overflow-x:auto;">
             <table class="simple-table" style="width:100%;border-collapse:collapse;">
@@ -163,6 +171,7 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
         </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 

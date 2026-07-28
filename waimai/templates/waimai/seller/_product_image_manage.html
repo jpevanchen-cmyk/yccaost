@@ -1,6 +1,6 @@
 {# 商品多图：已上传列表、删图、调序、同步文件夹（G1-3） #}
 {% if dish %}
-<div class="product-image-manage-block">
+<div class="product-image-manage-block" data-yc-tour="product-image-manage">
     <h4 class="product-image-manage-title">已上传图片（{{ dish_image_used|default:0 }} / {{ dish_image_max|default:10 }}）</h4>
     {% if dish.product_images.all %}
     <div class="product-image-thumb-row">

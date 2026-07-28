@@ -1,7 +1,9 @@
 {# 会员价 / 特价 表单块；prefix=member 或 special；须勾选「启用」才生效 #}
 {% load product_labels %}
-<fieldset class="tier-price-block" data-tier-block="{{ prefix }}">
-    <label class="tier-enable-row">
+<fieldset class="tier-price-block" data-tier-block="{{ prefix }}"
+    {% if not dish and prefix == 'member' %}data-yc-tour="add-member"{% elif not dish and prefix == 'special' %}data-yc-tour="add-special"{% endif %}>
+    <label class="tier-enable-row"
+        {% if not dish and prefix == 'member' %}data-yc-tour="add-member-enable"{% elif not dish and prefix == 'special' %}data-yc-tour="add-special-enable"{% endif %}>
         <input type="checkbox" class="tier-enable-cb" name="{{ prefix }}_price_enabled" value="1"
             data-tier-prefix="{{ prefix }}"
             {% if dish %}
@@ -37,12 +39,14 @@
                 value="{% if dish %}{% if prefix == 'member' %}{{ dish.member_price_fixed|default:'' }}{% else %}{{ dish.special_price_fixed|default:'' }}{% endif %}{% endif %}">
         </label>
         {% if prefix == 'member' %}
+        <div data-yc-tour="add-member-limits">
         <label>{% dish_limit_label 'member_daily_limit' %} <input type="number" name="member_daily_limit" min="1" placeholder="不限"
             value="{% if dish %}{{ dish.member_daily_limit|default:'' }}{% endif %}"></label>
         <label>{% dish_limit_label 'member_total_limit' %} <input type="number" name="member_total_limit" min="1" placeholder="不限"
             value="{% if dish %}{{ dish.member_total_limit|default:'' }}{% endif %}"></label>
+        </div>
         {% else %}
-        <label>{% dish_limit_label 'special_per_dish_limit' %} <input type="number" name="special_per_dish_limit" min="1" placeholder="{% if dish %}不限{% else %}默认 1{% endif %}"
+        <label data-yc-tour="add-special-limit">{% dish_limit_label 'special_per_dish_limit' %} <input type="number" name="special_per_dish_limit" min="1" placeholder="{% if dish %}不限{% else %}默认 1{% endif %}"
             value="{% if dish %}{{ dish.special_per_dish_limit|default:'' }}{% else %}1{% endif %}"></label>
         {% endif %}
     </div>

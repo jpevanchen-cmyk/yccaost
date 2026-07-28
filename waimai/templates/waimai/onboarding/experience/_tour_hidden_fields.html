@@ -1,0 +1,7 @@
+{# 新版体验可写页：POST 后保留 exp 引导参数（始终输出四项，避免丢步） #}
+{% if experience_writable and experience_tour_query %}
+<input type="hidden" name="exp" value="{{ experience_tour_query.exp|default:'' }}">
+<input type="hidden" name="exp_track" value="{{ experience_tour_query.exp_track|default:'' }}">
+<input type="hidden" name="exp_major" value="{{ experience_tour_query.exp_major|default:'' }}">
+<input type="hidden" name="exp_micro" value="{{ experience_tour_query.exp_micro|default:'' }}">
+{% endif %}

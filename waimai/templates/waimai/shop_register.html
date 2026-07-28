@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<h1>🏪 店铺注册服务器</h1>
+<h1 class="page-title" data-yc-tour="shop-register-title">🏪 店铺注册服务器</h1>
 {% if experience_site %}
 <div class="card" style="border-left: 4px solid #e6a23c; background: #fff8e6; margin-bottom: 16px; padding: 12px 16px;">
     <p style="margin: 0; font-size: 1.05rem; line-height: 1.6;"><strong>体验开店说明</strong></p>
@@ -15,9 +15,9 @@
 {% endif %}
 <p>开通店铺账号后，您的店铺将自动出现在<a href="/directory/">公共名录</a>中。</p>
 
-<form method="POST" class="auth-form" style="max-width: 480px;">
+<form method="POST" class="auth-form" style="max-width: 480px;" data-yc-tour="shop-register-form">
     {% csrf_token %}
     {% include 'waimai/_auth_form_fields.html' %}
-    <button type="submit" class="btn btn-green btn-block">注册并开通</button>
+    <button type="submit" class="btn btn-green btn-block" data-yc-tour="shop-register-submit">注册并开通</button>
 </form>
 {% endblock %}

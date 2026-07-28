@@ -3,7 +3,7 @@
 {% block title %}营业状态 - 野草系统{% endblock %}
 
 {% block seller_content %}
-<div class="seller-panel-box" id="status-intro">
+<div class="seller-panel-box" id="status-intro" data-yc-tour="operating-intro">
     <h2>🕐 营业状态</h2>
     <p class="card-meta">
         这里只设<strong>全天营业时间</strong>，并用一个按钮切换<strong>营业中 / 停止营业</strong>。
@@ -11,7 +11,7 @@
     </p>
 </div>
 
-<details class="seller-panel-fold" id="status-form" open>
+<details class="seller-panel-fold" id="status-form" open data-yc-tour="fold-operating-form">
     <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">营业时间和状态设定</span></summary>
     <div class="seller-panel-fold-body">
         <p class="page-desc">新单须落在全天营业时间内，且店铺为「营业中」；各通道细则由饮食等插件另行控制。</p>
@@ -19,16 +19,16 @@
             {% csrf_token %}
             <input type="hidden" name="save_status" value="1">
             {% for field in status_form %}
-            <p>
+            <p{% if field.name == 'business_open' %} data-yc-tour="operating-open-time"{% elif field.name == 'business_close' %} data-yc-tour="operating-close-time"{% endif %}>
                 {{ field.label_tag }} {{ field }}
                 {% if field.help_text %}<span class="field-help">{{ field.help_text }}</span>{% endif %}
                 {% for err in field.errors %}<span class="msg-err" style="display:block;margin-top:4px;">{{ err }}</span>{% endfor %}
             </p>
             {% endfor %}
-            <button type="submit" class="btn btn-block" style="background:#607d8b;color:#fff;">保存营业时间</button>
+            <button type="submit" class="btn btn-block" style="background:#607d8b;color:#fff;" data-yc-tour="operating-save-hours">保存营业时间</button>
         </form>
 
-        <p class="card-meta" style="margin:16px 0 8px;">
+        <p class="card-meta" style="margin:16px 0 8px;" data-yc-tour="operating-status-text">
             当前状态：
             {% if is_shop_open %}
             <strong style="color:#2a7;">营业中</strong>
@@ -38,7 +38,7 @@
         </p>
         <form method="POST">
             {% csrf_token %}
-            <button type="submit" name="toggle_open" value="1" class="btn {% if is_shop_open %}btn-outline{% else %}btn-green{% endif %}">
+            <button type="submit" name="toggle_open" value="1" class="btn {% if is_shop_open %}btn-outline{% else %}btn-green{% endif %}" data-yc-tour="operating-toggle">
                 {% if is_shop_open %}停止营业{% else %}营业中{% endif %}
             </button>
         </form>

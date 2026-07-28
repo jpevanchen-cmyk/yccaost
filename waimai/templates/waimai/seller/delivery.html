@@ -3,13 +3,16 @@
 
 {% block seller_content %}
 <div class="seller-panel-box">
-    <h2>🚚 配送费规则</h2>
+    <h2 data-yc-tour="delivery-intro">🚚 配送费规则</h2>
     <p class="page-desc">买家下单时按此处规则自动计算配送费。</p>
-    <form method="POST" class="seller-panel-form auth-form" id="delivery-settings-form" data-unsaved-guard>
+    <form method="POST" class="seller-panel-form auth-form" id="delivery-settings-form" data-unsaved-guard data-yc-tour="delivery-form">
         {% csrf_token %}
         <input type="hidden" name="save_delivery_settings" value="1">
-        {{ settings_form.as_p }}
-        <button type="submit" class="btn btn-block" style="background:#607d8b;color:#fff;">保存配送费规则</button>
+        {% for field in settings_form %}
+        <p{% if field.name == 'min_delivery_fee' %} data-yc-tour="delivery-fee"{% elif field.name == 'free_delivery_threshold' %} data-yc-tour="delivery-free"{% elif field.name == 'per_km_rate_0_3' %} data-yc-tour="delivery-per-km"{% elif field.name == 'max_distance_km' %} data-yc-tour="delivery-base"{% endif %}>{{ field.label_tag }} {{ field }}{% if field.help_text %}<span class="field-help">{{ field.help_text }}</span>{% endif %}</p>
+        {% endfor %}
+        <button type="submit" class="btn btn-block" style="background:#607d8b;color:#fff;" data-yc-tour="delivery-save">保存配送费规则</button>
     </form>
+    <p class="card-meta" style="margin-top:12px;" data-yc-tour="delivery-workbench-hint">配送员取货送达在「店铺工作台 · 配送员」；现金入金在「支付设置」。</p>
 </div>
 {% endblock %}

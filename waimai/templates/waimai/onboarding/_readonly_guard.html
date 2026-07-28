@@ -1,0 +1,15 @@
+{# 新手体验只读：禁止表单提交，保留输入框供引导演示打字 #}
+<script>
+(function () {
+    document.querySelectorAll('form').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            return false;
+        });
+    });
+    document.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function (btn) {
+        btn.disabled = true;
+        btn.title = '演示模式不会保存';
+    });
+})();
+</script>

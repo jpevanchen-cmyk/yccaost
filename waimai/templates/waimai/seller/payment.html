@@ -2,10 +2,10 @@
 {% block title %}支付设置 - 野草系统{% endblock %}
 
 {% block seller_content %}
-<div class="seller-panel-box" id="payment-settings-form">
+<div class="seller-panel-box" id="payment-settings-form" data-yc-tour="payment-settings-box">
     <h2>💳 支付设置</h2>
     {% if experience_block_wechat %}
-    <p class="msg-err" style="margin-bottom:12px;">
+    <p class="msg-err" style="margin-bottom:12px;" data-yc-tour="payment-experience-hint">
         当前为体验店铺：无法开通真实微信支付。请用「演示支付」走完整流程；真付请到官方小店。
     </p>
     {% endif %}
@@ -17,7 +17,7 @@
         {% csrf_token %}
         <div class="seller-form-grid">
             {% for field in payment_form %}
-            <div class="seller-field {% if field.field.widget.input_type == 'checkbox' %}seller-field-check{% endif %}">
+            <div class="seller-field {% if field.field.widget.input_type == 'checkbox' %}seller-field-check{% endif %}"{% if field.name == 'enable_simulate' %} data-yc-tour="payment-demo"{% elif field.name == 'enable_wechat' %} data-yc-tour="payment-wechat"{% elif field.name == 'enable_cash' %} data-yc-tour="payment-cash"{% endif %}>
                 {% if field.field.widget.input_type == 'checkbox' %}
                 <label class="seller-check-label">
                     {{ field }} {{ field.label }}
@@ -35,13 +35,13 @@
             微信异步通知地址（配置公网网址后自动使用）：<br>
             <code>{% if payment_form.instance.public_site_url %}{{ payment_form.instance.public_site_url|cut:"/" }}/pay/wechat/notify/{% else %}（填写公网网址后显示）{% endif %}</code>
         </p>
-        <button type="submit" name="save_payment_settings" value="1" class="btn btn-primary btn-block">保存支付设置</button>
+        <button type="submit" name="save_payment_settings" value="1" class="btn btn-primary btn-block" data-yc-tour="payment-save">保存支付设置</button>
     </form>
 </div>
 
 {# 外卖货到付款：配送员现金入金（归属履约插件） #}
 {% if show_rider_cash and rider_cash %}
-<div class="seller-panel-box" id="rider-cash-card">
+<div class="seller-panel-box" id="rider-cash-card" data-yc-tour="rider-cash-box">
     <h2>💵 配送员现金入金</h2>
     <p class="card-meta" style="margin-bottom:12px;">
         配送员先在工作台发起交款申请；店主在这里核对现金后确认。

@@ -3,7 +3,9 @@
 {% block title %}订单详情 - 野草系统{% endblock %}
 
 {% block page_back %}
-{% if viewer_role == 'seller' %}
+{% if onboarding_preview %}
+{% include 'waimai/_page_back.html' with back_url=home_url back_label="返回订单管理（演示）" %}
+{% elif viewer_role == 'seller' %}
 {% include 'waimai/_page_back.html' with back_url="/seller-panel/orders/" back_label="返回订单管理" %}
 {% elif viewer_role == 'rider' %}
 {% include 'waimai/_page_back.html' with back_url="/my-deliveries/" back_label="返回我的配送" %}
@@ -15,6 +17,9 @@
 {% endblock %}
 
 {% block content %}
+{% if onboarding_preview %}
+<p class="onboarding-preview-badge card-meta" data-yc-tour="preview-banner" style="margin-bottom:8px;">🌱 只读演示 · 订单详情</p>
+{% endif %}
 {% if messages %}
     {% for message in messages %}
     <div class="{% if message.tags == 'error' %}msg-err{% else %}msg-ok{% endif %}" style="margin-bottom:12px;">{{ message }}</div>
@@ -24,7 +29,7 @@
 <div class="msg-ok">{{ order_shell.cash_pending_banner|safe }}</div>
 {% endif %}
 
-<div class="detail-highlight">
+<div class="detail-highlight" data-yc-tour="order-detail-hero">
     <p class="status-hero">{{ order.get_order_status_display }}</p>
     {% if order.estimated_ready_at and order.order_status != 'completed' %}
     <p class="msg-ok" style="margin:10px 0 0;font-size:16px;">⏱ {{ order_shell.estimated_ready_label }}</p>
@@ -48,6 +53,8 @@
         {% endif %}
     {% endif %}
 </div>
+
+{% include 'waimai/_order_cashier_qr_block.html' %}
 
 {% if order.is_delivery_cod and order.cash_collected_amount %}
 <details class="detail-collapse" open>
@@ -156,7 +163,7 @@
 </details>
 {% endif %}
 
-<details class="detail-collapse" open>
+<details class="detail-collapse" open data-yc-tour="order-detail-chat">
     <summary>💬 订单沟通</summary>
     <div class="detail-collapse-body">
         <p class="card-meta" style="margin:0 0 10px;">重要事情请先电话/微信商量；这里用来双方留痕确认。打开本页即视为已看过新留言。</p>
@@ -232,7 +239,7 @@
 </details>
 {% endif %}
 
-<details class="detail-collapse">
+<details class="detail-collapse" open data-yc-tour="order-detail-items">
     <summary>🍱 订单内容</summary>
     <div class="detail-collapse-body">
         {% for item in dish_lines %}
@@ -356,4 +363,7 @@
 })();
 </script>
 {% endif %}
+        {% if onboarding_readonly %}
+        {% include 'waimai/onboarding/_readonly_guard.html' %}
+        {% endif %}
 {% endblock %}

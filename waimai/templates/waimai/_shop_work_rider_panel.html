@@ -9,10 +9,11 @@
 </p>
 {% endif %}
 
-<p class="page-desc">{{ workbench_shell.tab_rider }} <strong>{{ rider_id }}</strong> · 进行中的任务</p>
+<p class="page-desc" data-yc-tour="work-rider-action">{{ workbench_shell.tab_rider }} <strong>{{ rider_id }}</strong> · 进行中的任务</p>
 
-{% if rider_cash_remittance %}
-<div class="card" style="margin-bottom:14px;">
+{% if rider_cash_remittance or onboarding_demo_rider_cash %}
+{% with rider_cash_remittance=rider_cash_remittance|default:onboarding_demo_rider_cash %}
+<div class="card" style="margin-bottom:14px;" data-yc-tour="work-rider-remit">
     <h3 style="margin-top:0;">现金交款</h3>
     <p class="card-meta">
         可申请交款：{{ rider_cash_remittance.available_count }} 单，共
@@ -43,6 +44,7 @@
     </div>
     {% endif %}
 </div>
+{% endwith %}
 {% endif %}
 
 {% if pending_dispatch_orders %}

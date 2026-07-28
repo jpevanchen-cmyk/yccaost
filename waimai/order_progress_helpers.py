@@ -51,6 +51,42 @@ def build_progress_groups(dish_items: list | None, progress_field: str, output_k
     return list(groups.values())
 
 
+def find_markable_serve_line(items: list[dict], dish_id: str) -> dict | None:
+    """找尚可交付的一份：后厨已备好份数须大于已交付份数。"""
+    target = norm_dish_id(dish_id)
+    for line in items:
+        if norm_dish_id(str(line.get('dish_id', ''))) != target:
+            continue
+        served = int(line.get('served_count') or 0)
+        prepared = int(line.get('prepared_count') or 0)
+        if served < prepared:
+            return line
+    return None
+
+
+def dish_serve_fully_done(items: list[dict], dish_id: str) -> bool:
+    """该菜品是否已全部交付（按总份数）。"""
+    target = norm_dish_id(dish_id)
+    total = 0
+    served = 0
+    for line in items:
+        if norm_dish_id(str(line.get('dish_id', ''))) != target:
+            continue
+        total += int(line['quantity'])
+        served += int(line.get('served_count') or 0)
+    return total > 0 and served >= total
+
+
+def has_servable_units(items: list[dict]) -> bool:
+    """是否存在「已备好但未交付」的份数。"""
+    for line in items:
+        served = int(line.get('served_count') or 0)
+        prepared = int(line.get('prepared_count') or 0)
+        if served < prepared:
+            return True
+    return False
+
+
 def find_markable_line(items: list[dict], dish_id: str, progress_field: str) -> dict | None:
     target = norm_dish_id(dish_id)
     for line in items:

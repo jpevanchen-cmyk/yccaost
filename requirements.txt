@@ -1,6 +1,7 @@
 asgiref==3.11.1
 Django==5.2.15
 fpdf2==2.8.3
+python-barcode[images]==0.16.1
 qrcode[pil]==8.2
 sqlparse==0.5.5
 tzdata==2026.2

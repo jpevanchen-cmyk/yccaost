@@ -2,25 +2,31 @@
 {% block title %}商品上架管理 - 野草系统{% endblock %}
 
 {% block seller_content %}
-<details class="seller-panel-fold" id="sales-ranking">
+{% if experience_seller6_screenshots %}
+{% include 'waimai/seller/_experience_seller6_screenshots.html' %}
+{% endif %}
+{% if experience_seller5_step12_available %}
+{% include 'waimai/seller/_experience_seller5_step12_screenshot.html' %}
+{% endif %}
+<details class="seller-panel-fold" id="sales-ranking" data-yc-tour="fold-sales-ranking">
     <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📊 {{ product_shell.sales_title }}</span></summary>
     <div class="seller-panel-fold-body">
         <p class="page-desc">只统计<strong>已完成</strong>的订单。</p>
-        <div class="sales-rank-tabs" role="tablist">
+        <div class="sales-rank-tabs" role="tablist" data-yc-tour="sales-rank-tabs">
             <button type="button" class="sales-rank-tab active" data-panel="sales-day">日排行</button>
             <button type="button" class="sales-rank-tab" data-panel="sales-week">周排行</button>
             <button type="button" class="sales-rank-tab" data-panel="sales-month">月排行</button>
         </div>
         {% with rankings=sales_rankings %}
-        <div class="sales-rank-panel active" id="sales-day">
+        <div class="sales-rank-panel active" id="sales-day" data-yc-tour="sales-rank-day">
             <h3 class="sales-rank-subtitle">{{ rankings.day_label }}</h3>
             {% include 'waimai/seller/_sales_rank_table.html' with rows=rankings.day %}
         </div>
-        <div class="sales-rank-panel" id="sales-week" hidden>
+        <div class="sales-rank-panel" id="sales-week" hidden data-yc-tour="sales-rank-week">
             <h3 class="sales-rank-subtitle">{{ rankings.week_label }}</h3>
             {% include 'waimai/seller/_sales_rank_table.html' with rows=rankings.week %}
         </div>
-        <div class="sales-rank-panel" id="sales-month" hidden>
+        <div class="sales-rank-panel" id="sales-month" hidden data-yc-tour="sales-rank-month">
             <h3 class="sales-rank-subtitle">{{ rankings.month_label }}</h3>
             {% include 'waimai/seller/_sales_rank_table.html' with rows=rankings.month %}
         </div>
@@ -29,152 +35,10 @@
 </details>
 
 {% if product_shell.show_menu_catalog %}
-<details class="seller-panel-fold" id="menu-panel">
+<details class="seller-panel-fold" id="menu-panel" data-yc-tour="fold-menu-panel">
     <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📋 {{ product_shell.catalog_panel_title }}</span></summary>
-    <div class="seller-panel-fold-body">
-        <p class="page-desc">
-            切换{{ product_shell.catalog_word }}前须无未结束订单。客人店铺页以<strong>使用中</strong>的{{ product_shell.catalog_word }}为准。
-            当前使用中：{% if active_profile %}<strong>{{ active_profile.name }}</strong>{% else %}未选（客人见全部上架商品）{% endif %}
-            {% if active_profile %}
-            · <a href="{% url 'seller_product_qr_print' %}" target="_blank" rel="noopener">批量打印本清单商品二维码</a>
-            {% endif %}
-        </p>
-        {% if selected_profile and active_profile and selected_profile.profile_id != active_profile.profile_id %}
-        <p class="msg-warn">当前查看的是「{{ selected_profile.name }}」，客人店铺页仍以「{{ active_profile.name }}」为准；改完后请点「切换使用」。</p>
-        {% elif not active_profile %}
-        <p class="msg-warn">尚未有使用中的{{ product_shell.catalog_word }}，客人店铺页不会按下方「展示」设置过滤会员价/特价；请先点「切换使用」。</p>
-        {% endif %}
-        <p class="card-meta">说明：<strong>商品管理</strong>里设定是否<strong>允许</strong>会员价、特价；<strong>本{{ product_shell.catalog_word }}</strong>里设定是否<strong>对客人展示</strong>。两项都满足且本{{ product_shell.catalog_word }}已「切换使用」后，店铺页才会出现对应价格按钮。</p>
-        <form method="POST" class="seller-inline-form menu-profile-create-form" data-unsaved-guard>
-            {% csrf_token %}
-            <input type="hidden" name="create_menu_profile" value="1">
-            <label>新建{{ product_shell.catalog_word }} <input type="text" name="profile_name" placeholder="{{ product_shell.catalog_create_placeholder }}" required></label>
-            {% if menu_profiles %}
-            <label>复制自（可不选）
-                <select name="copy_from_profile_id">
-                    <option value="">全新（纳入全部商品）</option>
-                    {% for p in menu_profiles %}
-                    <option value="{{ p.profile_id }}">{{ p.name }}{% if active_profile and active_profile.profile_id == p.profile_id %}（使用中）{% endif %}</option>
-                    {% endfor %}
-                </select>
-            </label>
-            {% endif %}
-            <button type="submit" class="btn">创建</button>
-        </form>
-        {% if menu_profiles %}
-        <form method="GET" class="seller-inline-form menu-profile-picker-form" style="margin-top:12px;">
-            <label>选择{{ product_shell.catalog_word }}
-                <select name="profile" id="menu-profile-select">
-                    {% for p in menu_profiles %}
-                    <option value="{{ p.profile_id }}" {% if selected_profile and selected_profile.profile_id == p.profile_id %}selected{% endif %}>
-                        {{ p.name }}{% if active_profile and active_profile.profile_id == p.profile_id %}（使用中）{% endif %}
-                    </option>
-                    {% endfor %}
-                </select>
-            </label>
-            <span class="card-meta">切换后下方显示该清单详情；默认打开「使用中」的清单。</span>
-        </form>
-        {% if selected_profile %}
-        <div class="menu-profile-detail" id="menu-profile-detail">
-            <div class="menu-profile-detail-head">
-                <strong>{{ selected_profile.name }}</strong>
-                <form method="POST" style="display:inline;margin-left:8px;">
-                    {% csrf_token %}
-                    <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
-                    <button type="submit" name="activate_menu_profile" value="1" class="btn btn-sm"
-                        {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}disabled{% endif %}>
-                        {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}使用中{% else %}切换使用{% endif %}
-                    </button>
-                </form>
-                <form method="POST" class="menu-profile-delete-form" style="display:inline;margin-left:4px;">
-                    {% csrf_token %}
-                    <input type="hidden" name="delete_menu_profile" value="1">
-                    <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
-                    <button type="submit" class="btn btn-sm btn-danger" data-profile-name="{{ selected_profile.name }}"
-                        {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}disabled title="使用中的清单不能删除"{% endif %}>
-                        删除
-                    </button>
-                </form>
-            </div>
-            {% if selected_profile.items.all %}
-            <table class="seller-table menu-item-table">
-                <thead>
-                    <tr>
-                        <th>{{ product_shell.item_label }}</th>
-                        <th>本清单上架</th>
-                        <th>展示会员价</th>
-                        <th>展示特价</th>
-                        <th>可售上限</th>
-                        <th>已售</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for item in selected_profile.items.all %}
-                <tr>
-                    <td>{{ item.dish.name }}</td>
-                    <td>
-                        <form method="POST" class="menu-item-toggle-form">
-                            {% csrf_token %}
-                            <input type="hidden" name="toggle_menu_item_listed" value="1">
-                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
-                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
-                            <button type="submit" class="btn btn-sm {% if item.is_listed %}btn-green{% else %}btn-outline{% endif %}">
-                                {% if item.is_listed %}上架中{% else %}已下架{% endif %}
-                            </button>
-                        </form>
-                    </td>
-                    <td>
-                        {% if item.dish.member_price_enabled %}
-                        <form method="POST" class="menu-item-toggle-form">
-                            {% csrf_token %}
-                            <input type="hidden" name="toggle_menu_item_member" value="1">
-                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
-                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
-                            <button type="submit" class="btn btn-sm {% if item.member_price_listed %}btn-green{% else %}btn-outline{% endif %}">
-                                {% if item.member_price_listed %}展示{% else %}不展示{% endif %}
-                            </button>
-                        </form>
-                        {% else %}
-                        <span class="card-meta">未允许</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if item.dish.special_price_enabled %}
-                        <form method="POST" class="menu-item-toggle-form">
-                            {% csrf_token %}
-                            <input type="hidden" name="toggle_menu_item_special" value="1">
-                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
-                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
-                            <button type="submit" class="btn btn-sm {% if item.special_price_listed %}btn-green{% else %}btn-outline{% endif %}">
-                                {% if item.special_price_listed %}展示{% else %}不展示{% endif %}
-                            </button>
-                        </form>
-                        {% else %}
-                        <span class="card-meta">未允许</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <form method="POST" class="menu-item-cap-form">
-                            {% csrf_token %}
-                            <input type="hidden" name="save_menu_item_cap" value="1">
-                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
-                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
-                            <input type="number" name="sales_cap" min="1" placeholder="不限"
-                                value="{% if item.sales_cap %}{{ item.sales_cap }}{% endif %}" style="width:72px;">
-                            <button type="submit" class="btn btn-sm">保存</button>
-                        </form>
-                    </td>
-                    <td>{{ item.sold_count }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p class="card-meta">本清单尚无商品，请先在「添加新商品」中创建。</p>
-            {% endif %}
-        </div>
-        {% endif %}
-        {% endif %}
+    <div class="seller-panel-fold-body" id="menu-panel-body">
+        {% include 'waimai/seller/_menu_catalog_panel.html' %}
     </div>
 </details>
 {% endif %}
@@ -196,79 +60,40 @@
     </div>
 </details>
 
-<details class="seller-panel-fold" id="product-add">
+<details class="seller-panel-fold" id="product-add" data-yc-tour="fold-product-add">
     <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">➕ 添加新商品</span></summary>
     <div class="seller-panel-fold-body">
-        <form method="POST" enctype="multipart/form-data" class="seller-form-stack" id="product-add-form" data-unsaved-guard>
+        <form method="POST" enctype="multipart/form-data" class="seller-form-stack" id="product-add-form"{% if not experience_writable %} data-unsaved-guard{% endif %} data-yc-tour="product-add-form">
             {% csrf_token %}
+            {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
             <input type="hidden" name="add_dish" value="1">
-            <label>商品名称 <input type="text" name="name" required placeholder="如：回锅肉"></label>
-            <label>通用价格（元）<input type="number" name="price" step="0.01" min="0.01" required></label>
-            <label>{{ product_shell.sort_help }}<input type="number" name="sort_order" value="0"></label>
+            <label>商品名称 <input type="text" name="name" required placeholder="如：回锅肉" data-yc-tour="add-name"></label>
+            <label>通用价格（元）<input type="number" name="price" step="0.01" min="0.01" required data-yc-tour="add-price"></label>
+            <label data-yc-tour="add-sort">{{ product_shell.sort_help }}<input type="number" name="sort_order" value="0"></label>
             {% include 'waimai/seller/_product_description_fields.html' with dish=None only %}
             {% include 'waimai/seller/_tier_price_block.html' with prefix='member' title='会员价' hint='须登录买家可购；可设单日/累计限购。' dish=None only %}
             {% include 'waimai/seller/_tier_price_block.html' with prefix='special' title='特价' hint='须登录买家可购；受全店特价合计上限约束。' dish=None only %}
+            {% if experience_writable %}
+            {% include 'waimai/seller/_experience_add_image_mock.html' with dish_image_max=dish_image_max dish_image_max_mb=dish_image_max_mb only %}
+            {% elif not experience_writable %}
             {% include 'waimai/seller/_product_image_upload_fields.html' with dish=None dish_image_max=dish_image_max dish_image_max_mb=dish_image_max_mb dish_image_remaining=dish_image_remaining only %}
+            {% endif %}
             {% if product_shell.show_menu_catalog %}
-            <label class="product-add-list-row">
+            <label class="product-add-list-row" data-yc-tour="add-list-all">
                 <input type="checkbox" name="list_on_all_menus" value="1" id="list-on-all-menus-cb">
                 添加后在本店<strong>{{ product_shell.catalog_all_phrase }}</strong>中设为「已上架」
             </label>
             <p class="card-meta product-add-list-hint">不勾选时：新商品会进入各份清单，但默认「已下架」，须您在清单里手动上架。勾选并确认后：客人将立刻在店铺页看到。</p>
             {% endif %}
-            <button type="submit" class="btn btn-green btn-block">添加商品</button>
+            <button type="submit" class="btn btn-green btn-block" data-yc-tour="add-submit">添加商品</button>
         </form>
     </div>
 </details>
 
-<details class="seller-panel-fold" id="product-list"{% if edit_dish_id %} open{% endif %}>
+<details class="seller-panel-fold" id="product-list"{% if edit_dish_id %} open{% endif %} data-yc-tour="fold-product-list">
     <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📋 商品管理</span></summary>
-    <div class="seller-panel-fold-body">
-        <p class="card-meta">{{ product_shell.product_help }}</p>
-        {% for dish in dishes %}
-        <div class="seller-dish-row" id="dish-{{ dish.dish_id.hex|slice:":8" }}">
-            <div class="seller-dish-summary">
-                <strong>{{ dish.name }}</strong>
-                <span class="badge badge-pay-paid">通用 ¥{{ dish.price }}</span>
-                {% if dish.member_price_enabled %}<span class="badge badge-order-prep">会员价</span>{% endif %}
-                {% if dish.special_price_enabled %}<span class="badge badge-default">特价</span>{% endif %}
-                {% if dish.is_active %}<span class="badge badge-pay-paid">上架</span>{% else %}<span class="badge badge-default">下架</span>{% endif %}
-                {% if dish.display_code %}<span class="badge badge-default">编号 {{ dish.display_code|upper }}</span>{% endif %}
-                {% if dish.image_quota.dish_image_used %}<span class="badge badge-order-prep">{{ dish.image_quota.dish_image_used }} 图</span>{% endif %}
-                <div class="card-meta">排序 {{ dish.sort_order }}</div>
-            </div>
-            <div class="seller-dish-actions">
-                <a href="?edit={{ dish.dish_id.hex|slice:':8' }}#edit-{{ dish.dish_id.hex|slice:':8' }}" class="btn btn-sm">编辑</a>
-                <form method="POST" class="dish-delete-form" style="display:inline;">
-                    {% csrf_token %}
-                    <input type="hidden" name="delete_dish" value="1">
-                    <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
-                    <button type="submit" class="btn btn-sm btn-danger" data-dish-name="{{ dish.name }}">删除</button>
-                </form>
-            </div>
-            {% if edit_dish_id == dish.dish_id.hex|slice:":8" %}
-            <form method="POST" enctype="multipart/form-data" class="seller-form-stack product-edit-form" id="edit-{{ dish.dish_id.hex|slice:':8' }}" data-unsaved-guard>
-                {% csrf_token %}
-                <input type="hidden" name="edit_dish" value="1">
-                <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
-                <label>名称 <input type="text" name="name" value="{{ dish.name }}" required></label>
-                <label>通用价格 <input type="number" name="price" step="0.01" min="0.01" value="{{ dish.price }}" required></label>
-                <label>{{ product_shell.sort_help }}<input type="number" name="sort_order" value="{{ dish.sort_order }}"></label>
-                {% include 'waimai/seller/_product_description_fields.html' with dish=dish only %}
-                {% include 'waimai/seller/_tier_price_block.html' with prefix='member' title='会员价' hint='须登录买家可购。' dish=dish only %}
-                {% include 'waimai/seller/_tier_price_block.html' with prefix='special' title='特价' hint='须登录；受全店特价上限约束。' dish=dish only %}
-                {% include 'waimai/seller/_product_image_upload_fields.html' with dish=dish dish_image_max=dish.image_quota.dish_image_max dish_image_max_mb=dish_image_max_mb dish_image_used=dish.image_quota.dish_image_used dish_image_remaining=dish.image_quota.dish_image_remaining only %}
-                <button type="submit" class="btn btn-block">保存修改</button>
-            </form>
-            {% include 'waimai/seller/_product_image_manage.html' with dish=dish dish_image_max=dish.image_quota.dish_image_max dish_image_used=dish.image_quota.dish_image_used %}
-            {% if edit_scan_qr_rows %}
-            {% include 'waimai/seller/_product_scan_qr.html' with dish=dish scan_qr_rows=edit_scan_qr_rows %}
-            {% endif %}
-            {% endif %}
-        </div>
-        {% empty %}
-        <p class="card-meta">尚无商品，请在上方上架。</p>
-        {% endfor %}
+    <div class="seller-panel-fold-body" id="product-list-body">
+        {% include 'waimai/seller/_experience_product_list_body.html' %}
     </div>
 </details>
 
