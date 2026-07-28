@@ -1,11 +1,26 @@
 {# 新版新手体验：弹窗（与旧 onboarding-modal 区分，可拖动） #}
 
+<div id="experience-welcome-modal" class="experience-modal" hidden>
+    <div class="experience-backdrop" data-experience-close="welcome"></div>
+    <div class="experience-box card" role="dialog" aria-modal="true" aria-labelledby="experience-welcome-title">
+        <div class="experience-drag-handle" data-experience-drag-handle>
+            <span class="experience-drag-hint">⋮⋮ 可拖动</span>
+            <h2 id="experience-welcome-title" class="experience-box-title">欢迎来到野草</h2>
+        </div>
+        <p class="card-meta">野草帮助小店铺快速上线点餐与外卖。您可以选一条开店体验流程快速了解，也可以先逛逛主页。</p>
+        <div class="experience-zone-actions">
+            <button type="button" class="btn btn-orange btn-block" data-experience-start="seller">体验野草开店</button>
+            <button type="button" class="btn btn-sm btn-outline btn-block" data-experience-skip-welcome>跳过，我先自己看</button>
+        </div>
+    </div>
+</div>
+
 <div id="experience-step-picker-modal" class="experience-modal" hidden>
     <div class="experience-backdrop" data-experience-close="picker"></div>
     <div class="experience-box card" role="dialog" aria-modal="true" aria-labelledby="experience-step-picker-title">
         <div class="experience-drag-handle" data-experience-drag-handle>
             <span class="experience-drag-hint">⋮⋮ 可拖动</span>
-            <h2 id="experience-step-picker-title" class="experience-box-title">新版体验 · 选大步</h2>
+            <h2 id="experience-step-picker-title" class="experience-box-title">新手体验 · 选大步</h2>
         </div>
         <p class="card-meta" id="experience-step-picker-desc">请选要从哪一大步开始；也可全部从头体验。</p>
         <div id="experience-step-picker-list" class="experience-step-picker-list"></div>

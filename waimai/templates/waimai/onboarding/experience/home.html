@@ -1,27 +1,25 @@
-{# 新版新手体验：试运行入口页 #}
+{# 新版新手体验：入口页（与服务器主页欢迎窗同一套引导） #}
 {% extends 'waimai/base.html' %}
 {% load static %}
 
-{% block title %}新版新手体验（试运行） - 野草系统{% endblock %}
+{% block title %}新手体验 - 野草系统{% endblock %}
 {% block body_class %}experience-home-page{% endblock %}
 
 {% block content %}
 <section class="showcase-block card experience-zone" id="block-experience">
-    <h1 class="page-title">🌱 新版新手体验（试运行）</h1>
+    <h1 class="page-title">🌱 新手体验</h1>
     <p class="card-meta">
-        与主页「新手体验」旧版并行。当前卖家开店线含 <strong>6 大步</strong>：
+        卖家开店线含 <strong>6 大步</strong>：
         注册并开通店铺 → 营业状态 → 菜单清单 → 批量打印二维码 → 添加新商品 → 编辑商品与预览店铺。
-        演示店：{{ official_shop_name }}。定稿后会逐步替换旧版。
+        演示店：{{ official_shop_name }}。
     </p>
     <p class="msg-err" style="margin:12px 0 0;padding:10px 12px;font-size:14px;line-height:1.5;">
         <strong>设备提示：</strong>本引导目前<strong>建议在电脑浏览器</strong>上使用。
         若用手机（尤其小屏手机），说明框很容易挡住高亮演示区，看不清当前步骤；手机布局优化已列入方案，尚未上线。
     </p>
     <div class="experience-zone-actions">
-        <button type="button" class="btn btn-orange btn-block" data-experience-start="seller">开始新版开店体验</button>
+        <button type="button" class="btn btn-orange btn-block" data-experience-start="seller">开始开店体验</button>
         <a href="/" class="btn btn-outline btn-block">返回服务器主页</a>
     </div>
 </section>
-
-{% include 'waimai/onboarding/experience/_modals.html' %}
 {% endblock %}

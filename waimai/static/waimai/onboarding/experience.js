@@ -1540,7 +1540,9 @@
         boot = readBoot();
         if (!boot || !boot.enabled) return;
         bindGraduateModal();
-        var isHome = document.body.classList.contains('experience-home-page');
+        var isExperienceHome = document.body.classList.contains('experience-home-page');
+        var isShowcaseHome = document.body.classList.contains('showcase-home-page');
+        var isHome = isExperienceHome || isShowcaseHome;
         var params = new URLSearchParams(window.location.search);
         var tourActive = params.get(boot.urlFlag || 'exp') === '1';
         if (tourActive) {
@@ -1550,6 +1552,9 @@
         }
         if (isHome) {
             bindExperienceHome();
+            if (isShowcaseHome && !welcomeSeen()) {
+                window.setTimeout(function () { showModal('experience-welcome-modal'); }, 400);
+            }
         }
         if (activeTrack) {
             if (!isHome) {

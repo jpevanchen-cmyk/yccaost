@@ -136,15 +136,22 @@ def onboarding_boot(request):
     """全站注入新手体验引导数据（幻灯片式小步演示需跨页）"""
     from .onboarding_helpers import build_onboarding_boot_payload, official_shop_ready
 
-    # 新版体验页或 ?exp=1 时不注入旧版 boot，避免双引导
-    if request.GET.get('exp') == '1' or request.path.startswith('/experience/'):
+    path = request.path or ''
+
+    # 新版体验页、?exp=1、服务器主页：不注入旧版 boot，避免双引导
+    if (
+        request.GET.get('exp') == '1'
+        or path.startswith('/experience/')
+        or path in ('/', '/directory/')
+        or path.startswith('/directory/')
+    ):
         ready = official_shop_ready()
         name = ''
         if ready:
             boot = build_onboarding_boot_payload()
             name = boot['officialShopName']
         return {
-            'onboarding_enabled': ready,
+            'onboarding_enabled': False,
             'onboarding_boot_json': '',
             'official_shop_name': name,
         }

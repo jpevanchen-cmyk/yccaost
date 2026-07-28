@@ -264,11 +264,11 @@ class ExperienceViewTests(TestCase):
 
         self.assertEqual(resp.status_code, 200)
 
-        self.assertContains(resp, '新版新手体验（试运行）')
+        self.assertContains(resp, '新手体验')
 
         self.assertContains(resp, 'yc-experience-boot')
 
-        self.assertNotContains(resp, 'yc-onboarding-boot')
+        self.assertNotContains(resp, 'id="yc-onboarding-boot"')
 
 
 
@@ -603,7 +603,7 @@ class ExperienceViewTests(TestCase):
 
 
 
-    def test_old_onboarding_still_on_home(self):
+    def test_experience_on_server_home(self):
 
         resp = self.client.get('/')
 
@@ -611,7 +611,13 @@ class ExperienceViewTests(TestCase):
 
         self.assertContains(resp, '体验野草开店')
 
-        self.assertContains(resp, '新版体验（试运行）')
+        self.assertContains(resp, 'yc-experience-boot')
 
-        self.assertContains(resp, 'yc-onboarding-boot')
+        self.assertContains(resp, 'experience-welcome-modal')
+
+        self.assertNotContains(resp, 'id="yc-onboarding-boot"')
+
+        self.assertNotContains(resp, 'onboarding-welcome-modal')
+
+        self.assertNotContains(resp, '新版体验（试运行）')
 

@@ -246,13 +246,17 @@ class OnboardingViewTests(TestCase):
 
 
 
-    def test_home_has_onboarding_zone(self):
+    def test_home_has_experience_zone(self):
 
         resp = self.client.get('/')
 
         self.assertEqual(resp.status_code, 200)
 
-        self.assertContains(resp, 'onboarding-step-picker-modal')
+        self.assertContains(resp, 'experience-step-picker-modal')
+
+        self.assertContains(resp, 'experience-welcome-modal')
+
+        self.assertNotContains(resp, 'id="yc-onboarding-boot"')
 
 
 

@@ -21,6 +21,20 @@ from waimai.staff_account_helpers import (
 )
 from waimai.workbench_shell_helpers import build_workbench_shell
 
+# 单元测试占位：非真实微信商户参数（勿用 32 位类密钥格式，避免 GitHub 误报）
+_FAKE_WECHAT_MCH_ID = 'unit-test-mch-not-real'
+_FAKE_WECHAT_APP_ID = 'unit-test-app-not-real'
+_FAKE_WECHAT_API_KEY = 'NOT_A_REAL_WECHAT_KEY'
+
+
+def _apply_fake_wechat_settings(pay):
+    """测试里模拟「微信参数已配齐」"""
+    pay.enable_wechat = True
+    pay.wechat_mch_id = _FAKE_WECHAT_MCH_ID
+    pay.wechat_app_id = _FAKE_WECHAT_APP_ID
+    pay.wechat_api_key = _FAKE_WECHAT_API_KEY
+    pay.save()
+
 
 class CashierBase(TestCase):
     def setUp(self):
@@ -370,21 +384,13 @@ class CashierWechatTests(CashierBase):
 
     def test_wechat_shown_when_ready(self):
         pay = get_payment_settings(self.seller.username)
-        pay.enable_wechat = True
-        pay.wechat_mch_id = '1234567890'
-        pay.wechat_app_id = 'wxtestappid1234567890ab'
-        pay.wechat_api_key = 'testapikey1234567890abcd1234567890ab'
-        pay.save()
+        _apply_fake_wechat_settings(pay)
         opts = cashier_wechat_options(self.seller.username)
         self.assertTrue(opts['cashier_enable_wechat'])
 
     def test_start_wechat_redirects_to_qr_page(self):
         pay = get_payment_settings(self.seller.username)
-        pay.enable_wechat = True
-        pay.wechat_mch_id = '1234567890'
-        pay.wechat_app_id = 'wxtestappid1234567890ab'
-        pay.wechat_api_key = 'testapikey1234567890abcd1234567890ab'
-        pay.save()
+        _apply_fake_wechat_settings(pay)
         order = self.make_pending_order(fulfillment_type='takeaway')
         client = Client()
         client.post(
@@ -403,11 +409,7 @@ class CashierWechatTests(CashierBase):
 
     def test_cannot_start_wechat_for_paid_order(self):
         pay = get_payment_settings(self.seller.username)
-        pay.enable_wechat = True
-        pay.wechat_mch_id = '1234567890'
-        pay.wechat_app_id = 'wxtestappid1234567890ab'
-        pay.wechat_api_key = 'testapikey1234567890abcd1234567890ab'
-        pay.save()
+        _apply_fake_wechat_settings(pay)
         order = self.make_pending_order(
             payment_status='paid',
             order_status='awaiting_prep',

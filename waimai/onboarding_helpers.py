@@ -118,9 +118,20 @@ def build_onboarding_boot_json() -> str:
 
 
 def enrich_server_home_onboarding(context: dict) -> dict:
-    """服务器主页追加体验引导上下文（与 context_processor 字段一致）"""
-    boot = build_onboarding_boot_payload()
-    context['onboarding_enabled'] = boot['enabled']
-    context['onboarding_boot_json'] = json.dumps(boot, ensure_ascii=False)
+    """服务器主页追加新版体验引导上下文（view 层与 context_processor 保持一致）"""
+    from .onboarding.boot import build_experience_boot_payload, experience_shop_ready
+
+    if not experience_shop_ready():
+        context['experience_enabled'] = False
+        context['experience_boot_json'] = ''
+        context['official_shop_name'] = ''
+        context['onboarding_enabled'] = False
+        context['onboarding_boot_json'] = ''
+        return context
+    boot = build_experience_boot_payload()
+    context['experience_enabled'] = True
+    context['experience_boot_json'] = json.dumps(boot, ensure_ascii=False)
     context['official_shop_name'] = boot['officialShopName']
+    context['onboarding_enabled'] = False
+    context['onboarding_boot_json'] = ''
     return context

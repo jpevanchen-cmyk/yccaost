@@ -1,42 +1,18 @@
-{# 服务器主页固定体验入口（A.10.9） #}
-{% if onboarding_enabled %}
-<section class="showcase-block card onboarding-zone" id="block-onboarding" data-yc-tour="block-onboarding">
+{# 服务器主页固定体验入口（H4 v2 · 正本 docs/新手引导流程.md） #}
+{% if experience_enabled %}
+<section class="showcase-block card experience-zone" id="block-experience" data-yc-tour="block-experience">
     <h2 class="showcase-block-title">🌱 新手体验</h2>
     <div class="showcase-block-main">
-        <p class="card-meta">快速了解野草开店与购物流程；可随时选从哪一步开始，不真注册。演示店：{{ official_shop_name }}。</p>
-        <div class="onboarding-zone-actions">
-            <button type="button" class="btn btn-orange" data-onboarding-start="seller">体验野草开店</button>
-            <button type="button" class="btn btn-outline" data-onboarding-start="buyer">体验野草购物</button>
-            <a href="{% url 'experience_home' %}" class="btn btn-sm btn-outline btn-block btn-experience-trial">新版体验（试运行）</a>
+        <p class="card-meta">
+            快速了解野草开店流程（<strong>6 大步</strong>）；可随时选从哪一步开始，演示数据会自动清理，不真注册。
+            演示店：{{ official_shop_name }}。
+        </p>
+        <p class="msg-err" style="margin:10px 0 0;padding:8px 10px;font-size:13px;line-height:1.45;">
+            <strong>设备提示：</strong>建议在<strong>电脑浏览器</strong>上体验；手机小屏说明框可能挡住演示区（改进方案已列入待做）。
+        </p>
+        <div class="experience-zone-actions">
+            <button type="button" class="btn btn-orange" data-experience-start="seller">体验野草开店</button>
         </div>
     </div>
 </section>
 {% endif %}
-
-{# 欢迎层 #}
-<div id="onboarding-welcome-modal" class="onboarding-modal" hidden>
-    <div class="onboarding-backdrop" data-onboarding-close="welcome"></div>
-    <div class="onboarding-box card" role="dialog" aria-modal="true" aria-labelledby="onboarding-welcome-title">
-        <h2 id="onboarding-welcome-title" class="onboarding-box-title">欢迎来到野草</h2>
-        <p class="card-meta">野草帮助小店铺快速上线点餐与外卖。您可以选一条短流程快速体验，也可以先逛逛主页。</p>
-        <div class="onboarding-zone-actions">
-            <button type="button" class="btn btn-orange btn-block" data-onboarding-start="seller">体验野草开店</button>
-            <button type="button" class="btn btn-outline btn-block" data-onboarding-start="buyer">体验野草购物</button>
-            <button type="button" class="btn btn-sm btn-outline btn-block" data-onboarding-skip-welcome>跳过，我先自己看</button>
-        </div>
-    </div>
-</div>
-
-{# 选大步：点体验开店/购物后先选从哪一步开始 #}
-<div id="onboarding-step-picker-modal" class="onboarding-modal" hidden>
-    <div class="onboarding-backdrop" data-onboarding-close="picker"></div>
-    <div class="onboarding-box card" role="dialog" aria-modal="true" aria-labelledby="onboarding-step-picker-title">
-        <h2 id="onboarding-step-picker-title" class="onboarding-box-title">选择体验内容</h2>
-        <p class="card-meta" id="onboarding-step-picker-desc">请选要从哪一大步开始；也可全部从头体验。</p>
-        <div id="onboarding-step-picker-list" class="onboarding-step-picker-list"></div>
-        <div class="onboarding-zone-actions">
-            <button type="button" class="btn btn-orange btn-block" id="onboarding-step-picker-all">全部从头体验</button>
-            <button type="button" class="btn btn-sm btn-outline btn-block" data-onboarding-close="picker">取消</button>
-        </div>
-    </div>
-</div>

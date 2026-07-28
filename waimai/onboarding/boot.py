@@ -92,7 +92,10 @@ def build_experience_boot_json() -> str:
 
 
 def should_inject_experience_boot(request) -> bool:
-    """换页引导时（?exp=1）或新版入口页需要注入启动数据"""
-    if request.path.startswith('/experience/'):
+    """换页引导（?exp=1）、新版入口页、服务器主页需要注入启动数据"""
+    path = request.path or ''
+    if path.startswith('/experience/'):
+        return True
+    if path in ('/', '/directory/') or path.startswith('/directory/'):
         return True
     return request.GET.get(URL_FLAG) == '1'

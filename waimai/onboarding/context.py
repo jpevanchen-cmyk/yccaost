@@ -9,14 +9,22 @@ from .official_shop import OFFICIAL_SHOP_NAME, official_shop_ready
 
 
 def experience_boot(request):
-    """在 ?exp=1 或 /experience/ 下注入新版 boot；其它页面不注入"""
+    """在 ?exp=1、/experience/ 或服务器主页下注入新版 boot"""
     if not should_inject_experience_boot(request):
-        return {'experience_boot_json': ''}
+        return {
+            'experience_boot_json': '',
+            'experience_enabled': False,
+            'official_shop_name': '',
+        }
     if not official_shop_ready():
-        return {'experience_boot_json': ''}
+        return {
+            'experience_boot_json': '',
+            'experience_enabled': False,
+            'official_shop_name': '',
+        }
     boot = build_experience_boot_payload()
     return {
         'experience_boot_json': json.dumps(boot, ensure_ascii=False),
         'experience_enabled': True,
-        'experience_official_shop_name': boot['officialShopName'],
+        'official_shop_name': boot['officialShopName'],
     }
