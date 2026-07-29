@@ -26,5 +26,20 @@ urlpatterns = [
         views.experience_preview_workbench,
         name='experience_preview_workbench',
     ),
+    path(
+        'preview/seller/dine/',
+        views.experience_preview_dine,
+        name='experience_preview_dine',
+    ),
+    path(
+        'preview/seller/table-stickers/',
+        views.experience_preview_table_stickers,
+        name='experience_preview_table_stickers',
+    ),
+    path(
+        'preview/seller/delivery/',
+        views.experience_preview_delivery,
+        name='experience_preview_delivery',
+    ),
     path('cleanup/', views.experience_cleanup, name='experience_cleanup'),
 ]

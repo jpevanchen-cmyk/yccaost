@@ -149,6 +149,28 @@
         cb.checked = shouldCheck;
         cb.dispatchEvent(new Event('change', { bubbles: true }));
     }
+    function runSelectChipsDemo(step) {
+        if (!step || !step.demoChipLabels || !step.demoChipLabels.length) return;
+        var gridId = step.demoChipGrid || 'table-chip-grid';
+        var grid = document.getElementById(gridId);
+        if (!grid) return;
+        grid.querySelectorAll('.code-chip.is-selected').forEach(function (chip) {
+            chip.classList.remove('is-selected');
+        });
+        var form = document.getElementById('table-batch-form');
+        if (form) {
+            form.querySelectorAll('input[name="selected_ids"]').forEach(function (el) {
+                el.remove();
+            });
+        }
+        step.demoChipLabels.forEach(function (label) {
+            var chip = grid.querySelector('.code-chip[data-label="' + label + '"]');
+            if (!chip) return;
+            if (!chip.classList.contains('is-selected')) {
+                chip.click();
+            }
+        });
+    }
     function runMultiTypeDemo(step) {
         if (!step || !step.demoFields || !step.demoFields.length) return;
         step.demoFields.forEach(function (field) {
@@ -286,7 +308,7 @@
     }
     function ensureAllExpHiddenFields() {
         if (!isWritableTourPage() || !activeTrack) return;
-        document.querySelectorAll('#menu-panel form').forEach(function (form) {
+        document.querySelectorAll('form').forEach(function (form) {
             var method = (form.getAttribute('method') || 'get').toLowerCase();
             if (method === 'post') {
                 ensureExpHiddenFieldsInForm(form);
@@ -344,6 +366,12 @@
         if ((form.getAttribute('method') || 'get').toLowerCase() !== 'post') return false;
         if (form.id === 'product-add-form') return true;
         return form.classList.contains('product-edit-form');
+    }
+    function isExperienceDinePostForm(form) {
+        if (!form || !isWritableTourPage() || !activeTrack) return false;
+        if (pageKeyFromPath() !== 'preview_dine') return false;
+        if ((form.getAttribute('method') || 'get').toLowerCase() !== 'post') return false;
+        return form.id === 'table-add-form' || form.id === 'table-batch-form';
     }
     function appendFormSubmitter(fd, submitter) {
         // 拦截 submit 后用 FormData(form) 会丢触发按钮；须手动补上
@@ -615,6 +643,25 @@
             }, null, el.tagName === 'BUTTON' || el.tagName === 'INPUT' ? el : null);
             return true;
         }
+        if (form && isExperienceDinePostForm(form)) {
+            bumpMicroForNextStep();
+            saveSession();
+            ensureExpHiddenFieldsInForm(form);
+            if (window.ycSellerUnsavedGuard &&
+                typeof window.ycSellerUnsavedGuard.allowNextUnload === 'function') {
+                window.ycSellerUnsavedGuard.allowNextUnload();
+            }
+            if (el.tagName === 'BUTTON' && el.type === 'submit') {
+                if (typeof form.requestSubmit === 'function') {
+                    form.requestSubmit(el);
+                } else {
+                    form.submit();
+                }
+            } else {
+                el.click();
+            }
+            return true;
+        }
         return false;
     }
     function executeSelectNameStep(step) {
@@ -697,6 +744,9 @@
         if (path.indexOf('/experience/preview/seller/products') === 0) return 'preview_products';
         if (path.indexOf('/experience/preview/seller/print-qr') === 0) return 'preview_print_qr';
         if (path.indexOf('/experience/preview/seller/workbench') === 0) return 'preview_workbench_manage';
+        if (path.indexOf('/experience/preview/seller/dine') === 0) return 'preview_dine';
+        if (path.indexOf('/experience/preview/seller/table-stickers') === 0) return 'preview_table_stickers';
+        if (path.indexOf('/experience/preview/seller/delivery') === 0) return 'preview_delivery';
         if (path.indexOf('/onboarding/preview/seller/products') === 0) return 'preview_products';
         if (path.indexOf('/onboarding/preview/seller/print-qr') === 0) return 'preview_print_qr';
         if (path.indexOf('/onboarding/preview/seller/workbench') === 0) return 'preview_workbench_manage';
@@ -994,26 +1044,31 @@
         }
     }
     function runSelectDemo(el, step) {
-        if (!el || el.tagName !== 'SELECT' || !step) return;
+        if (!el || !step) return;
+        var selectEl = el;
+        if (el.tagName !== 'SELECT' && el.querySelector) {
+            selectEl = el.querySelector('select');
+        }
+        if (!selectEl || selectEl.tagName !== 'SELECT') return;
         var val = step.demoText || '';
         if (step.demoTextKey && boot && boot[step.demoTextKey]) {
             val = boot[step.demoTextKey];
         }
         if (step.demoType === 'select_name' && val) {
             var matched = '';
-            for (var i = 0; i < el.options.length; i++) {
-                if (el.options[i].text.indexOf(val) >= 0) {
-                    matched = el.options[i].value;
+            for (var i = 0; i < selectEl.options.length; i++) {
+                if (selectEl.options[i].text.indexOf(val) >= 0) {
+                    matched = selectEl.options[i].value;
                     break;
                 }
             }
             val = matched;
         }
         if (!val) return;
-        if (el.value === val) return;
-        el.value = val;
-        if (step.demoType === 'select_name') {
-            el.dispatchEvent(new Event('change', { bubbles: true }));
+        if (selectEl.value === val) return;
+        selectEl.value = val;
+        if (step.demoType === 'select_name' || step.demoType === 'select') {
+            selectEl.dispatchEvent(new Event('change', { bubbles: true }));
         }
     }
     function resolveTextField(el) {
@@ -1098,6 +1153,11 @@
                         if (!isTourVisible()) return;
                         repositionSpotlightOnly(step);
                     }, 150);
+                } else if (isDineSettingsFieldStep(step)) {
+                    window.setTimeout(function () {
+                        if (!isTourVisible()) return;
+                        repositionSpotlightOnly(step);
+                    }, 180);
                 } else if (isSeller6ScreenshotMode()) {
                     window.setTimeout(function () {
                         if (!isTourVisible()) return;
@@ -1136,6 +1196,19 @@
             || cardRect.bottom + gap <= highlightRect.top
             || cardRect.top >= highlightRect.bottom + gap
         );
+    }
+    function isDineSettingsFieldStep(step) {
+        if (!step || !step.selector) return false;
+        var sel = step.selector;
+        return sel.indexOf('dine-channel') >= 0
+            || sel.indexOf('dine-takeaway') >= 0
+            || sel.indexOf('dine-delivery') >= 0
+            || sel.indexOf('dine-hours') >= 0
+            || sel.indexOf('dine-wait-') >= 0
+            || sel.indexOf('dine-share') >= 0
+            || sel.indexOf('dine-restrict') >= 0
+            || sel.indexOf('fold-lan-address') >= 0
+            || sel.indexOf('dine-wait-time-rules') >= 0;
     }
     function isSeller5Step12Mode(step) {
         return !!(step && step.selector && step.selector.indexOf('demo-s5-step12-shot') >= 0);
@@ -1341,6 +1414,12 @@
         if (step.demoType === 'select' && step.selector) {
             window.setTimeout(function () {
                 runSelectDemo(findTarget(step.selector), step);
+            }, 400);
+        }
+        if (step.demoChipLabels && step.demoChipLabels.length) {
+            window.setTimeout(function () {
+                if (!isTourVisible() || currentMicroStep() !== step) return;
+                runSelectChipsDemo(step);
             }, 400);
         }
         if (step.selector && step.selector.indexOf('add-list-all') >= 0) {

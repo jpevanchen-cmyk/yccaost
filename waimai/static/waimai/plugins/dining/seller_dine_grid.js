@@ -11,6 +11,10 @@
         var pathsBox = document.getElementById(cfg.pathsBoxId);
         if (!grid || !form) return;
 
+        function experienceTourSkipConfirm() {
+            return document.body.classList.contains('yc-exp-tour-active');
+        }
+
         function selectedChips() {
             return grid.querySelectorAll('.code-chip.is-selected');
         }
@@ -79,18 +83,20 @@
                 }
                 syncHiddenIds();
                 if (action === 'delete') {
-                    var labels = [];
-                    selectedChips().forEach(function (chip) {
-                        labels.push(chip.getAttribute('data-label'));
-                    });
-                    var first = window.confirm(
-                        '确定要删除以下' + cfg.itemName + '吗？\n' + labels.join('、')
-                    );
-                    if (!first) return;
-                    var second = window.confirm(
-                        '删除后不可恢复，请再次确认删除这 ' + labels.length + ' 个' + cfg.itemName + '。'
-                    );
-                    if (!second) return;
+                    if (!experienceTourSkipConfirm()) {
+                        var labels = [];
+                        selectedChips().forEach(function (chip) {
+                            labels.push(chip.getAttribute('data-label'));
+                        });
+                        var first = window.confirm(
+                            '确定要删除以下' + cfg.itemName + '吗？\n' + labels.join('、')
+                        );
+                        if (!first) return;
+                        var second = window.confirm(
+                            '删除后不可恢复，请再次确认删除这 ' + labels.length + ' 个' + cfg.itemName + '。'
+                        );
+                        if (!second) return;
+                    }
                 }
                 actionInput.value = action;
                 // 这是明确的批量提交，不是用户误离开网页。

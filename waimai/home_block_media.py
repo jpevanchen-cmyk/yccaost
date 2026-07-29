@@ -20,6 +20,18 @@ def count_user_uploaded_photos(user) -> int:
     return UserUploadedPhoto.objects.filter(owner=user).count()
 
 
+DEFAULT_HOME_BLOCK_LINK_LABEL = '了解更多'
+
+
+def block_display_link_label(block) -> str:
+    """前台用：有附加链接时显示的文字；留空则用默认「了解更多」。"""
+    url = (getattr(block, 'link_url', None) or '').strip()
+    if not url:
+        return ''
+    label = (getattr(block, 'link_label', None) or '').strip()
+    return label or DEFAULT_HOME_BLOCK_LINK_LABEL
+
+
 def block_display_image_src(block) -> str:
     """前台用：优先本站上传图，否则公开链接。"""
     img = getattr(block, 'image', None)

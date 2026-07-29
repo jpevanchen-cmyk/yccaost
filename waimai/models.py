@@ -364,6 +364,9 @@ class ServerHomeBlock(models.Model):
     )
     image_url = models.CharField(max_length=500, blank=True, default='', verbose_name='图片公开链接')
     link_url = models.CharField(max_length=500, blank=True, default='', verbose_name='附加链接')
+    link_label = models.CharField(
+        max_length=32, blank=True, default='', verbose_name='附加链接显示文字',
+    )
     nav_label = models.CharField(max_length=32, blank=True, default='', verbose_name='导航短名')
     is_enabled = models.BooleanField(default=False, db_index=True, verbose_name='是否启用')
     show_in_nav = models.BooleanField(default=True, verbose_name='是否出现在吸顶导航')
@@ -543,6 +546,9 @@ class ShopHomeBlock(models.Model):
     )
     image_url = models.CharField(max_length=500, blank=True, default='', verbose_name='图片公开链接')
     link_url = models.CharField(max_length=500, blank=True, default='', verbose_name='附加链接')
+    link_label = models.CharField(
+        max_length=32, blank=True, default='', verbose_name='附加链接显示文字',
+    )
     nav_label = models.CharField(max_length=32, blank=True, default='', verbose_name='导航短名')
     is_enabled = models.BooleanField(default=False, db_index=True, verbose_name='是否启用')
     show_in_nav = models.BooleanField(default=True, verbose_name='是否出现在吸顶导航')

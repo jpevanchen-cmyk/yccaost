@@ -344,12 +344,13 @@ def resolve_entry_home_page():
 
 def _attach_block_meta(blocks, get_spec_fn):
     """给块挂上说明书、前台锚点与展示用图片地址"""
-    from .home_block_media import block_display_image_src
+    from .home_block_media import block_display_image_src, block_display_link_label
 
     for b in blocks:
         b.spec = get_spec_fn(b.block_type)
         b.dom_id = block_dom_id(b)
         b.display_image_src = block_display_image_src(b)
+        b.display_link_label = block_display_link_label(b)
         # 与前台 showcase 一致：进入店铺/名录块不用配图与附加链接
         b.shows_rich_media = b.block_type not in (BLOCK_ORDER_CTA, BLOCK_DIRECTORY)
 

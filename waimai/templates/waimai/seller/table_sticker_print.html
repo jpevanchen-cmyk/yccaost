@@ -1,0 +1,81 @@
+{% extends 'waimai/seller/base.html' %}
+{% load static %}
+{% block title %}桌贴预览 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="table-sticker-print-page" id="table-sticker-print-page">
+    <div class="table-sticker-print-toolbar no-print">
+        <h2 style="margin:0 0 8px;">🖨 桌贴预览（演示）</h2>
+        <p class="card-meta" style="margin:0 0 12px;" data-yc-tour="table-sticker-intro">
+            以下为所选实体桌台的扫码二维码；正式店点「导出桌贴 PDF」会下载可打印文件（每页 12 张）。
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+            <button type="button" class="btn btn-green" onclick="window.print()" data-yc-tour="table-sticker-print-btn">打印本页</button>
+            <a href="{% if experience_dine_url %}{{ experience_dine_url }}{% else %}{% url 'seller_panel_section' 'dine' %}{% endif %}"
+               class="btn btn-outline" data-unsaved-skip>返回堂食营业</a>
+        </div>
+        {% if not sticker_cards %}
+        <p class="msg-warn">未选择桌台，或桌台已不存在。</p>
+        {% endif %}
+    </div>
+
+    {% if sticker_cards %}
+    <div class="table-sticker-print-grid" data-yc-tour="table-sticker-grid">
+        {% for card in sticker_cards %}
+        <figure class="table-sticker-print-card">
+            <p class="table-sticker-print-title">{{ card.title }}</p>
+            {% if card.shop_name %}
+            <p class="table-sticker-print-shop">{{ card.shop_name }}</p>
+            {% endif %}
+            <img src="{{ card.data_url }}" alt="{{ card.title }}" width="160" height="160">
+            <p class="table-sticker-print-wifi">先连店内访客 WiFi → 再扫此码点餐</p>
+            <p class="table-sticker-print-caption">{{ card.footer }}</p>
+        </figure>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.table-sticker-print-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 16px 12px;
+}
+.table-sticker-print-card {
+    margin: 0;
+    padding: 8px;
+    text-align: center;
+    border: 1px dashed #ddd;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+.table-sticker-print-title {
+    margin: 0 0 4px;
+    font-weight: 700;
+    font-size: 18px;
+}
+.table-sticker-print-shop {
+    margin: 0 0 6px;
+    font-size: 12px;
+    color: #555;
+}
+.table-sticker-print-wifi {
+    margin: 6px 0 2px;
+    font-size: 10px;
+    line-height: 1.35;
+    color: #666;
+}
+.table-sticker-print-caption {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #444;
+}
+@media print {
+    .no-print { display: none !important; }
+    .seller-mobile-tabs, .seller-panel-tabs, .page-back { display: none !important; }
+    .table-sticker-print-card { border: none; }
+}
+</style>
+{% endblock %}

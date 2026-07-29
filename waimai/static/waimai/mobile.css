@@ -2897,6 +2897,18 @@ ul.errorlist li {
 .showcase-home-page .showcase-block-title {
     margin: 0 0 8px;
     font-size: 17px;
+    line-height: 1.35;
+}
+.showcase-home-page .showcase-block-title-link {
+    color: #1976d2;
+    font-size: 14px;
+    font-weight: normal;
+    text-decoration: none;
+    margin-left: 8px;
+    white-space: nowrap;
+}
+.showcase-home-page .showcase-block-title-link:hover {
+    text-decoration: underline;
 }
 .showcase-home-page .showcase-block-actions {
     margin-top: 8px;

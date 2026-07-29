@@ -76,10 +76,12 @@ def get_demo_dish_for_seller(seller_id: str):
 
 
 def cleanup_experience_demo_data(seller_id: str) -> dict[str, int]:
-    """删除演示清单/演示商品，并尽量恢复「通用清单」为使用中"""
+    """删除演示清单/演示商品/演示桌台，并尽量恢复「通用清单」为使用中"""
     from waimai.menu_helpers import get_active_menu_profile
     from waimai.models import Dish, MenuProfile
     from waimai.operating_helpers import get_operating_settings
+
+    from .dine_demo_helpers import cleanup_experience_demo_tables
 
     deleted_menus = 0
     deleted_dishes = 0
@@ -146,6 +148,12 @@ def cleanup_experience_demo_data(seller_id: str) -> dict[str, int]:
             settings.active_menu_profile = generic
             settings.save(update_fields=['active_menu_profile'])
 
+    deleted_tables = cleanup_experience_demo_tables(seller_id)
+
     _save_demo_menu_ids([])
     _save_demo_dish_ids([])
-    return {'deleted_menus': deleted_menus, 'deleted_dishes': deleted_dishes}
+    return {
+        'deleted_menus': deleted_menus,
+        'deleted_dishes': deleted_dishes,
+        'deleted_tables': deleted_tables,
+    }

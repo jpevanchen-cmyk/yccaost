@@ -76,7 +76,9 @@
     {% elif block.block_type == 'contact_us' and owner_toolkit_enabled %}
         {% include 'owner_toolkit/contact_us_block.html' with block=block %}
     {% else %}
-        <h2 class="showcase-block-title">{{ block.title }}</h2>
+        <h2 class="showcase-block-title">
+            {{ block.title }}{% if block.link_url %}<a class="showcase-block-title-link" href="{{ block.link_url }}" rel="noopener" target="_blank">{{ block.display_link_label }}</a>{% endif %}
+        </h2>
         <div class="showcase-block-main">
         {% if block.display_image_src %}
         <img class="showcase-block-img" src="{{ block.display_image_src }}" alt="">
@@ -90,13 +92,10 @@
         </div>
         {% endif %}
         </div>
-        {% if block.display_image_src or block.image_url or block.link_url %}
+        {% if block.display_image_src or block.image_url %}
         <div class="showcase-block-actions">
             {% if block.display_image_src or block.image_url %}
             <a class="btn btn-sm btn-outline" href="{% if block.display_image_src %}{{ block.display_image_src }}{% else %}{{ block.image_url }}{% endif %}" target="_blank" rel="noopener">查看原图</a>
-            {% endif %}
-            {% if block.link_url %}
-            <a class="btn btn-sm btn-outline" href="{{ block.link_url }}" rel="noopener" target="_blank">了解更多</a>
             {% endif %}
         </div>
         {% endif %}

@@ -9,7 +9,7 @@
         {% csrf_token %}
         <input type="hidden" name="save_delivery_settings" value="1">
         {% for field in settings_form %}
-        <p{% if field.name == 'min_delivery_fee' %} data-yc-tour="delivery-fee"{% elif field.name == 'free_delivery_threshold' %} data-yc-tour="delivery-free"{% elif field.name == 'per_km_rate_0_3' %} data-yc-tour="delivery-per-km"{% elif field.name == 'max_distance_km' %} data-yc-tour="delivery-base"{% endif %}>{{ field.label_tag }} {{ field }}{% if field.help_text %}<span class="field-help">{{ field.help_text }}</span>{% endif %}</p>
+        <p{% if field.name == 'min_delivery_fee' %} data-yc-tour="delivery-fee"{% elif field.name == 'free_delivery_threshold' %} data-yc-tour="delivery-free"{% elif field.name == 'per_km_rate_0_3' %} data-yc-tour="delivery-per-km"{% elif field.name == 'multiplier_3_6' %} data-yc-tour="delivery-multiplier-3-6"{% elif field.name == 'multiplier_6_9' %} data-yc-tour="delivery-multiplier-6-9"{% elif field.name == 'max_distance_km' %} data-yc-tour="delivery-base"{% elif field.name == 'discount_percent' %} data-yc-tour="delivery-discount"{% endif %}>{{ field.label_tag }} {{ field }}{% if field.help_text %}<span class="field-help">{{ field.help_text }}</span>{% endif %}</p>
         {% endfor %}
         <button type="submit" class="btn btn-block" style="background:#607d8b;color:#fff;" data-yc-tour="delivery-save">保存配送费规则</button>
     </form>

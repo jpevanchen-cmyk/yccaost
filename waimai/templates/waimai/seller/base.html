@@ -30,7 +30,8 @@
 <nav class="seller-tabs-desktop" aria-label="店铺管理">
     {% for item in seller_nav_items %}
     <a href="{% if onboarding_preview %}{{ item.href }}{% else %}{% url 'seller_panel_section' item.section %}{% endif %}"
-       class="seller-nav-link {% if section == item.section %}active{% endif %}">
+       class="seller-nav-link {% if section == item.section %}active{% endif %}"
+       {% if item.section == 'dine' %}data-yc-tour="nav-dine"{% elif item.section == 'delivery' %}data-yc-tour="nav-delivery"{% endif %}>
         {{ item.icon }} {{ item.label }}{% if item.section == 'orders' and shop_unread_msg_total %}<span class="seller-nav-badge" title="未读顾客沟通">{{ shop_unread_msg_total }}</span>{% endif %}
     </a>
     {% endfor %}

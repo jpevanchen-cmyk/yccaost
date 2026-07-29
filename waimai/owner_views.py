@@ -156,6 +156,7 @@ def server_settings_home_page(request):
             block.body = request.POST.get('body') or ''
             block.image_url = (request.POST.get('image_url') or '').strip()[:500]
             block.link_url = (request.POST.get('link_url') or '').strip()[:500]
+            block.link_label = (request.POST.get('link_label') or '').strip()[:32]
             block.nav_label = (request.POST.get('nav_label') or '')[:32]
             block.is_enabled = request.POST.get('is_enabled') == '1'
             block.show_in_nav = request.POST.get('show_in_nav') == '1'

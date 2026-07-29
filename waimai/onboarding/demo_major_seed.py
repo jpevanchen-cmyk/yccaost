@@ -34,6 +34,10 @@ def ensure_seller_major_prepared(seller_id: str, *, track: str, major_index: int
         dish = _ensure_demo_dish_for_edit_major(seller_id)
         if dish:
             return {'edit_dish_id': dish.dish_id.hex[:8]}
+    if major_index == 7:
+        from .dine_demo_helpers import ensure_dine_tour_prepared
+
+        ensure_dine_tour_prepared(seller_id)
     return {}
 
 

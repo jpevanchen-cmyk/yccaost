@@ -75,7 +75,7 @@ def build_experience_boot_payload() -> dict[str, Any]:
         'demoCopyProfileId': demo_copy_profile_id,
         'demoDishEditPick': demo_dish_edit_pick,
         'cleanupUrl': reverse('experience_cleanup'),
-        'writablePages': ['preview_products'],
+        'writablePages': ['preview_products', 'preview_dine'],
         'welcomeSeenKey': WELCOME_SEEN_KEY,
         'sessionTrackKey': SESSION_TRACK_KEY,
         'sessionMajorKey': SESSION_MAJOR_KEY,

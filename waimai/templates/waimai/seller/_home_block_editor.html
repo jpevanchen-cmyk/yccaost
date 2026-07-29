@@ -35,9 +35,10 @@
             <input class="form-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="进入店铺">
             <label class="form-label">按钮上方说明</label>
             <textarea class="form-input home-block-body-input" name="body" rows="4" placeholder="浏览商品、加入购物车并下单">{{ block.body }}</textarea>
-            <p class="card-meta" style="margin:8px 0 0;">本块在主页上是橙色大按钮；配图与「了解更多」链接对本块无效。</p>
+            <p class="card-meta" style="margin:8px 0 0;">本块在主页上是橙色大按钮；配图与附加链接对本块无效。</p>
             <input type="hidden" name="image_url" value="{{ block.image_url }}">
             <input type="hidden" name="link_url" value="{{ block.link_url }}">
+            <input type="hidden" name="link_label" value="{{ block.link_label }}">
             {% elif block.block_type == 'directory' %}
             <label class="form-label">标题</label>
             <input class="form-input" type="text" name="title" value="{{ block.title }}" maxlength="120">
@@ -46,6 +47,7 @@
             <p class="card-meta" style="margin:8px 0 0;">名录块自带搜索与店铺列表；一般不用配图和附加链接。</p>
             <input type="hidden" name="image_url" value="{{ block.image_url }}">
             <input type="hidden" name="link_url" value="{{ block.link_url }}">
+            <input type="hidden" name="link_label" value="{{ block.link_label }}">
             {% else %}
             <label class="form-label">标题</label>
             <input class="form-input home-block-title-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="显示在主页上的大标题">
@@ -91,7 +93,11 @@
             <div class="home-block-link-box">
                 <div class="home-block-path-row">
                     <span class="home-block-path-label">附加链接</span>
-                    <input class="form-input home-block-path-input" type="text" name="link_url" value="{{ block.link_url }}" maxlength="500" placeholder="可选：粘贴网页地址，主页会出现「了解更多」按钮；以 https:// 开头" inputmode="url" autocomplete="off">
+                    <input class="form-input home-block-path-input" type="text" name="link_url" value="{{ block.link_url }}" maxlength="500" placeholder="可选：粘贴网页地址，以 https:// 开头；会显示在标题旁" inputmode="url" autocomplete="off">
+                </div>
+                <div class="home-block-path-row" style="margin-top:10px;">
+                    <span class="home-block-path-label">链接文字</span>
+                    <input class="form-input home-block-path-input" type="text" name="link_label" value="{{ block.link_label }}" maxlength="32" placeholder="显示在标题旁；留空则用「了解更多」">
                 </div>
             </div>
             {% endif %}

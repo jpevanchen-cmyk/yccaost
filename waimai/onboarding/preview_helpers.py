@@ -315,6 +315,135 @@ def build_experience_workbench_context(request) -> dict[str, Any]:
     return ctx
 
 
+def build_experience_dine_context(request) -> dict[str, Any]:
+    """新版堂食营业演示页：接单细则观摩 + 桌台可写演示"""
+    shop = get_official_shop_profile()
+    if not shop:
+        return {}
+    seller_id = shop.seller_id
+    from waimai.forms import ShopOperatingSettingsForm
+    from waimai.models import ShopTable, TableSession, VirtualTableCode
+    from waimai.operating_helpers import get_operating_settings
+    from waimai.plugin_runtime.registry import is_plugin_enabled
+    from waimai.plugins.dining.table_bulk_helpers import sort_shop_tables, sort_virtual_codes
+    from waimai.plugins.dining.table_helpers import (
+        build_table_scan_path,
+        build_virtual_scan_path,
+        virtual_code_is_busy,
+    )
+
+    if not is_plugin_enabled('dining', seller_id):
+        return {'_redirect': 'experience_home'}
+
+    from .constants import URL_MAJOR, URL_MICRO, URL_TRACK
+    from .dine_demo_helpers import ensure_dine_tour_prepared
+    from .tour_session import load_tour_query
+
+    q = load_tour_query(request)
+    try:
+        major_idx = int(q.get(URL_MAJOR, '-1'))
+    except (TypeError, ValueError):
+        major_idx = -1
+    try:
+        micro_idx = int(q.get(URL_MICRO, '0') or '0')
+    except (TypeError, ValueError):
+        micro_idx = 0
+    track = (q.get(URL_TRACK) or '').strip()
+    if track == 'seller' and major_idx == 7 and micro_idx == 0:
+        ensure_dine_tour_prepared(seller_id)
+
+    operating = get_operating_settings(seller_id)
+    ctx = base_experience_preview_context('堂食营业（演示）', 'dine')
+    ctx.update({
+        'onboarding_readonly': False,
+        'experience_writable': True,
+        'experience_tour_query': _experience_tour_query(request),
+        'operating': operating,
+        'operating_form': ShopOperatingSettingsForm(instance=operating),
+        'wait_time_rules': list(operating.wait_time_rules.all()),
+        'shop_unread_msg_total': shop_unread_message_summary(seller_id)['total'],
+    })
+    tables = sort_shop_tables(list(ShopTable.objects.filter(seller_id=seller_id)))
+    for t in tables:
+        t.scan_path = build_table_scan_path(seller_id, t.qr_token)
+    ctx['tables'] = tables
+    if operating.share_table_enabled and operating.share_table_mode == 'virtual':
+        vcodes = sort_virtual_codes(list(VirtualTableCode.objects.filter(seller_id=seller_id)))
+        for v in vcodes:
+            v.scan_path = build_virtual_scan_path(seller_id, v.qr_token)
+            v.is_busy = virtual_code_is_busy(v)
+        ctx['virtual_codes'] = vcodes
+    if operating.share_table_enabled and operating.share_table_mode == 'waiter':
+        ctx['share_sessions'] = TableSession.objects.filter(
+            seller_id=seller_id, session_type='share_waiter', status='open',
+        )[:20]
+    return ctx
+
+
+def build_experience_delivery_context(request) -> dict[str, Any]:
+    """新版配送费规则演示页：只观摩，表单不真保存"""
+    shop = get_official_shop_profile()
+    if not shop:
+        return {}
+    seller_id = shop.seller_id
+    from waimai.delivery_helpers import get_delivery_settings
+    from waimai.plugin_runtime.registry import is_plugin_enabled
+    from waimai.plugins.fulfillment.forms import ShopDeliverySettingsForm
+
+    if not is_plugin_enabled('fulfillment', seller_id):
+        return {'_redirect': 'experience_home'}
+
+    ctx = base_experience_preview_context('配送费规则（演示）', 'delivery')
+    ctx.update({
+        'onboarding_readonly': True,
+        'experience_writable': False,
+        'experience_tour_query': _experience_tour_query(request),
+        'settings_form': ShopDeliverySettingsForm(instance=get_delivery_settings(seller_id)),
+    })
+    return ctx
+
+
+def build_experience_table_stickers_context(request) -> dict[str, Any]:
+    """桌贴预览页（体验引导 · 替代 PDF 下载）"""
+    shop = get_official_shop_profile()
+    if not shop:
+        return {}
+    seller_id = shop.seller_id
+    from waimai.models import ShopProfile, ShopTable
+    from waimai.plugin_runtime.registry import is_plugin_enabled
+    from waimai.plugins.dining.table_sticker_print_helpers import build_table_sticker_print_cards
+
+    if not is_plugin_enabled('dining', seller_id):
+        return {'_redirect': 'experience_home'}
+
+    raw_ids = (request.GET.get('tables') or '').strip()
+    ids = [x.strip() for x in raw_ids.split(',') if x.strip()]
+    tables = list(ShopTable.objects.filter(seller_id=seller_id, table_id__in=ids))
+    profile = ShopProfile.objects.filter(seller_id=seller_id).first()
+    ctx = base_experience_preview_context('桌贴预览（演示）', 'dine')
+    ctx.update({
+        'onboarding_readonly': True,
+        'experience_writable': False,
+        'experience_tour_query': _experience_tour_query(request),
+        'sticker_cards': build_table_sticker_print_cards(
+            request, seller_id, tables, shop_profile=profile,
+        ),
+        'experience_dine_url': reverse_experience_dine(request),
+    })
+    return ctx
+
+
+def reverse_experience_dine(request) -> str:
+    from django.urls import reverse
+    from urllib.parse import urlencode
+
+    base = reverse('experience_preview_dine')
+    q = load_tour_query(request)
+    if not q:
+        return base
+    return f'{base}?{urlencode(q)}'
+
+
 def experience_menu_panel_json(request, seller_id: str):
     """体验引导：GET 切换清单时只刷新菜单区 JSON（不整页跳转）"""
     from django.http import JsonResponse

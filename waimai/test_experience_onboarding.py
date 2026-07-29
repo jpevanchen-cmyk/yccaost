@@ -78,11 +78,21 @@ class ExperienceBootTests(TestCase):
 
         settings.active_menu_profile = profile
 
-        settings.save(update_fields=['active_menu_profile'])
+        settings.plugin_dining_enabled = True
+
+        settings.save(update_fields=['active_menu_profile', 'plugin_dining_enabled'])
 
 
 
-    def test_boot_has_seven_majors(self):
+    def test_boot_has_eight_majors_when_dining(self):
+
+        from waimai.operating_helpers import get_operating_settings
+
+        settings = get_operating_settings(self.seller.username)
+
+        settings.plugin_fulfillment_enabled = False
+
+        settings.save(update_fields=['plugin_fulfillment_enabled'])
 
         boot = build_experience_boot_payload()
 
@@ -92,25 +102,51 @@ class ExperienceBootTests(TestCase):
 
         seller = boot['tracks']['seller']
 
-        self.assertEqual(len(seller), 7)
+        self.assertEqual(len(seller), 8)
 
         self.assertEqual(seller[0]['id'], 'seller-1')
 
-        self.assertEqual(seller[1]['id'], 'seller-2')
-
-        self.assertEqual(seller[2]['id'], 'seller-3')
-
-        self.assertEqual(seller[3]['id'], 'seller-4')
-
-        self.assertEqual(seller[4]['id'], 'seller-5')
-
-        self.assertEqual(seller[5]['id'], 'seller-6')
-
-        self.assertEqual(seller[6]['id'], 'seller-7')
+        self.assertEqual(seller[7]['id'], 'seller-8')
 
         self.assertTrue(seller[2].get('cleanupOnComplete'))
 
         self.assertTrue(seller[5].get('cleanupOnComplete'))
+
+        self.assertTrue(seller[7].get('cleanupOnComplete'))
+
+
+
+    def test_boot_has_nine_majors_when_dining_and_fulfillment(self):
+
+        from waimai.operating_helpers import get_operating_settings
+
+        settings = get_operating_settings(self.seller.username)
+
+        settings.plugin_fulfillment_enabled = True
+
+        settings.save(update_fields=['plugin_fulfillment_enabled'])
+
+        boot = build_experience_boot_payload()
+
+        seller = boot['tracks']['seller']
+
+        self.assertEqual(len(seller), 9)
+
+        self.assertEqual(seller[7]['id'], 'seller-8')
+
+        self.assertEqual(seller[8]['id'], 'seller-10')
+
+        delivery_major = seller[8]
+
+        self.assertEqual(len(delivery_major['microSteps']), 12)
+
+        self.assertEqual(delivery_major['microSteps'][0]['selector'], '[data-yc-tour="nav-delivery"]')
+
+        self.assertEqual(delivery_major['microSteps'][-1]['title'], '配送费规则体验结束')
+
+        self.assertIn('/experience/preview/seller/delivery/', boot['pages']['preview_delivery'])
+
+        self.assertNotIn('preview_delivery', boot['writablePages'])
 
 
 
@@ -131,6 +167,18 @@ class ExperienceBootTests(TestCase):
         self.assertIn('/experience/preview/seller/print-qr/', boot['pages']['preview_print_qr'])
 
         self.assertIn('/experience/preview/seller/workbench/', boot['pages']['preview_workbench_manage'])
+
+        self.assertIn('/experience/preview/seller/dine/', boot['pages']['preview_dine'])
+
+        self.assertIn('preview_dine', boot['writablePages'])
+
+        dine_major = boot['tracks']['seller'][7]
+
+        self.assertEqual(dine_major['id'], 'seller-8')
+
+        self.assertGreaterEqual(len(dine_major['microSteps']), 30)
+
+        self.assertEqual(dine_major['microSteps'][-1]['title'], '堂食营业体验结束')
 
         workbench_major = boot['tracks']['seller'][6]
         self.assertEqual(workbench_major['id'], 'seller-7')
@@ -369,6 +417,166 @@ class ExperienceViewTests(TestCase):
         self.assertContains(resp, '演示员工')
 
         self.assertContains(resp, 'attendance-log-stream')
+
+
+
+    def test_experience_dine_preview_ok(self):
+
+        resp = self.client.get(
+
+            '/experience/preview/seller/dine/?exp=1&exp_track=seller&exp_major=7&exp_micro=0',
+
+        )
+
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertContains(resp, 'fold-dine-rules')
+
+        self.assertContains(resp, 'dine-rules-content')
+
+        self.assertContains(resp, 'fold-dining-settings')
+
+        self.assertContains(resp, 'data-yc-tour="dine-channel"')
+
+        self.assertContains(resp, 'table-min-max')
+
+        self.assertContains(resp, '可写演示')
+
+
+
+    def test_experience_delivery_preview_ok(self):
+
+        from waimai.operating_helpers import get_operating_settings
+
+        settings = get_operating_settings(self.seller.username)
+
+        settings.plugin_fulfillment_enabled = True
+
+        settings.save(update_fields=['plugin_fulfillment_enabled'])
+
+        resp = self.client.get(
+
+            '/experience/preview/seller/delivery/?exp=1&exp_track=seller&exp_major=7&exp_micro=0',
+
+        )
+
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertContains(resp, 'delivery-intro')
+
+        self.assertContains(resp, 'delivery-multiplier-3-6')
+
+        self.assertContains(resp, 'delivery-multiplier-6-9')
+
+        self.assertContains(resp, 'delivery-discount')
+
+        self.assertContains(resp, 'nav-delivery')
+
+
+
+    def test_experience_delivery_redirect_without_plugin(self):
+
+        from waimai.operating_helpers import get_operating_settings
+
+        settings = get_operating_settings(self.seller.username)
+
+        settings.plugin_fulfillment_enabled = False
+
+        settings.save(update_fields=['plugin_fulfillment_enabled'])
+
+        resp = self.client.get('/experience/preview/seller/delivery/')
+
+        self.assertEqual(resp.status_code, 302)
+
+        self.assertIn('/experience/', resp.url)
+
+
+
+    def test_experience_dine_batch_add_tables(self):
+
+        resp = self.client.post(
+
+            '/experience/preview/seller/dine/',
+
+            {
+
+                'add_table': '1',
+
+                'table_min': '1',
+
+                'table_max': '3',
+
+                'exp': '1',
+
+                'exp_track': 'seller',
+
+                'exp_major': '7',
+
+                'exp_micro': '20',
+
+            },
+
+            follow=True,
+
+        )
+
+        self.assertEqual(resp.status_code, 200)
+
+        from waimai.models import ShopTable
+
+        nums = list(
+
+            ShopTable.objects.filter(seller_id=self.seller.username)
+
+            .values_list('table_number', flat=True),
+
+        )
+
+        self.assertIn('1', nums)
+
+        self.assertIn('3', nums)
+
+
+
+    def test_experience_table_stickers_preview(self):
+
+        from waimai.models import ShopTable
+
+        from waimai.plugins.dining.table_bulk_helpers import bulk_create_tables
+
+        bulk_create_tables(self.seller.username, 1, 2)
+
+        tables = list(ShopTable.objects.filter(seller_id=self.seller.username))
+
+        ids = ','.join(str(t.table_id) for t in tables)
+
+        resp = self.client.get(
+
+            f'/experience/preview/seller/table-stickers/?tables={ids}&exp=1',
+
+        )
+
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertContains(resp, 'table-sticker-grid')
+
+
+
+    def test_experience_cleanup_removes_demo_tables(self):
+
+        from waimai.models import ShopTable
+
+        from waimai.plugins.dining.table_bulk_helpers import bulk_create_tables
+
+        bulk_create_tables(self.seller.username, 1, 2)
+
+        self.assertEqual(ShopTable.objects.filter(seller_id=self.seller.username).count(), 2)
+
+        result = cleanup_experience_demo_data(self.seller.username)
+
+        self.assertGreaterEqual(result.get('deleted_tables', 0), 2)
+
+        self.assertEqual(ShopTable.objects.filter(seller_id=self.seller.username).count(), 0)
 
 
 

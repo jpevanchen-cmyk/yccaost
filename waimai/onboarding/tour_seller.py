@@ -88,7 +88,7 @@ def seller_tour_majors(
     catalog_title = (shell.get('catalog_panel_title') or catalog).lstrip('📋 ').strip()
     sales_title = shell.get('sales_title', '商品销量排行')
     dine_hint = '堂食/打包/外卖细分在「堂食营业」大步。' if dining_enabled else '细分通道可在启用相应插件后配置。'
-    return [
+    majors = [
         _seller_register(),
         _seller_operating(dine_hint),
         _seller_menu_catalog(
@@ -102,6 +102,11 @@ def seller_tour_majors(
         _seller_edit_product(item=item),
         _seller_workbench_manage(fulfillment_enabled=fulfillment_enabled),
     ]
+    if dining_enabled:
+        majors.append(_seller_dine())
+    if fulfillment_enabled:
+        majors.append(_seller_delivery())
+    return majors
 
 
 def _seller_operating(dine_hint: str) -> dict[str, Any]:
@@ -460,7 +465,7 @@ def _seller_workbench_manage(*, fulfillment_enabled: bool) -> dict[str, Any]:
         _wb_ms('list', selector='[data-yc-tour="staff-toggle-active"]', title='停用 / 启用账号',
             warn='离职或暂不用时可停用，不必删账号。'),
         _wb_ms('list', selector='[data-yc-tour="fold-staff-list"]', title='本大步结束',
-            body='员工工作台管理已观摩完毕；后续大步将学习堂食、实操、配送费等（待上线）。'),
+            body='员工工作台管理已观摩完毕；下一步学习堂食营业。'),
     ])
     return {
         'id': 'seller-7',
@@ -468,6 +473,192 @@ def _seller_workbench_manage(*, fulfillment_enabled: bool) -> dict[str, Any]:
         'graduateTitle': '工作台管理已观摩',
         'graduateSummary': '您已了解员工登录、协作设置、考勤与子账号；后续大步待上线。',
         'microSteps': steps,
+    }
+
+
+# 第 8 大步 · 堂食营业：每小步固定折叠布局
+_DINE_FOLD_LAYOUTS: dict[str, list[str]] = {
+    'none': [],
+    'rules': ['dine-rules'],
+    'settings': ['dining-settings'],
+    'tables': ['table-list'],
+    'virtual': ['virtual-list'],
+}
+
+
+def _dine_ms(fold_key: str, **kwargs) -> dict[str, Any]:
+    """堂食营业演示小步：同步 foldLayout"""
+    layout = _DINE_FOLD_LAYOUTS.get(fold_key)
+    if layout is None:
+        raise ValueError(f'未知堂食折叠布局: {fold_key}')
+    kwargs.pop('open_fold', None)
+    return _ms('preview_dine', fold_layout=layout, **kwargs)
+
+
+def _dine_sticker_ms(**kwargs) -> dict[str, Any]:
+    """桌贴预览页小步"""
+    kwargs.pop('open_fold', None)
+    return _ms('preview_table_stickers', fold_layout=[], **kwargs)
+
+
+def _seller_dine() -> dict[str, Any]:
+    """第 8 大步：堂食营业（接单细则观摩 + 桌台可写演示）"""
+    action_hint = '请在高亮处点击；若未操作，倒计时结束后将自动执行。'
+    return {
+        'id': 'seller-8',
+        'title': '堂食营业',
+        'graduateTitle': '堂食营业已体验',
+        'graduateSummary': '您已了解堂食硬规则、接单细则、实体桌码与虚拟桌码池；下一步可学配送费规则（须启用履约插件）。',
+        'cleanupOnComplete': True,
+        'microSteps': [
+            _dine_ms('none', selector='[data-yc-tour="nav-dine"]', title='进入「堂食营业」',
+                body='点顶部菜单进入堂食设置页；饮食插件开启后才有此入口。'),
+            _dine_ms('rules', selector='[data-yc-tour="fold-dine-rules"]', title='展开「桌码主单硬规则」',
+                body='做堂食营业必看，切勿偷懒！先展开这张卡片阅读规则。'),
+            _dine_ms('rules', selector='[data-yc-tour="dine-rules-content"]', title='桌码主单硬规则',
+                body='做堂食营业必看，切勿偷懒！每桌一份主单、可多次加点；须营业中且堂食通道开启才能开单。',
+                warn='容易错：不看规则就营业，客人扫桌码可能无法下单。'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-settings-head"]', title='展开「堂食接单细则与拼桌」',
+                body='堂食/打包/外卖是否接单、等待时间、拼桌与桌码局域网，都在这里设置；点标题展开。'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-channel"]', title='允许堂食接单',
+                body='控制客人能否扫实体桌码在现场点餐。'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-takeaway"]', title='允许打包接单',
+                body='控制客人能否选「打包」通道下单。'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-delivery"]', title='允许外卖接单',
+                body='控制客人能否选「外卖」通道下单。'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-hours"]', title='堂食接单时段',
+                body='堂食与打包共用此时段；留空表示不额外限制（仍受「营业状态」全天时间约束）。'),
+            _dine_ms('settings', selector='[data-yc-tour="delivery-hours"]', title='外卖接单时段',
+                body='只限制外卖通道；与堂食时段分开配置。'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-wait-default"]', title='堂食默认等待时间',
+                body='没有匹配到下方「分时段规则」时使用。'),
+            _dine_ms('settings', selector='[data-yc-tour="takeaway-wait-default"]', title='打包默认等待时间',
+                body='逻辑同堂食；无匹配分时段时用此值。'),
+            _dine_ms('settings', selector='[data-yc-tour="delivery-wait-default"]', title='外卖默认等待时间',
+                body='逻辑同堂食；无匹配分时段时用此值。'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-share-enable"]', title='开启拼桌功能',
+                body='同一物理桌有多批客人须分开买单时才需要开启。'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-share-mode"]', title='拼桌模式 · 模式 A',
+                body='模式 A · 服务员拼桌单：第二位及以后客人须由服务员开单，客人不能自助扫码开拼桌单。',
+                demo_type='select', demo_text='waiter'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-share-mode"]', title='拼桌模式 · 模式 B',
+                body='模式 B · 虚拟桌码自助拼桌：把空闲虚拟码交给客人扫码，客人可自助开拼桌单；结账后码可复用。',
+                demo_type='select', demo_text='virtual'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-share-mode"]', title='A 与 B 的主要区别',
+                body='A 靠服务员全程操作，适合管得严的店；B 靠虚拟码池，客人可自助，但须先配好虚拟码。本演示预设为模式 B。',
+                tips=('上方硬规则卡片会随所选模式显示 2A 或 2B。',)),
+            _dine_ms('settings', selector='[data-yc-tour="dine-restrict-device"]', title='同桌仅允许同一台手机',
+                body='防止有居心不良者，偷偷刷码，乱给其它人点单！'),
+            _dine_ms('settings', selector='[data-yc-tour="fold-lan-address"]', title='桌码局域网固定地址',
+                body=(
+                    '难点：桌贴二维码须填客人连上店内 WiFi 后能打开的地址；'
+                    '填错或填成宽带公网 IP，客人扫了打不开。推荐用四段数字，例 192 168 3 120。'
+                ),
+                warn='容易错：勿填宽带公网 IP；桌贴会印「先连店内访客 WiFi → 再扫此码点餐」。'),
+            _dine_ms('settings', selector='[data-yc-tour="dine-wait-time-rules"]', title='按时间段自动调整等待时间（可选）',
+                body=(
+                    '难点：可按「堂食/打包/外卖 + 下单时段」自动给出预计等待分钟数；'
+                    '没有匹配行时才用上面的普通默认时间。服务员和后厨仍可临时改单个订单。'
+                ),
+                tips=('同一种订单类型的时间段不能重叠。',)),
+            _dine_ms('settings', selector='[data-yc-tour="dine-save-btn"]', title='保存堂食设置',
+                body='改完后须点保存；体验模式不会真保存。'),
+            _dine_ms('tables', selector='[data-yc-tour="fold-table-list"]', title='展开「实体桌台与桌码」',
+                body='在这里批量建桌号、停用/启用、删除，以及导出桌贴。'),
+            _dine_ms('tables', selector='[data-yc-tour="table-min-max"]', title='最小桌号 / 最大桌号',
+                demo_type='type_multi',
+                demo_fields=[
+                    {'selector': '[data-yc-tour="table-min"] input', 'text': '1'},
+                    {'selector': '[data-yc-tour="table-max"] input', 'text': '10'},
+                ],
+                body='演示输入 1 和 10，可一次建好 1～10 号桌。'),
+            _dine_ms('tables', selector='[data-yc-tour="table-batch-add"]', title='批量添加桌台',
+                body='请点「批量添加桌台」真实建立；体验结束后系统会自动清理。' + action_hint,
+                demo_type='action',
+                warn='演示会写入官方演示店。'),
+            _dine_ms('tables', selector='[data-yc-tour="table-chip-1"]', title='点选 1 号桌',
+                demo_chip_labels=['1'],
+                body='先点选桌号，再用下方按钮批量操作。'),
+            _dine_ms('tables', selector='[data-yc-tour="table-batch-disable"]', title='停用 1 号桌',
+                demo_chip_labels=['1'],
+                body='演示停用；停用后客人扫该桌码无法开新主单。' + action_hint,
+                demo_type='action'),
+            _dine_ms('tables', selector='[data-yc-tour="table-batch-enable"]', title='再启用 1 号桌',
+                demo_chip_labels=['1'],
+                body='恢复启用后，客人又可扫该桌码开单。' + action_hint,
+                demo_type='action'),
+            _dine_ms('tables', selector='[data-yc-tour="table-chip-10"]', title='点选 10 号桌',
+                demo_chip_labels=['10'],
+                body='单独选中 10 号桌，演示删除。'),
+            _dine_ms('tables', selector='[data-yc-tour="table-batch-delete"]', title='删除 10 号桌',
+                body='删除须二次确认；体验模式会自动确认。' + action_hint,
+                demo_type='action',
+                warn='删除后不可恢复；体验结束也会自动清理。'),
+            _dine_ms('tables', selector='[data-yc-tour="table-chip-grid"]', title='点选 1～5 号桌',
+                demo_chip_labels=['1', '2', '3', '4', '5'],
+                body='可一次选多张桌，用于批量导出桌贴 PDF。'),
+            _dine_ms('tables', selector='[data-yc-tour="table-batch-export"]', title='导出桌贴 PDF',
+                body='请点「导出桌贴 PDF」；体验模式会打开网页预览（正式店为下载 PDF）。' + action_hint,
+                demo_type='action'),
+            _dine_sticker_ms(selector='[data-yc-tour="table-sticker-grid"]', title='桌贴预览',
+                body='打印出来剪下来，贴在桌子上，就可以让客人扫码点单了！',
+                tips=('每页正式 PDF 可排 12 张；此处为演示所选 5 张。',)),
+            _dine_ms('virtual', selector='[data-yc-tour="fold-virtual-list"]', title='展开「虚拟桌码池」',
+                body='除了虚拟桌码编号和实体桌码不一样，其余操作方法完全相同。',
+                path='/experience/preview/seller/dine/'),
+            _dine_ms('virtual', selector='[data-yc-tour="virtual-list-intro"]', title='虚拟桌码池说明',
+                body='虚拟码以 V 开头；须先开启拼桌模式 B 才显示本卡片。体验预设已开启模式 B。',
+                tips=('批量添加、停用、导出 PDF 与实体桌台操作相同。',)),
+            _dine_ms('none', selector='[data-yc-tour="fold-virtual-list"]', title='堂食营业体验结束',
+                body='堂食营业大步已走完；下一步可学习配送费规则（须启用履约插件）；工作台实操等后续上线。'),
+        ],
+    }
+
+
+def _delivery_ms(**kwargs) -> dict[str, Any]:
+    """配送费规则演示小步（只观摩，无折叠卡片）"""
+    kwargs.pop('open_fold', None)
+    return _ms('preview_delivery', fold_layout=[], **kwargs)
+
+
+def _seller_delivery() -> dict[str, Any]:
+    """第 10 大步：配送费规则（只观摩；依赖履约插件）"""
+    return {
+        'id': 'seller-10',
+        'title': '配送费规则',
+        'graduateTitle': '配送费规则已观摩',
+        'graduateSummary': '您已了解配送费各字段含义；工作台实操、支付设置等后续大步待上线。',
+        'microSteps': [
+            _delivery_ms(selector='[data-yc-tour="nav-delivery"]', title='进入「配送费规则」',
+                body='点顶部菜单进入；须启用履约配送插件才有此入口。'),
+            _delivery_ms(selector='[data-yc-tour="delivery-intro"]', title='配送费规则做什么',
+                body='买家下单时按此处规则自动计算配送费。'),
+            _delivery_ms(selector='[data-yc-tour="delivery-fee"]', title='最低配送费（元）',
+                body='算出的配送费不会低于此金额。',
+                demo_type='type', demo_text='3'),
+            _delivery_ms(selector='[data-yc-tour="delivery-per-km"]', title='3公里内单价（元/公里）',
+                body='配送距离在 3 公里以内时，按此单价乘以公里数计费。',
+                demo_type='type', demo_text='2'),
+            _delivery_ms(selector='[data-yc-tour="delivery-multiplier-3-6"]', title='3～6公里倍数',
+                body='距离在 3～6 公里段时，在 3 公里内单价基础上乘以该倍数。',
+                demo_type='type', demo_text='1.5'),
+            _delivery_ms(selector='[data-yc-tour="delivery-multiplier-6-9"]', title='6～9公里倍数',
+                body='距离在 6～9 公里段时，继续按倍数加价。',
+                demo_type='type', demo_text='2'),
+            _delivery_ms(selector='[data-yc-tour="delivery-base"]', title='最远配送距离（公里）',
+                body='超出此距离的订单无法配送。',
+                demo_type='type', demo_text='5'),
+            _delivery_ms(selector='[data-yc-tour="delivery-free"]', title='满额免运门槛（元）',
+                body='商品金额达到此门槛时配送费为零；可留空表示不设免配。'),
+            _delivery_ms(selector='[data-yc-tour="delivery-discount"]', title='按订单金额减免上限（%）',
+                body='在最低配送费之上，还可按商品金额百分比再减免一部分配送费。'),
+            _delivery_ms(selector='[data-yc-tour="delivery-save"]', title='保存配送费规则',
+                body='改完后须点保存；体验模式不会真保存。'),
+            _delivery_ms(selector='[data-yc-tour="delivery-workbench-hint"]', title='与工作台关系',
+                body='配送员取货送达在「店铺工作台 · 配送员」；现金入金在「支付设置」。'),
+            _delivery_ms(selector='[data-yc-tour="delivery-intro"]', title='配送费规则体验结束',
+                body='本大步已走完；工作台实操等后续大步待上线。'),
+        ],
     }
 
 

@@ -13,6 +13,9 @@ TOUR_PAGES: dict[str, str] = {
     'preview_products': '/experience/preview/seller/products/',
     'preview_print_qr': '/experience/preview/seller/print-qr/',
     'preview_workbench_manage': '/experience/preview/seller/workbench/',
+    'preview_dine': '/experience/preview/seller/dine/',
+    'preview_table_stickers': '/experience/preview/seller/table-stickers/',
+    'preview_delivery': '/experience/preview/seller/delivery/',
 }
 
 
@@ -35,6 +38,8 @@ def ms(
     auto_seconds: int | None = None,
     demo_fields: list[dict[str, str]] | None = None,
     demo_checked: bool = False,
+    demo_chip_labels: list[str] | None = None,
+    demo_chip_grid: str = 'table-chip-grid',
 ) -> dict[str, Any]:
     """组装一个小步"""
     if auto_seconds is None:
@@ -64,4 +69,7 @@ def ms(
         step['demoFields'] = demo_fields
     if demo_checked:
         step['demoChecked'] = True
+    if demo_chip_labels:
+        step['demoChipLabels'] = list(demo_chip_labels)
+        step['demoChipGrid'] = demo_chip_grid
     return step

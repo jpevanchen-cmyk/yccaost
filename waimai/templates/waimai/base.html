@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}野草系统{% endblock %}</title>
     {% if yc_page_view_id %}<meta name="yc-page-view-id" content="{{ yc_page_view_id }}">{% endif %}
-    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=48">
+    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=49">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -133,7 +133,7 @@
     {% include 'waimai/onboarding/experience/_modals.html' %}
     <script type="application/json" id="yc-experience-boot">{{ experience_boot_json|safe }}</script>
     <script src="{% static 'waimai/onboarding/experience_modal.js' %}?v=1"></script>
-    <script src="{% static 'waimai/onboarding/experience.js' %}?v=4"></script>
+    <script src="{% static 'waimai/onboarding/experience.js' %}?v=8"></script>
     {% endif %}
     {% if yc_track_visitor %}
     <script src="{% static 'owner_toolkit/visitor_beacon.js' %}?v=1"></script>
