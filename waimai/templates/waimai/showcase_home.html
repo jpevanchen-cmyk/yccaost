@@ -22,7 +22,7 @@
 
 <div id="top" class="showcase-stack">
 {% if home_kind == 'server' %}
-{% include 'waimai/onboarding/_home_embed.html' %}
+{% comment %}体验入口已移至顶栏「体验开店」按钮{% endcomment %}
 {% endif %}
 {% if home_kind == 'shop' and shop_profile %}
 <div class="card showcase-shop-header" data-yc-tour="shop-home-header" style="padding:12px 16px;margin-bottom:12px;">

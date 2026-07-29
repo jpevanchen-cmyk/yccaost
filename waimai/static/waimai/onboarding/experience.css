@@ -98,6 +98,19 @@
     flex-direction: column;
     gap: 8px;
 }
+
+/* 顶栏「体验开店」小按钮（服务器主页 / 体验页） */
+.site-header-experience-btn {
+    flex-shrink: 0;
+    margin-left: 4px;
+    padding: 4px 10px;
+    font-size: 13px;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+.site-header .site-brand {
+    min-width: 0;
+}
 .experience-graduate-icon {
     font-size: 2rem;
     text-align: center;

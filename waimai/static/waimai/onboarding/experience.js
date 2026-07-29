@@ -26,6 +26,8 @@
     var resizeHandler = null;
     var typingTimer = null;
     var positionTimer = null;
+    var scrollSettleTimer = null;
+    var tourNavInstant = false;
     var autoTimer = null;
     var menuAjaxPending = false;
     var productAjaxPending = false;
@@ -694,6 +696,7 @@
         if (path.indexOf('/experience/preview/seller/operating') === 0) return 'preview_operating';
         if (path.indexOf('/experience/preview/seller/products') === 0) return 'preview_products';
         if (path.indexOf('/experience/preview/seller/print-qr') === 0) return 'preview_print_qr';
+        if (path.indexOf('/experience/preview/seller/workbench') === 0) return 'preview_workbench_manage';
         if (path.indexOf('/onboarding/preview/seller/products') === 0) return 'preview_products';
         if (path.indexOf('/onboarding/preview/seller/print-qr') === 0) return 'preview_print_qr';
         if (path.indexOf('/onboarding/preview/seller/workbench') === 0) return 'preview_workbench_manage';
@@ -725,6 +728,22 @@
         var el = findTarget(sel);
         if (el && el.tagName === 'DETAILS') {
             el.open = true;
+        }
+    }
+    /** 按小步 foldLayout 同步工作台折叠区：该开的开、其余全关 */
+    function syncStepFoldLayout(step) {
+        if (!step || step.foldLayout === undefined || step.foldLayout === null) return;
+        var want = {};
+        var ids = step.foldLayout;
+        var i;
+        for (i = 0; i < ids.length; i++) {
+            want[ids[i]] = true;
+        }
+        var folds = document.querySelectorAll('details.seller-panel-fold');
+        for (i = 0; i < folds.length; i++) {
+            var d = folds[i];
+            if (!d.id) continue;
+            d.open = !!want[d.id];
         }
     }
     function runDemoClick(sel) {
@@ -950,6 +969,7 @@
             clearTimeout(positionTimer);
             positionTimer = null;
         }
+        clearScrollSettleTimer();
         if (tourRoot) tourRoot.hidden = true;
         document.body.classList.remove('yc-exp-tour-active');
         syncSeller5Step12ScreenshotMode(null);
@@ -1058,19 +1078,20 @@
             placeCard(rect);
         }
     }
-    function positionTour(step) {
+    function positionTour(step, opts) {
+        opts = opts || {};
+        var instant = !!opts.instant;
         if (!tourRoot || !step || !isTourVisible()) return;
         if (positionTimer) {
             clearTimeout(positionTimer);
             positionTimer = null;
         }
-        var target = findTarget(step.selector);
+        clearScrollSettleTimer();
         var pad = 8;
-        if (target) {
-            scrollTourTarget(target);
-            positionTimer = window.setTimeout(function () {
-                positionTimer = null;
-                if (!isTourVisible()) return;
+        function finalizeSpotlight() {
+            if (!isTourVisible() || currentMicroStep() !== step) return;
+            var target = findTarget(step.selector);
+            if (target) {
                 applySpotlightRect(target, pad);
                 if (isSeller5Step12Mode(step)) {
                     window.setTimeout(function () {
@@ -1083,7 +1104,14 @@
                         repositionSpotlightOnly(step);
                     }, 150);
                 }
-            }, 280);
+            } else {
+                applySpotlightRect(null, pad);
+            }
+        }
+        var target = findTarget(step.selector);
+        if (target) {
+            scrollTourTarget(target, instant);
+            afterScrollSettled(finalizeSpotlight, instant);
         } else {
             applySpotlightRect(null, pad);
         }
@@ -1121,21 +1149,37 @@
     function preferCardAboveHighlight(step) {
         return false;
     }
-    function scrollTourTarget(target) {
+    function scrollTourTarget(target, instant) {
         if (!target) return;
         var step = currentMicroStep();
+        var behavior = instant ? 'auto' : 'smooth';
         if (isSeller6ScreenshotMode()) {
             var rect = target.getBoundingClientRect();
             var absoluteTop = rect.top + window.pageYOffset;
             var offset = Math.max(0, window.innerHeight * 0.1);
-            window.scrollTo({ top: Math.max(0, absoluteTop - offset), behavior: 'smooth' });
+            window.scrollTo({ top: Math.max(0, absoluteTop - offset), behavior: behavior });
             return;
         }
         if (isSeller5Step12Mode(step)) {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            window.scrollTo({ top: 0, behavior: behavior });
             return;
         }
-        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        target.scrollIntoView({ block: 'center', behavior: behavior });
+    }
+    function clearScrollSettleTimer() {
+        if (scrollSettleTimer) {
+            clearTimeout(scrollSettleTimer);
+            scrollSettleTimer = null;
+        }
+    }
+    /** 滚动与折叠动画停稳后再量位置，避免上一步连点框错位 */
+    function afterScrollSettled(cb, instant) {
+        clearScrollSettleTimer();
+        var delay = instant ? 90 : 320;
+        scrollSettleTimer = window.setTimeout(function () {
+            scrollSettleTimer = null;
+            cb();
+        }, delay);
     }
     function placeCardSeller5Step12(rect, cardW, cardH, margin) {
         var maxLeft = Math.max(margin, window.innerWidth - cardW - margin);
@@ -1260,6 +1304,8 @@
         link.setAttribute('data-unsaved-skip', '1');
     }
     function showMicroUi(step) {
+        var instantScroll = tourNavInstant;
+        tourNavInstant = false;
         ensureTourDom();
         resetTourCardPosition();
         fillTourCard(step);
@@ -1267,13 +1313,14 @@
         document.body.classList.add('yc-exp-tour-active');
         syncSeller5Step12ScreenshotMode(step);
         syncExperiencePrintLinkHref();
+        syncStepFoldLayout(step);
         if (step.openFold) {
             openFoldSelector(step.openFold);
         }
         if (step.demoClick) {
             runDemoClick(step.demoClick);
         }
-        positionTour(step);
+        positionTour(step, { instant: instantScroll });
         bindStepInteractionListeners(step);
         ensureAllExpHiddenFields();
         if (step.demoType === 'type' && step.demoText && step.selector) {
@@ -1406,12 +1453,14 @@
         clearAutoTimer();
         var major = currentMajor();
         if (!major || activeMicro <= 0) return;
+        tourNavInstant = true;
         activeMicro -= 1;
         saveSession();
         runMicroStep();
     }
     function advanceMicro() {
         clearAutoTimer();
+        tourNavInstant = false;
         var major = currentMajor();
         if (!major) return;
         var step = currentMicroStep();
@@ -1482,7 +1531,7 @@
         var descEl = $('experience-step-picker-desc');
         var listEl = $('experience-step-picker-list');
         if (titleEl) {
-            titleEl.textContent = track === 'seller' ? '体验野草开店 · 选大步' : '体验野草购物 · 选大步';
+            titleEl.textContent = track === 'seller' ? '体验开店 · 选大步' : '体验野草购物 · 选大步';
         }
         if (descEl) {
             descEl.textContent = '请选要从哪一大步开始；也可点下方「全部从头体验」。';
@@ -1552,7 +1601,7 @@
         }
         if (isHome) {
             bindExperienceHome();
-            if (isShowcaseHome && !welcomeSeen()) {
+            if ((isShowcaseHome || isExperienceHome) && !welcomeSeen()) {
                 window.setTimeout(function () { showModal('experience-welcome-modal'); }, 400);
             }
         }

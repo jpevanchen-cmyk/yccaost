@@ -1,0 +1,29 @@
+{% if attendance_logs_page.paginator.count %}
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px;" data-yc-tour="attendance-log-pagination">
+    <span class="card-meta">共 {{ attendance_logs_page.paginator.count }} 条 · 第 {{ attendance_logs_page.number }}/{{ attendance_logs_page.paginator.num_pages }} 页</span>
+    <span>每页</span>
+    {% for size in attendance_log_page_sizes %}
+    {% if attendance_full_base_url %}
+    <a href="{{ attendance_full_base_url }}?{% if attendance_logs_query %}{{ attendance_logs_query }}&{% endif %}log_per_page={{ size }}&log_page=1"
+       class="btn btn-sm {% if attendance_log_per_page == size %}btn-green{% else %}btn-outline{% endif %}">{{ size }}</a>
+    {% else %}
+    <a href="?{% if attendance_logs_query %}{{ attendance_logs_query }}&{% endif %}log_per_page={{ size }}&log_page=1"
+       class="btn btn-sm {% if attendance_log_per_page == size %}btn-green{% else %}btn-outline{% endif %}">{{ size }}</a>
+    {% endif %}
+    {% endfor %}
+    {% if attendance_logs_page.has_previous %}
+    {% if attendance_full_base_url %}
+    <a href="{{ attendance_full_base_url }}?{% if attendance_logs_query %}{{ attendance_logs_query }}&{% endif %}log_per_page={{ attendance_log_per_page }}&log_page={{ attendance_logs_page.previous_page_number }}" class="btn btn-sm btn-outline">上一页</a>
+    {% else %}
+    <a href="?{% if attendance_logs_query %}{{ attendance_logs_query }}&{% endif %}log_per_page={{ attendance_log_per_page }}&log_page={{ attendance_logs_page.previous_page_number }}" class="btn btn-sm btn-outline">上一页</a>
+    {% endif %}
+    {% endif %}
+    {% if attendance_logs_page.has_next %}
+    {% if attendance_full_base_url %}
+    <a href="{{ attendance_full_base_url }}?{% if attendance_logs_query %}{{ attendance_logs_query }}&{% endif %}log_per_page={{ attendance_log_per_page }}&log_page={{ attendance_logs_page.next_page_number }}" class="btn btn-sm btn-outline">下一页</a>
+    {% else %}
+    <a href="?{% if attendance_logs_query %}{{ attendance_logs_query }}&{% endif %}log_per_page={{ attendance_log_per_page }}&log_page={{ attendance_logs_page.next_page_number }}" class="btn btn-sm btn-outline">下一页</a>
+    {% endif %}
+    {% endif %}
+</div>
+{% endif %}

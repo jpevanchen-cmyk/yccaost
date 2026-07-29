@@ -21,5 +21,10 @@ urlpatterns = [
         views.experience_preview_print_qr,
         name='experience_preview_print_qr',
     ),
+    path(
+        'preview/seller/workbench/',
+        views.experience_preview_workbench,
+        name='experience_preview_workbench',
+    ),
     path('cleanup/', views.experience_cleanup, name='experience_cleanup'),
 ]

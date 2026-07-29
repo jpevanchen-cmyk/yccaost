@@ -9,7 +9,14 @@
     <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard data-yc-tour="mgmt-staff-form">
         {% csrf_token %}
         <input type="hidden" name="create_staff_account" value="1">
-        {{ management_staff_form.as_p }}
+        {% for field in management_staff_form %}
+        <p{% if field.name == 'username' %} data-yc-tour="mgmt-staff-username"{% elif field.name == 'password1' %} data-yc-tour="mgmt-staff-password"{% elif field.name == 'job_title' %} data-yc-tour="mgmt-staff-job-title"{% elif field.name == 'permissions' %} data-yc-tour="mgmt-staff-permissions"{% endif %}>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
+            {{ field.errors }}
+        </p>
+        {% endfor %}
         <button type="submit" class="btn btn-green btn-block" data-yc-tour="mgmt-staff-submit">创建管理职务账号</button>
     </form>
     </div>
@@ -24,7 +31,14 @@
     <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard data-yc-tour="emp-staff-form">
         {% csrf_token %}
         <input type="hidden" name="create_staff_account" value="1">
-        {{ employee_staff_form.as_p }}
+        {% for field in employee_staff_form %}
+        <p{% if field.name == 'preset' %} data-yc-tour="emp-staff-preset"{% elif field.name == 'job_title' %} data-yc-tour="emp-staff-job-title"{% elif field.name == 'username' %} data-yc-tour="emp-staff-username"{% elif field.name == 'permissions' %} data-yc-tour="emp-staff-permissions"{% endif %}>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
+            {{ field.errors }}
+        </p>
+        {% endfor %}
         <button type="submit" class="btn btn-green btn-block" data-yc-tour="emp-staff-submit">创建普通员工账号</button>
     </form>
     </div>

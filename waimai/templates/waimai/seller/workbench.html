@@ -10,18 +10,9 @@
         <div data-yc-tour="fold-workbench-qr">
         <p class="card-meta">贴在员工方便扫码的位置；扫码后输入名字和密码开始上班（可用手机浏览器记住密码）。</p>
         {% if work_login_url %}
-        <p data-yc-tour="workbench-qr-body"><strong>链接：</strong><a href="{{ work_login_url }}" target="_blank" rel="noopener">{{ work_login_url }}</a></p>
+        <p data-yc-tour="workbench-qr-body"><strong>链接：</strong><a href="{{ work_login_url }}" target="_blank" rel="noopener" data-yc-tour="workbench-qr-link">{{ work_login_url }}</a></p>
         {% if work_qr_data_url %}
         <p style="margin:12px 0;"><img src="{{ work_qr_data_url }}" alt="工作台登录二维码" style="max-width:220px;border:1px solid #eee;padding:8px;background:#fff;"></p>
-        {% endif %}
-        {% if work_mobile_url %}
-        <p class="card-meta">手机测试请先用 0.0.0.0:8000 方式启动服务器，再扫下面这个局域网二维码。</p>
-        <p><strong>手机链接：</strong><a href="{{ work_mobile_url }}" target="_blank" rel="noopener">{{ work_mobile_url }}</a></p>
-        {% if work_mobile_qr_data_url %}
-        <p style="margin:12px 0;"><img src="{{ work_mobile_qr_data_url }}" alt="工作台手机二维码" style="max-width:220px;border:1px solid #eee;padding:8px;background:#fff;"></p>
-        {% endif %}
-        {% else %}
-        <p class="card-meta">当前未识别到可供手机访问的局域网 IP；请按「服务器启动命令以及网址等.txt」里的方法先查本机 IP。</p>
         {% endif %}
         {% else %}
         <p class="msg-err">尚未生成店码，请联系管理员补全店铺资料。</p>
@@ -37,7 +28,14 @@
         <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard enctype="multipart/form-data" data-yc-tour="workbench-settings-hint">
             {% csrf_token %}
             <input type="hidden" name="save_workbench_settings" value="1">
-            {{ workbench_settings_form.as_p }}
+            {% for field in workbench_settings_form %}
+            <p{% if field.name == 'delivery_handoff_mode' %} data-yc-tour="workbench-delivery-handoff"{% elif field.name == 'auto_dispatch_enabled' %} data-yc-tour="workbench-auto-dispatch"{% elif field.name == 'attendance_retention_days' %} data-yc-tour="workbench-attendance-retention"{% elif field.name == 'alert_volume' %} data-yc-tour="workbench-alert-volume"{% elif field.name == 'alert_interval_sec' %} data-yc-tour="workbench-alert-interval"{% elif field.name == 'alert_sound' %} data-yc-tour="workbench-alert-sound"{% endif %}>
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
+                {{ field.errors }}
+            </p>
+            {% endfor %}
             <button type="submit" class="btn btn-green" data-yc-tour="workbench-settings-save">保存协作设置</button>
         </form>
         </div>
@@ -45,8 +43,8 @@
 
 {% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-attendance' fold_title='🗂 员工状态与考勤' %}
         <div data-yc-tour="fold-workbench-attendance">
-        <p class="card-meta" data-yc-tour="workbench-attendance-body">这里可看当前状态、今日上班情况与最近考勤流水；老板也可在此兜底补改。</p>
-        <form method="GET" class="seller-panel-form auth-form" style="margin:10px 0 14px;">
+        <p class="card-meta" data-yc-tour="workbench-attendance-body">这里可看当前状态、今日上班情况与最近考勤流水；老板也可在此兜底补改。<strong>默认只显示今天的流水</strong>，可筛选或打开全部。</p>
+        <form method="GET" class="seller-panel-form auth-form" style="margin:10px 0 14px;" data-yc-tour="attendance-filter">
             <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;">
                 <label>开始日期<br>{{ attendance_filter_form.date_from }}</label>
                 <label>结束日期<br>{{ attendance_filter_form.date_to }}</label>
@@ -68,7 +66,7 @@
             <input type="hidden" name="name" value="{{ attendance_filter_form.name.value|default:'' }}">
             <button type="submit" class="btn btn-outline" data-yc-tour="attendance-export">导出考勤 CSV</button>
         </form>
-        <div style="overflow-x:auto;">
+        <div style="overflow-x:auto;" data-yc-tour="attendance-status-table">
             <table class="simple-table" style="width:100%;border-collapse:collapse;">
                 <thead>
                     <tr>
@@ -114,16 +112,23 @@
                             —
                             {% endif %}
                         </td>
-                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;min-width:260px;">
-                            <form method="POST" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;min-width:320px;">
+                            <form method="POST" class="manager-attendance-form" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"{% if forloop.first %} data-yc-tour="attendance-manager-form"{% endif %}>
                                 {% csrf_token %}
                                 <input type="hidden" name="manager_set_staff_status" value="1">
                                 <input type="hidden" name="attendance_username" value="{{ row.user.username }}">
-                                <select name="attendance_status">
+                                <select name="attendance_status" class="js-manager-attendance-status">
                                     {% for value, label in attendance_status_choices %}
                                     <option value="{{ value }}" {% if row.user.staff_work_status == value %}selected{% endif %}>{{ label }}</option>
                                     {% endfor %}
                                 </select>
+                                <span class="js-manager-attendance-at">
+                                    <input type="datetime-local" name="attendance_at" value="{{ attendance_datetime_default }}" title="上班/下班时间点">
+                                </span>
+                                <span class="js-manager-break-range" style="display:none;">
+                                    <input type="datetime-local" name="break_start" value="{{ attendance_datetime_default }}" title="休息开始">
+                                    <input type="datetime-local" name="break_end" value="{{ attendance_datetime_default }}" title="休息结束">
+                                </span>
                                 <input type="text" name="attendance_note" placeholder="补改备注（可留空）" style="min-width:110px;">
                                 <button type="submit" class="btn btn-sm btn-outline">保存</button>
                             </form>
@@ -137,41 +142,16 @@
                 </tbody>
             </table>
         </div>
-        <h4 style="margin-top:16px;">最近考勤流水</h4>
-        <div style="overflow-x:auto;">
-            <table class="simple-table" style="width:100%;border-collapse:collapse;">
-                <thead>
-                    <tr>
-                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">时间</th>
-                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">员工名</th>
-                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">类别</th>
-                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">职务</th>
-                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">动作</th>
-                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">来源</th>
-                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">操作人</th>
-                        <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">备注</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for log in attendance_logs %}
-                    <tr>
-                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.changed_at|beijing:"m-d H:i" }}</td>
-                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.display_name_snapshot }}</td>
-                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log|staff_account_type }}</td>
-                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{% if log.job_title_snapshot %}{{ log.job_title_snapshot }}{% else %}{{ log.role_snapshot|staff_role }}{% endif %}</td>
-                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.get_action_display }}</td>
-                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.get_source_display }}</td>
-                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.operator_username|default:"—" }}</td>
-                        <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.note|default:"—" }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="8" style="padding:10px;">还没有考勤流水。</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <h4 style="margin-top:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;" data-yc-tour="attendance-log-stream">
+            <span>最近考勤流水</span>
+            {% if onboarding_preview %}
+            <span class="card-meta" data-yc-tour="attendance-open-full-hint">正式店可点「打开全部考勤」在新窗口查看全部历史。</span>
+            {% elif attendance_full_url %}
+            <a href="{{ attendance_full_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline" data-yc-tour="attendance-open-full">打开全部考勤</a>
+            {% endif %}
+        </h4>
+        {% include 'waimai/seller/_attendance_logs_table.html' %}
+        {% include 'waimai/seller/_attendance_log_pagination.html' %}
         </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 
@@ -350,4 +330,24 @@
         </form>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 {% endif %}
+<script>
+(function () {
+    function syncManagerAttendanceForm(form) {
+        var sel = form.querySelector('.js-manager-attendance-status');
+        var atWrap = form.querySelector('.js-manager-attendance-at');
+        var breakWrap = form.querySelector('.js-manager-break-range');
+        if (!sel || !atWrap || !breakWrap) return;
+        var isBreak = sel.value === 'break';
+        atWrap.style.display = isBreak ? 'none' : '';
+        breakWrap.style.display = isBreak ? '' : 'none';
+        atWrap.querySelectorAll('input').forEach(function (el) { el.disabled = isBreak; });
+        breakWrap.querySelectorAll('input').forEach(function (el) { el.disabled = !isBreak; });
+    }
+    document.querySelectorAll('.manager-attendance-form').forEach(function (form) {
+        syncManagerAttendanceForm(form);
+        var sel = form.querySelector('.js-manager-attendance-status');
+        if (sel) sel.addEventListener('change', function () { syncManagerAttendanceForm(form); });
+    });
+})();
+</script>
 {% endblock %}

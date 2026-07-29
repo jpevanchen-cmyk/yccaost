@@ -12,6 +12,7 @@ TOUR_PAGES: dict[str, str] = {
     'preview_operating': '/experience/preview/seller/operating/',
     'preview_products': '/experience/preview/seller/products/',
     'preview_print_qr': '/experience/preview/seller/print-qr/',
+    'preview_workbench_manage': '/experience/preview/seller/workbench/',
 }
 
 
@@ -28,6 +29,7 @@ def ms(
     demo_text_key: str = '',
     open_nav: bool = False,
     open_fold: str = '',
+    fold_layout: list[str] | None = None,
     demo_click: str = '',
     path: str = '',
     auto_seconds: int | None = None,
@@ -56,6 +58,8 @@ def ms(
         'demoClick': demo_click,
         'autoSeconds': auto_seconds,
     }
+    if fold_layout is not None:
+        step['foldLayout'] = list(fold_layout)
     if demo_fields:
         step['demoFields'] = demo_fields
     if demo_checked:

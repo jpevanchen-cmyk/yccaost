@@ -82,7 +82,7 @@ class ExperienceBootTests(TestCase):
 
 
 
-    def test_boot_has_six_majors(self):
+    def test_boot_has_seven_majors(self):
 
         boot = build_experience_boot_payload()
 
@@ -92,7 +92,7 @@ class ExperienceBootTests(TestCase):
 
         seller = boot['tracks']['seller']
 
-        self.assertEqual(len(seller), 6)
+        self.assertEqual(len(seller), 7)
 
         self.assertEqual(seller[0]['id'], 'seller-1')
 
@@ -105,6 +105,8 @@ class ExperienceBootTests(TestCase):
         self.assertEqual(seller[4]['id'], 'seller-5')
 
         self.assertEqual(seller[5]['id'], 'seller-6')
+
+        self.assertEqual(seller[6]['id'], 'seller-7')
 
         self.assertTrue(seller[2].get('cleanupOnComplete'))
 
@@ -127,6 +129,41 @@ class ExperienceBootTests(TestCase):
         self.assertIn('preview_products', boot['writablePages'])
 
         self.assertIn('/experience/preview/seller/print-qr/', boot['pages']['preview_print_qr'])
+
+        self.assertIn('/experience/preview/seller/workbench/', boot['pages']['preview_workbench_manage'])
+
+        workbench_major = boot['tracks']['seller'][6]
+        self.assertEqual(workbench_major['id'], 'seller-7')
+        # 合并 3 个小步后共 37 步；有履约插件时 +2
+        self.assertIn(len(workbench_major['microSteps']), (37, 39))
+        self.assertEqual(workbench_major['microSteps'][-1]['title'], '本大步结束')
+        self.assertEqual(workbench_major['microSteps'][-1]['selector'], '[data-yc-tour="fold-staff-list"]')
+        self.assertEqual(workbench_major['microSteps'][0]['foldLayout'], [])
+        self.assertEqual(workbench_major['microSteps'][1]['foldLayout'], ['workbench-qr'])
+        self.assertEqual(workbench_major['microSteps'][-1]['foldLayout'], ['staff-account-list'])
+        self.assertEqual(workbench_major['microSteps'][1].get('openFold'), '')
+
+        operating_major = boot['tracks']['seller'][1]
+        self.assertEqual(operating_major['id'], 'seller-2')
+        self.assertEqual(operating_major['microSteps'][0]['foldLayout'], [])
+        self.assertEqual(operating_major['microSteps'][1]['foldLayout'], ['status-form'])
+
+        menu_major = boot['tracks']['seller'][2]
+        self.assertEqual(menu_major['microSteps'][0]['foldLayout'], ['sales-ranking'])
+        self.assertEqual(menu_major['microSteps'][5]['foldLayout'], ['menu-panel'])
+
+        add_major = boot['tracks']['seller'][4]
+        self.assertEqual(add_major['microSteps'][0]['foldLayout'], ['product-add'])
+        self.assertEqual(add_major['microSteps'][-1]['foldLayout'], [])
+
+        edit_major = boot['tracks']['seller'][5]
+        self.assertEqual(edit_major['microSteps'][0]['foldLayout'], [])
+
+        register_major = boot['tracks']['seller'][0]
+        self.assertEqual(
+            register_major['microSteps'][1]['selector'],
+            '[data-yc-tour="experience-start-btn"]',
+        )
 
         menu_major = boot['tracks']['seller'][2]
 
@@ -314,6 +351,24 @@ class ExperienceViewTests(TestCase):
         self.assertContains(resp, 'print-qr-g18-hint')
 
         self.assertContains(resp, 'print-qr-btn')
+
+
+
+    def test_experience_workbench_preview_ok(self):
+
+        resp = self.client.get('/experience/preview/seller/workbench/')
+
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertContains(resp, 'workbench-intro')
+
+        self.assertContains(resp, 'workbench-qr-link')
+
+        self.assertContains(resp, 'workbench-alert-volume')
+
+        self.assertContains(resp, '演示员工')
+
+        self.assertContains(resp, 'attendance-log-stream')
 
 
 
@@ -609,11 +664,17 @@ class ExperienceViewTests(TestCase):
 
         self.assertEqual(resp.status_code, 200)
 
-        self.assertContains(resp, '体验野草开店')
+        self.assertContains(resp, '体验开店')
+
+        self.assertContains(resp, 'experience-start-btn')
 
         self.assertContains(resp, 'yc-experience-boot')
 
         self.assertContains(resp, 'experience-welcome-modal')
+
+        self.assertContains(resp, '7 大步')
+
+        self.assertNotContains(resp, 'block-experience')
 
         self.assertNotContains(resp, 'id="yc-onboarding-boot"')
 

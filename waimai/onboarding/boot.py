@@ -45,8 +45,13 @@ def build_experience_boot_payload() -> dict[str, Any]:
     from waimai.plugin_runtime.registry import is_plugin_enabled
 
     dining_enabled = is_plugin_enabled('dining', seller_id) if seller_id else False
+    fulfillment_enabled = is_plugin_enabled('fulfillment', seller_id) if seller_id else False
     seller_majors = _attach_major_meta(
-        seller_tour_majors(dining_enabled=dining_enabled, seller_id=seller_id),
+        seller_tour_majors(
+            dining_enabled=dining_enabled,
+            fulfillment_enabled=fulfillment_enabled,
+            seller_id=seller_id,
+        ),
     )
     demo_copy_profile_id = ''
     if seller_id:

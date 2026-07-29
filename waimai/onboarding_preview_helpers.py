@@ -6,7 +6,6 @@ import base64
 from types import SimpleNamespace
 from typing import Any
 
-from django.conf import settings
 from django.urls import reverse
 
 from .models import Dish, MenuProfile, ShopProfile, User
@@ -124,12 +123,9 @@ def build_onboarding_seller_section_context(request, section: str) -> dict[str, 
         )
         from .operating_helpers import get_operating_settings
         from .staff_account_helpers import (
-            AttendanceFilterForm,
             attendance_status_options,
-            build_mobile_share_url,
-            build_staff_status_rows,
+            build_workbench_attendance_context,
             get_shop_staff_users,
-            query_attendance_logs,
             staff_account_type_label,
             staff_job_title,
             staff_permission_codes,
@@ -152,10 +148,6 @@ def build_onboarding_seller_section_context(request, section: str) -> dict[str, 
             seller_id=seller_id,
             account_type='employee',
         )
-        attendance_filter_form = AttendanceFilterForm(request.GET or None, seller_id=seller_id)
-        attendance_filters = (
-            attendance_filter_form.cleaned_data if attendance_filter_form.is_valid() else {}
-        )
         staff_users = list(get_shop_staff_users(seller_id))
         staff_users.sort(key=lambda user: (
             staff_account_type_label(user),
@@ -176,19 +168,19 @@ def build_onboarding_seller_section_context(request, section: str) -> dict[str, 
                 ),
             })
         ctx['staff_account_rows'] = staff_account_rows
-        attendance_logs = list(query_attendance_logs(
+        attendance_ctx = build_workbench_attendance_context(
+            request,
             seller_id,
             operating.attendance_retention_days,
-            filters=attendance_filters,
-        )[:100])
-        ctx['staff_status_rows'] = build_staff_status_rows(staff_users, attendance_logs)
-        ctx['attendance_logs'] = attendance_logs
+            staff_users,
+            default_today=True,
+        )
+        ctx.update(attendance_ctx)
         ctx['attendance_status_choices'] = attendance_status_options()
-        ctx['attendance_filter_form'] = attendance_filter_form
+        ctx['attendance_full_url'] = ''
+        ctx['attendance_logs_query'] = ''
         work_login_url = ''
         work_qr_data_url = ''
-        work_mobile_url = ''
-        work_mobile_qr_data_url = ''
         shop_profile = ctx['shop_profile']
         if shop_profile and (shop_profile.shop_code or '').strip():
             work_login_url = request.build_absolute_uri(
@@ -200,18 +192,8 @@ def build_onboarding_seller_section_context(request, section: str) -> dict[str, 
                 ),
             )
             work_qr_data_url = 'data:image/png;base64,' + base64.b64encode(png).decode('ascii')
-            if settings.DEBUG:
-                mobile_candidate = build_mobile_share_url(work_login_url)
-                if mobile_candidate and mobile_candidate != work_login_url:
-                    work_mobile_url = mobile_candidate
-                    mobile_png = build_work_login_qr_png(work_mobile_url)
-                    work_mobile_qr_data_url = (
-                        'data:image/png;base64,' + base64.b64encode(mobile_png).decode('ascii')
-                    )
         ctx['work_login_url'] = work_login_url
         ctx['work_qr_data_url'] = work_qr_data_url
-        ctx['work_mobile_url'] = work_mobile_url
-        ctx['work_mobile_qr_data_url'] = work_mobile_qr_data_url
     elif section == 'orders':
         from .forms import ShopBossOrderNotifyForm
         from .models import BuyOrder

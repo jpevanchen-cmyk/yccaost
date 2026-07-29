@@ -72,6 +72,7 @@ urlpatterns = [
     path('accounts/session/beacon-logout/', views.session_beacon_logout, name='session_beacon_logout'),
     path('seller-panel/', views.seller_panel, name='seller_panel'),
     path('seller-panel/products/print-qr/', views.seller_product_qr_print, name='seller_product_qr_print'),
+    path('seller-panel/workbench/attendance-logs/', views.seller_panel_attendance_logs, name='seller_panel_attendance_logs'),
     path('seller-panel/orders/pending.json', views.seller_pending_orders_json, name='seller_pending_orders_json'),
     path('seller-panel/<str:section>/', views.seller_panel_section, name='seller_panel_section'),
     path('place-order/', views.place_order, name='place_order'),

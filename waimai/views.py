@@ -1618,6 +1618,49 @@ def seller_product_qr_print(request):
 
 
 @login_required
+def seller_panel_attendance_logs(request):
+    """员工考勤流水全表（新窗口打开；支持筛选与分页）"""
+    if request.user.role != 'seller':
+        return redirect('/accounts/login/')
+
+    from .operating_helpers import get_operating_settings
+    from .order_message_helpers import shop_unread_message_summary
+    from .plugin_runtime.registry import collect_seller_nav_items
+    from .staff_account_helpers import (
+        attendance_logs_querystring,
+        attendance_status_options,
+        build_workbench_attendance_context,
+        get_shop_staff_users,
+    )
+
+    seller_id = request.user.username
+    operating = get_operating_settings(seller_id)
+    staff_users = list(get_shop_staff_users(seller_id))
+    attendance_ctx = build_workbench_attendance_context(
+        request,
+        seller_id,
+        operating.attendance_retention_days,
+        staff_users,
+        default_today=False,
+    )
+    unread_summary = shop_unread_message_summary(seller_id)
+    return render(
+        request,
+        'waimai/seller/attendance_logs.html',
+        {
+            'seller_id': seller_id,
+            'shop_profile': ShopProfile.objects.filter(seller_id=seller_id).first(),
+            'shop_unread_msg_total': unread_summary['total'],
+            'seller_nav_items': collect_seller_nav_items(seller_id),
+            'attendance_status_choices': attendance_status_options(),
+            'attendance_logs_query': attendance_logs_querystring(request),
+            'workbench_url': reverse('seller_panel_section', kwargs={'section': 'workbench'}),
+            **attendance_ctx,
+        },
+    )
+
+
+@login_required
 def seller_panel_section(request, section):
     """卖家管理分区（仅店主生态登录）"""
     if request.user.role != 'seller':
@@ -1847,19 +1890,15 @@ def seller_panel_section(request, section):
             ShopWorkbenchSettingsForm,
         )
         from .staff_account_helpers import (
-            AttendanceFilterForm,
+            attendance_logs_querystring,
             attendance_status_options,
-            build_mobile_share_url,
-            build_staff_status_rows,
+            build_workbench_attendance_context,
             get_shop_staff_users,
-            query_attendance_logs,
             staff_account_type_label,
             staff_job_title,
             staff_permission_codes,
         )
         from .workbench_qr import build_work_login_qr_png
-
-        from django.conf import settings
 
         operating = get_operating_settings(seller_id)
         workbench_form = ShopWorkbenchSettingsForm(instance=operating)
@@ -1876,8 +1915,6 @@ def seller_panel_section(request, section):
             seller_id=seller_id,
             account_type='employee',
         )
-        attendance_filter_form = AttendanceFilterForm(request.GET or None, seller_id=seller_id)
-        attendance_filters = attendance_filter_form.cleaned_data if attendance_filter_form.is_valid() else {}
         staff_users = list(get_shop_staff_users(seller_id))
         staff_users.sort(key=lambda user: (
             staff_account_type_label(user),
@@ -1898,35 +1935,29 @@ def seller_panel_section(request, section):
                 ),
             })
         context['staff_account_rows'] = staff_account_rows
-        attendance_logs = list(query_attendance_logs(
+        attendance_ctx = build_workbench_attendance_context(
+            request,
             seller_id,
             operating.attendance_retention_days,
-            filters=attendance_filters,
-        )[:100])
-        context['staff_status_rows'] = build_staff_status_rows(staff_users, attendance_logs)
-        context['attendance_logs'] = attendance_logs
+            staff_users,
+            default_today=True,
+        )
+        context.update(attendance_ctx)
         context['attendance_status_choices'] = attendance_status_options()
-        context['attendance_filter_form'] = attendance_filter_form
+        context['attendance_logs_query'] = attendance_logs_querystring(request)
+        context['attendance_full_url'] = (
+            reverse('seller_panel_attendance_logs') + '?' + attendance_logs_querystring(request)
+        )
         work_login_url = ''
         work_qr_data_url = ''
-        work_mobile_url = ''
-        work_mobile_qr_data_url = ''
         if shop_profile and (shop_profile.shop_code or '').strip():
             work_login_url = request.build_absolute_uri(
                 reverse('shop_work', kwargs={'shop_code': shop_profile.shop_code.strip()}),
             )
             png = build_work_login_qr_png(work_login_url)
             work_qr_data_url = 'data:image/png;base64,' + base64.b64encode(png).decode('ascii')
-            if settings.DEBUG:
-                mobile_candidate = build_mobile_share_url(work_login_url)
-                if mobile_candidate and mobile_candidate != work_login_url:
-                    work_mobile_url = mobile_candidate
-                    mobile_png = build_work_login_qr_png(work_mobile_url)
-                    work_mobile_qr_data_url = 'data:image/png;base64,' + base64.b64encode(mobile_png).decode('ascii')
         context['work_login_url'] = work_login_url
         context['work_qr_data_url'] = work_qr_data_url
-        context['work_mobile_url'] = work_mobile_url
-        context['work_mobile_qr_data_url'] = work_mobile_qr_data_url
     elif section == 'delivery':
         from .plugins.fulfillment.ownership import fulfillment_plugin_enabled
         if not fulfillment_plugin_enabled(seller_id):

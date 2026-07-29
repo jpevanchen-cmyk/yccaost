@@ -1,0 +1,39 @@
+{% extends 'waimai/seller/base.html' %}
+{% load staff_account %}
+{% block title %}员工考勤流水 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<p class="page-desc">查看本店全部考勤流水（受「考勤记录保留时长」限制）。可筛选、分页、导出 CSV。</p>
+<p style="margin-bottom:12px;">
+    <a href="{{ workbench_url }}" class="btn btn-sm btn-outline">返回员工工作台管理</a>
+</p>
+
+<form method="GET" class="seller-panel-form auth-form" style="margin:10px 0 14px;">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;">
+        <label>开始日期<br>{{ attendance_filter_form.date_from }}</label>
+        <label>结束日期<br>{{ attendance_filter_form.date_to }}</label>
+        <label>职务<br>{{ attendance_filter_form.role }}</label>
+        <label>名字<br>{{ attendance_filter_form.name }}</label>
+        <button type="submit" class="btn btn-sm">筛选</button>
+        <a href="{% url 'seller_panel_attendance_logs' %}" class="btn btn-sm btn-outline">重置</a>
+    </div>
+    {% if attendance_filter_form.errors %}
+    <p class="msg-err" style="margin-top:8px;">筛选条件有误，请检查日期范围。</p>
+    {% endif %}
+</form>
+
+<form method="POST" action="{{ workbench_url }}" style="margin:10px 0 14px;">
+    {% csrf_token %}
+    <input type="hidden" name="export_attendance_csv" value="1">
+    <input type="hidden" name="date_from" value="{{ attendance_filter_form.date_from.value|default:'' }}">
+    <input type="hidden" name="date_to" value="{{ attendance_filter_form.date_to.value|default:'' }}">
+    <input type="hidden" name="role" value="{{ attendance_filter_form.role.value|default:'' }}">
+    <input type="hidden" name="name" value="{{ attendance_filter_form.name.value|default:'' }}">
+    <button type="submit" class="btn btn-outline">导出考勤 CSV</button>
+</form>
+
+{% include 'waimai/seller/_attendance_logs_table.html' %}
+{% with attendance_full_base_url=request.path %}
+{% include 'waimai/seller/_attendance_log_pagination.html' %}
+{% endwith %}
+{% endblock %}

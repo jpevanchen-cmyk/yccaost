@@ -227,6 +227,94 @@ def reverse_experience_products(request) -> str:
     return f'{base}?{urlencode(q)}'
 
 
+def build_experience_workbench_context(request) -> dict[str, Any]:
+    """新版员工工作台管理演示页（只观摩 · 演示数据不写库）"""
+    import base64
+
+    from django.urls import reverse
+
+    from waimai.forms import CreateStaffAccountForm, EditStaffAccountForm, ShopWorkbenchSettingsForm
+    from waimai.operating_helpers import get_operating_settings
+    from waimai.plugins.fulfillment.ownership import fulfillment_plugin_enabled
+    from waimai.staff_account_helpers import (
+        attendance_status_options,
+        staff_account_type_label,
+        staff_job_title,
+        staff_permission_codes,
+    )
+    from waimai.workbench_qr import build_work_login_qr_png
+
+    from .workbench_demo_helpers import (
+        build_experience_workbench_attendance_context,
+        build_experience_workbench_demo_logs,
+        build_experience_workbench_demo_staff,
+    )
+
+    shop = get_official_shop_profile()
+    if not shop:
+        return {}
+    seller_id = shop.seller_id
+    ctx = base_experience_preview_context('员工工作台管理（演示）', 'workbench')
+    unread = shop_unread_message_summary(seller_id)
+    operating = get_operating_settings(seller_id)
+    operating.alert_volume = 80
+    workbench_form = ShopWorkbenchSettingsForm(instance=operating)
+    if not fulfillment_plugin_enabled(seller_id):
+        for fname in ('delivery_handoff_mode', 'auto_dispatch_enabled'):
+            workbench_form.fields.pop(fname, None)
+    demo_staff = build_experience_workbench_demo_staff(seller_id)
+    demo_logs = build_experience_workbench_demo_logs(seller_id)
+    staff_account_rows = []
+    for staff_user in demo_staff:
+        staff_account_rows.append({
+            'user': staff_user,
+            'account_type_label': staff_account_type_label(staff_user),
+            'job_title': staff_job_title(staff_user),
+            'permission_codes': sorted(staff_permission_codes(staff_user)),
+            'edit_form': EditStaffAccountForm(seller_id=seller_id, user=staff_user),
+        })
+    attendance_ctx = build_experience_workbench_attendance_context(
+        request,
+        seller_id,
+        staff_users=demo_staff,
+        demo_logs=demo_logs,
+    )
+    work_login_url = ''
+    work_qr_data_url = ''
+    shop_profile = ShopProfile.objects.filter(seller_id=seller_id).first()
+    if shop_profile and (shop_profile.shop_code or '').strip():
+        work_login_url = request.build_absolute_uri(reverse('onboarding_work_login'))
+        png = build_work_login_qr_png(
+            request.build_absolute_uri(
+                reverse('shop_work', kwargs={'shop_code': shop_profile.shop_code.strip()}),
+            ),
+        )
+        work_qr_data_url = 'data:image/png;base64,' + base64.b64encode(png).decode('ascii')
+    ctx.update({
+        'onboarding_readonly': True,
+        'experience_writable': False,
+        'experience_tour_query': _experience_tour_query(request),
+        'shop_unread_msg_total': unread['total'],
+        'workbench_settings_form': workbench_form,
+        'management_staff_form': CreateStaffAccountForm(
+            seller_id=seller_id,
+            account_type='management',
+        ),
+        'employee_staff_form': CreateStaffAccountForm(
+            seller_id=seller_id,
+            account_type='employee',
+        ),
+        'staff_account_rows': staff_account_rows,
+        'attendance_status_choices': attendance_status_options(),
+        'attendance_full_url': '',
+        'attendance_logs_query': '',
+        'work_login_url': work_login_url,
+        'work_qr_data_url': work_qr_data_url,
+    })
+    ctx.update(attendance_ctx)
+    return ctx
+
+
 def experience_menu_panel_json(request, seller_id: str):
     """体验引导：GET 切换清单时只刷新菜单区 JSON（不整页跳转）"""
     from django.http import JsonResponse

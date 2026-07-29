@@ -1,4 +1,4 @@
-{# 新版新手体验：入口页（与服务器主页欢迎窗同一套引导） #}
+{# 新版新手体验：入口页（引导从顶栏「体验开店」进入） #}
 {% extends 'waimai/base.html' %}
 {% load static %}
 
@@ -8,17 +8,8 @@
 {% block content %}
 <section class="showcase-block card experience-zone" id="block-experience">
     <h1 class="page-title">🌱 新手体验</h1>
-    <p class="card-meta">
-        卖家开店线含 <strong>6 大步</strong>：
-        注册并开通店铺 → 营业状态 → 菜单清单 → 批量打印二维码 → 添加新商品 → 编辑商品与预览店铺。
-        演示店：{{ official_shop_name }}。
-    </p>
-    <p class="msg-err" style="margin:12px 0 0;padding:10px 12px;font-size:14px;line-height:1.5;">
-        <strong>设备提示：</strong>本引导目前<strong>建议在电脑浏览器</strong>上使用。
-        若用手机（尤其小屏手机），说明框很容易挡住高亮演示区，看不清当前步骤；手机布局优化已列入方案，尚未上线。
-    </p>
+    <p class="card-meta">请点页面顶部、店名旁边的 <strong>「体验开店」</strong> 按钮开始；首次进入服务器主页时会弹出说明欢迎窗。</p>
     <div class="experience-zone-actions">
-        <button type="button" class="btn btn-orange btn-block" data-experience-start="seller">开始开店体验</button>
         <a href="/" class="btn btn-outline btn-block">返回服务器主页</a>
     </div>
 </section>

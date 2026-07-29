@@ -5,6 +5,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 from .time_helpers import format_beijing_time
 from .time_helpers import to_beijing
@@ -448,7 +449,7 @@ class StaffAttendanceLog(models.Model):
     source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default='self', verbose_name='操作来源')
     operator_username = models.CharField(max_length=128, blank=True, default='', verbose_name='操作人账号')
     note = models.CharField(max_length=200, blank=True, default='', verbose_name='备注')
-    changed_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='发生时间')
+    changed_at = models.DateTimeField(default=timezone.now, db_index=True, verbose_name='发生时间')
 
     class Meta:
         db_table = 'staff_attendance_log'

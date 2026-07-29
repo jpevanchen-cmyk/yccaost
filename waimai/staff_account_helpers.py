@@ -1,19 +1,20 @@
 # 店铺员工子账号：工牌用户名仅在本店唯一（库内用「店铺ID::工牌名」存储）
 
-import socket
 import csv
-from datetime import timedelta
-from urllib.parse import urlsplit, urlunsplit
+from datetime import datetime, timedelta
 
 from django.contrib.auth import authenticate
 from django import forms
+from django.core.paginator import EmptyPage, Paginator
+from django.db.models import QuerySet
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import HttpResponse, QueryDict
 from django.utils import timezone
 
 from .models import StaffAttendanceLog, User
 
 STAFF_USERNAME_SEP = '::'
+ATTENDANCE_LOG_PAGE_SIZES = (10, 15, 20)
 STAFF_WORK_ON_DUTY = 'on_duty'
 STAFF_WORK_BREAK = 'break'
 STAFF_WORK_OFF_DUTY = 'off_duty'
@@ -388,6 +389,187 @@ class AttendanceFilterForm(forms.Form):
         return cleaned
 
 
+def parse_local_datetime_input(value: str):
+    """解析页面 datetime-local 输入为本机时区时间"""
+    text = (value or '').strip()
+    if not text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
+
+
+def datetime_local_input_value(dt=None) -> str:
+    """生成 datetime-local 控件用的默认值"""
+    moment = dt or timezone.localtime()
+    if timezone.is_naive(moment):
+        moment = timezone.make_aware(moment, timezone.get_current_timezone())
+    else:
+        moment = timezone.localtime(moment)
+    return moment.strftime('%Y-%m-%dT%H:%M')
+
+
+def attendance_get_with_defaults(request, *, default_today: bool) -> QueryDict:
+    """工作台考勤：首次进入默认筛今天"""
+    if request.GET:
+        return request.GET
+    if not default_today:
+        return request.GET
+    today = timezone.localdate().isoformat()
+    q = QueryDict(mutable=True)
+    q['date_from'] = today
+    q['date_to'] = today
+    return q
+
+
+def resolve_attendance_log_page_size(raw_value) -> int:
+    try:
+        size = int(raw_value or 10)
+    except (TypeError, ValueError):
+        return 10
+    return size if size in ATTENDANCE_LOG_PAGE_SIZES else 10
+
+
+def paginate_attendance_logs(logs_qs: QuerySet, page_number, per_page: int):
+    paginator = Paginator(logs_qs, per_page)
+    try:
+        page_num = int(page_number or 1)
+    except (TypeError, ValueError):
+        page_num = 1
+    if page_num < 1:
+        page_num = 1
+    try:
+        return paginator.page(page_num)
+    except EmptyPage:
+        if paginator.num_pages:
+            return paginator.page(paginator.num_pages)
+        return paginator.page(1)
+
+
+def build_workbench_attendance_context(
+    request,
+    seller_id: str,
+    retention_value: str,
+    staff_users,
+    *,
+    default_today: bool = True,
+):
+    """员工工作台页：筛选、状态表、考勤流水分页"""
+    get_params = attendance_get_with_defaults(request, default_today=default_today)
+    attendance_filter_form = AttendanceFilterForm(get_params, seller_id=seller_id)
+    filters = attendance_filter_form.cleaned_data if attendance_filter_form.is_valid() else {}
+    per_page = resolve_attendance_log_page_size(request.GET.get('log_per_page'))
+    logs_qs = query_attendance_logs(seller_id, retention_value, filters=filters)
+    page_obj = paginate_attendance_logs(logs_qs, request.GET.get('log_page'), per_page)
+    status_logs = list(query_attendance_logs(seller_id, retention_value, filters=filters)[:500])
+    return {
+        'attendance_filter_form': attendance_filter_form,
+        'attendance_filters': filters,
+        'staff_status_rows': build_staff_status_rows(staff_users, status_logs),
+        'attendance_logs_page': page_obj,
+        'attendance_log_per_page': per_page,
+        'attendance_log_page_sizes': ATTENDANCE_LOG_PAGE_SIZES,
+        'attendance_datetime_default': datetime_local_input_value(),
+    }
+
+
+def attendance_logs_querystring(request, *, overrides: dict | None = None) -> str:
+    """保留当前筛选与分页参数，供翻页/导出链接使用"""
+    from urllib.parse import urlencode
+
+    data = request.GET.copy()
+    if overrides:
+        for key, value in overrides.items():
+            if value is None:
+                data.pop(key, None)
+            else:
+                data[key] = str(value)
+    return urlencode(data, doseq=True)
+
+
+def handle_manager_staff_status_post(request, seller_id: str, *, section: str = 'workbench'):
+    """老板在考勤表中兜底改状态（须带时间点；休息须带时段）"""
+    from django.contrib import messages
+    from django.shortcuts import get_object_or_404, redirect
+
+    if 'manager_set_staff_status' not in request.POST:
+        return None
+    username = (request.POST.get('attendance_username') or '').strip()
+    status = (request.POST.get('attendance_status') or '').strip()
+    note = (request.POST.get('attendance_note') or '').strip()
+    user = get_object_or_404(
+        User,
+        username=username,
+        employer_seller_id=seller_id,
+        role__in=ALL_STAFF_ROLES,
+    )
+    operator = request.user.username
+
+    if status == STAFF_WORK_BREAK:
+        break_start = parse_local_datetime_input(request.POST.get('break_start'))
+        break_end = parse_local_datetime_input(request.POST.get('break_end'))
+        if not break_start or not break_end:
+            messages.error(request, '补改休息须填写开始时间与结束时间')
+            return redirect('seller_panel_section', section=section)
+        if break_end <= break_start:
+            messages.error(request, '休息结束时间必须晚于开始时间')
+            return redirect('seller_panel_section', section=section)
+        start_text = timezone.localtime(break_start).strftime('%m-%d %H:%M')
+        end_text = timezone.localtime(break_end).strftime('%m-%d %H:%M')
+        break_note = note or f'休息 {start_text}～{end_text}'
+        create_attendance_log(
+            user,
+            STAFF_WORK_BREAK,
+            source=ATTENDANCE_SOURCE_MANAGER,
+            operator_username=operator,
+            note=break_note,
+            changed_at=break_start,
+        )
+        create_attendance_log(
+            user,
+            STAFF_WORK_ON_DUTY,
+            source=ATTENDANCE_SOURCE_MANAGER,
+            operator_username=operator,
+            note='休息结束，恢复上班',
+            changed_at=break_end,
+        )
+        now = timezone.now()
+        if break_start <= now < break_end:
+            target = STAFF_WORK_BREAK
+            updated_at = break_start
+        else:
+            target = STAFF_WORK_ON_DUTY
+            updated_at = break_end if now >= break_end else now
+        user.staff_work_status = target
+        user.staff_work_status_updated_at = updated_at
+        user.save(update_fields=['staff_work_status', 'staff_work_status_updated_at'])
+        messages.success(
+            request,
+            f'已补记 {staff_display_username(user.username)} 的休息时段',
+        )
+        return redirect('seller_panel_section', section=section)
+
+    log_at = parse_local_datetime_input(request.POST.get('attendance_at'))
+    if not log_at:
+        messages.error(request, '补改上班/下班须填写时间点')
+        return redirect('seller_panel_section', section=section)
+    set_staff_work_status(
+        user,
+        status,
+        source=ATTENDANCE_SOURCE_MANAGER,
+        operator_username=operator,
+        note=note or '老板补改',
+        force_log=True,
+        log_at=log_at,
+    )
+    messages.success(request, f'已把 {staff_display_username(user.username)} 改为{staff_status_label(user)}')
+    return redirect('seller_panel_section', section=section)
+
+
 def attendance_retention_days_value(raw_value) -> int | None:
     """把保留时长配置转成天数；长期保留返回 None"""
     value = (raw_value or '').strip()
@@ -420,11 +602,19 @@ def _normalize_staff_work_status(status: str) -> str:
     return STAFF_WORK_OFF_DUTY
 
 
-def create_attendance_log(user, action: str, *, source: str, operator_username: str = '', note: str = '') -> None:
-    """写入一条员工考勤流水"""
+def create_attendance_log(
+    user,
+    action: str,
+    *,
+    source: str,
+    operator_username: str = '',
+    note: str = '',
+    changed_at=None,
+) -> None:
+    """写入一条员工考勤流水；老板补改可指定发生时间"""
     if not is_shop_staff_account(user):
         return
-    StaffAttendanceLog.objects.create(
+    payload = dict(
         user=user,
         seller_id=(user.employer_seller_id or '').strip(),
         username_snapshot=user.username,
@@ -437,14 +627,27 @@ def create_attendance_log(user, action: str, *, source: str, operator_username: 
         operator_username=(operator_username or '').strip(),
         note=(note or '').strip(),
     )
+    if changed_at is not None:
+        payload['changed_at'] = changed_at
+    StaffAttendanceLog.objects.create(**payload)
 
 
-def set_staff_work_status(user, status: str, *, source: str = ATTENDANCE_SOURCE_SYSTEM, operator_username: str = '', note: str = '', force_log: bool = False) -> bool:
+def set_staff_work_status(
+    user,
+    status: str,
+    *,
+    source: str = ATTENDANCE_SOURCE_SYSTEM,
+    operator_username: str = '',
+    note: str = '',
+    force_log: bool = False,
+    log_at=None,
+) -> bool:
     """
     统一切换员工在岗状态：
     - on_duty：上班，可接单
     - break：休息，不接单
     - off_duty：下班，不接单
+    log_at：写入考勤流水的时间（老板补改时指定）
     """
     role = getattr(user, 'role', '')
     if not is_shop_staff_account(user):
@@ -452,7 +655,8 @@ def set_staff_work_status(user, status: str, *, source: str = ATTENDANCE_SOURCE_
     target = _normalize_staff_work_status(status)
     changed = _normalize_staff_work_status(user.staff_work_status) != target
     user.staff_work_status = target
-    user.staff_work_status_updated_at = timezone.now()
+    event_time = log_at if log_at is not None else timezone.now()
+    user.staff_work_status_updated_at = event_time
     user.save(update_fields=['staff_work_status', 'staff_work_status_updated_at'])
     if changed or force_log:
         create_attendance_log(
@@ -461,6 +665,7 @@ def set_staff_work_status(user, status: str, *, source: str = ATTENDANCE_SOURCE_
             source=source,
             operator_username=operator_username,
             note=note,
+            changed_at=event_time,
         )
     # 配送员一进入上班状态，就主动询问待派单池；自动派单关闭时不会领取。
     if target == STAFF_WORK_ON_DUTY:
@@ -612,66 +817,6 @@ def export_attendance_csv(logs, *, seller_id: str) -> HttpResponse:
             log.note,
         ])
     return response
-
-
-def handle_manager_staff_status_post(request, seller_id: str, *, section: str = 'workbench'):
-    """老板在考勤表中兜底改状态"""
-    from django.contrib import messages
-    from django.shortcuts import get_object_or_404, redirect
-
-    if 'manager_set_staff_status' not in request.POST:
-        return None
-    username = (request.POST.get('attendance_username') or '').strip()
-    status = (request.POST.get('attendance_status') or '').strip()
-    note = (request.POST.get('attendance_note') or '').strip()
-    user = get_object_or_404(
-        User,
-        username=username,
-        employer_seller_id=seller_id,
-        role__in=ALL_STAFF_ROLES,
-    )
-    set_staff_work_status(
-        user,
-        status,
-        source=ATTENDANCE_SOURCE_MANAGER,
-        operator_username=request.user.username,
-        note=note or '老板补改',
-        force_log=True,
-    )
-    messages.success(request, f'已把 {staff_display_username(user.username)} 改为{staff_status_label(user)}')
-    return redirect('seller_panel_section', section=section)
-
-
-def get_local_network_ip() -> str:
-    """取当前电脑在局域网里的常用 IP，给手机扫码用"""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.connect(('8.8.8.8', 80))
-        ip = sock.getsockname()[0]
-    except OSError:
-        ip = ''
-    finally:
-        sock.close()
-    if ip.startswith('127.'):
-        return ''
-    return ip
-
-
-def build_mobile_share_url(page_url: str) -> str:
-    """把本机链接改成手机可访问的局域网链接"""
-    text = (page_url or '').strip()
-    if not text:
-        return ''
-    lan_ip = get_local_network_ip()
-    if not lan_ip:
-        return ''
-    parts = urlsplit(text)
-    host = parts.hostname or ''
-    if host not in ('127.0.0.1', 'localhost'):
-        return text
-    port = f':{parts.port}' if parts.port else ''
-    new_netloc = f'{lan_ip}{port}'
-    return urlunsplit((parts.scheme, new_netloc, parts.path, parts.query, parts.fragment))
 
 
 # 三岗位停用/启用：表单字段名与岗位称谓

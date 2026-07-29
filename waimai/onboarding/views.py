@@ -27,6 +27,7 @@ from .preview_helpers import (
     build_experience_operating_context,
     build_experience_print_qr_context,
     build_experience_products_context,
+    build_experience_workbench_context,
     experience_menu_panel_json,
 )
 from .tour_session import touch_experience_tour_session
@@ -148,6 +149,20 @@ def experience_preview_print_qr(request):
     ctx['experience_boot_json'] = build_experience_boot_json()
     ctx['onboarding_boot_json'] = ''
     return render(request, 'waimai/seller/product_qr_print.html', ctx)
+
+
+def experience_preview_workbench(request):
+    """新版员工工作台管理演示页（只读观摩）"""
+    redir = _shop_or_redirect()
+    if redir:
+        return redir
+    ctx = build_experience_workbench_context(request)
+    if not ctx:
+        return redirect('experience_home')
+    touch_experience_tour_session(request)
+    ctx['experience_boot_json'] = build_experience_boot_json()
+    ctx['onboarding_boot_json'] = ''
+    return render(request, 'waimai/seller/workbench.html', ctx)
 
 
 @require_POST

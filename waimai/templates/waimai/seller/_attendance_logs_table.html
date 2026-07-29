@@ -1,0 +1,36 @@
+{% load staff_account %}
+{% load yc_time %}
+<div style="overflow-x:auto;">
+    <table class="simple-table" style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">时间</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">员工名</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">类别</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">职务</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">动作</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">来源</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">操作人</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">备注</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in attendance_logs_page %}
+            <tr>
+                <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.changed_at|beijing:"m-d H:i" }}</td>
+                <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.display_name_snapshot }}</td>
+                <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log|staff_account_type }}</td>
+                <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{% if log.job_title_snapshot %}{{ log.job_title_snapshot }}{% else %}{{ log.role_snapshot|staff_role }}{% endif %}</td>
+                <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.get_action_display }}</td>
+                <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.get_source_display }}</td>
+                <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.operator_username|default:"—" }}</td>
+                <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.note|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" style="padding:10px;">当前条件下还没有考勤流水。</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

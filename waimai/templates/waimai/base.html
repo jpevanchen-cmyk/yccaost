@@ -15,6 +15,9 @@
         <header class="site-header">
             <button type="button" class="nav-toggle" id="nav-toggle" aria-label="打开菜单">☰</button>
             <a class="site-brand" href="/">{% if site_brand_image_url %}<img src="{{ site_brand_image_url }}" alt="" style="height:22px;vertical-align:middle;margin-right:4px;">{% endif %}{{ site_brand_name|default:"🌿 野草系统" }}</a>
+            {% if experience_enabled %}
+            <button type="button" class="btn btn-sm btn-orange site-header-experience-btn" data-experience-start="seller" data-yc-tour="experience-start-btn">体验开店</button>
+            {% endif %}
             {% if on_shop_work_site and shop_work_user %}
             <div class="site-user" title="{{ shop_work_user.username }}">工作台 · {{ shop_work_user|staff_title }}</div>
             {% elif user.is_authenticated and user.role == 'buyer' %}
@@ -126,11 +129,11 @@
     <script src="{% static 'waimai/onboarding.js' %}?v=9"></script>
     {% endif %}
     {% if experience_boot_json %}
-    <link rel="stylesheet" href="{% static 'waimai/onboarding/experience.css' %}?v=1">
+    <link rel="stylesheet" href="{% static 'waimai/onboarding/experience.css' %}?v=2">
     {% include 'waimai/onboarding/experience/_modals.html' %}
     <script type="application/json" id="yc-experience-boot">{{ experience_boot_json|safe }}</script>
     <script src="{% static 'waimai/onboarding/experience_modal.js' %}?v=1"></script>
-    <script src="{% static 'waimai/onboarding/experience.js' %}?v=2"></script>
+    <script src="{% static 'waimai/onboarding/experience.js' %}?v=4"></script>
     {% endif %}
     {% if yc_track_visitor %}
     <script src="{% static 'owner_toolkit/visitor_beacon.js' %}?v=1"></script>
