@@ -9,7 +9,7 @@
         当前为体验店铺：无法开通真实微信支付。请用「演示支付」走完整流程；真付请到官方小店。
     </p>
     {% endif %}
-    <p class="card-meta" style="margin-bottom:16px;">
+    <p class="card-meta" style="margin-bottom:16px;" data-yc-tour="payment-intro">
         各支付方式可单独开关。演示店可同时开启「模拟」与「真微信」；正式营业请关闭模拟支付。
     </p>
 
@@ -17,7 +17,7 @@
         {% csrf_token %}
         <div class="seller-form-grid">
             {% for field in payment_form %}
-            <div class="seller-field {% if field.field.widget.input_type == 'checkbox' %}seller-field-check{% endif %}"{% if field.name == 'enable_simulate' %} data-yc-tour="payment-demo"{% elif field.name == 'enable_wechat' %} data-yc-tour="payment-wechat"{% elif field.name == 'enable_cash' %} data-yc-tour="payment-cash"{% endif %}>
+            <div class="seller-field {% if field.field.widget.input_type == 'checkbox' %}seller-field-check{% endif %}"{% if field.name == 'enable_simulate' %} data-yc-tour="payment-demo"{% elif field.name == 'enable_wechat' %} data-yc-tour="payment-wechat"{% elif field.name == 'enable_cash' %} data-yc-tour="payment-cash"{% elif field.name == 'enable_cod' %} data-yc-tour="payment-cod"{% elif field.name == 'enable_cashier' %} data-yc-tour="payment-cashier"{% elif field.name == 'cashier_page_size' %} data-yc-tour="payment-cashier-page-size"{% elif field.name == 'wechat_mch_id' %} data-yc-tour="payment-wechat-mch-id"{% elif field.name == 'wechat_app_id' %} data-yc-tour="payment-wechat-app-id"{% elif field.name == 'wechat_api_key' %} data-yc-tour="payment-wechat-api-key"{% elif field.name == 'public_site_url' %} data-yc-tour="payment-public-site-url"{% endif %}>
                 {% if field.field.widget.input_type == 'checkbox' %}
                 <label class="seller-check-label">
                     {{ field }} {{ field.label }}
@@ -31,7 +31,7 @@
             </div>
             {% endfor %}
         </div>
-        <p class="card-meta" style="margin:12px 0;">
+        <p class="card-meta" style="margin:12px 0;" data-yc-tour="payment-notify-url">
             微信异步通知地址（配置公网网址后自动使用）：<br>
             <code>{% if payment_form.instance.public_site_url %}{{ payment_form.instance.public_site_url|cut:"/" }}/pay/wechat/notify/{% else %}（填写公网网址后显示）{% endif %}</code>
         </p>

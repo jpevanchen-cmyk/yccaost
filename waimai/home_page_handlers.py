@@ -79,8 +79,7 @@ def handle_home_page_post(request, seller_id: str):
 
         block.title = (request.POST.get('title') or '')[:120]
         block.body = request.POST.get('body') or ''
-        # 去掉首尾空格，避免粘贴链接后「看起来像没保存」
-        block.image_url = (request.POST.get('image_url') or '').strip()[:500]
+        block.image_url = ''
         block.link_url = (request.POST.get('link_url') or '').strip()[:500]
         block.link_label = (request.POST.get('link_label') or '').strip()[:32]
         block.nav_label = (request.POST.get('nav_label') or '')[:32]

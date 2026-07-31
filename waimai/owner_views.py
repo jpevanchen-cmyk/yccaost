@@ -154,7 +154,7 @@ def server_settings_home_page(request):
                 return redirect('server_settings_home_page')
             block.title = (request.POST.get('title') or '')[:120]
             block.body = request.POST.get('body') or ''
-            block.image_url = (request.POST.get('image_url') or '').strip()[:500]
+            block.image_url = ''
             block.link_url = (request.POST.get('link_url') or '').strip()[:500]
             block.link_label = (request.POST.get('link_label') or '').strip()[:32]
             block.nav_label = (request.POST.get('nav_label') or '')[:32]

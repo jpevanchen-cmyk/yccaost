@@ -11,6 +11,8 @@
         warn: { icon: '⚠️', cls: 'is-warn', defaultAck: true },
         error: { icon: '⚠️', cls: 'is-error', defaultAck: true },
     };
+    /** 同页刷新时用于识别「这批提示已经弹过」 */
+    var FP_STORAGE_KEY = 'yc_notice_fp';
 
     var modal = null;
     var textEl = null;
@@ -94,29 +96,78 @@
         next();
     }
 
+    /** 从页面嵌入的 JSON 读取待弹提示 */
+    function readItemsFromEl(el) {
+        if (!el || !el.textContent) return [];
+        try {
+            var data = JSON.parse(el.textContent);
+            if (Array.isArray(data)) return data;
+            if (data && Array.isArray(data.items)) return data.items;
+        } catch (e) { /* 忽略 */ }
+        return [];
+    }
+
     function readBoot() {
         var items = [];
-        var bootEl = document.getElementById('yc-notice-boot');
-        if (bootEl && bootEl.textContent) {
-            try {
-                var boot = JSON.parse(bootEl.textContent);
-                if (Array.isArray(boot)) items = items.concat(boot);
-            } catch (e) { /* 忽略 */ }
-        }
-        var msgEl = document.getElementById('yc-notice-messages');
-        if (msgEl && msgEl.textContent) {
-            try {
-                var msgs = JSON.parse(msgEl.textContent);
-                if (Array.isArray(msgs)) items = items.concat(msgs);
-            } catch (e) { /* 忽略 */ }
-        }
+        items = items.concat(readItemsFromEl(document.getElementById('yc-notice-boot')));
+        items = items.concat(readItemsFromEl(document.getElementById('yc-notice-messages')));
         return items;
+    }
+
+    /** 弹过后立刻删掉嵌入数据，避免缓存页再次读取 */
+    function clearBootSources() {
+        ['yc-notice-messages', 'yc-notice-boot'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el && el.parentNode) {
+                el.parentNode.removeChild(el);
+            }
+        });
+    }
+
+    function bootFingerprint(items) {
+        var path = window.location.pathname + window.location.search;
+        try {
+            return path + '|' + JSON.stringify(items);
+        } catch (e) {
+            return path + '|' + String(items.length);
+        }
+    }
+
+    /** 是否为浏览器刷新（非保存后跳转） */
+    function isPageReload() {
+        try {
+            var nav = performance.getEntriesByType('navigation')[0];
+            return nav && nav.type === 'reload';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /** 刷新且与上次已弹内容相同 → 不再弹 */
+    function shouldSkipReplay(fingerprint) {
+        if (!isPageReload()) return false;
+        try {
+            return sessionStorage.getItem(FP_STORAGE_KEY) === fingerprint;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function rememberFingerprint(fingerprint) {
+        try {
+            sessionStorage.setItem(FP_STORAGE_KEY, fingerprint);
+        } catch (e) { /* 隐私模式等忽略 */ }
     }
 
     function init() {
         ensureModal();
         var items = readBoot();
-        if (items.length) showQueue(items);
+        clearBootSources();
+        if (!items.length) return;
+        var fp = bootFingerprint(items);
+        if (shouldSkipReplay(fp)) return;
+        rememberFingerprint(fp);
+        showQueue(items);
     }
 
     window.YcNotice = { show: show, showQueue: showQueue };

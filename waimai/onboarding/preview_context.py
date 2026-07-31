@@ -19,6 +19,12 @@ def _experience_section_url(section: str) -> str:
         return reverse('experience_preview_dine')
     if section == 'delivery':
         return reverse('experience_preview_delivery')
+    if section == 'payment':
+        return reverse('experience_preview_payment')
+    if section == 'orders':
+        return reverse('experience_preview_orders')
+    if section == 'homepage':
+        return reverse('experience_preview_homepage')
     # 其余 Tab 尚未定稿：回到新版入口
     return reverse('experience_home')
 

@@ -97,7 +97,7 @@
 {% endif %}
 
 {% if show_contact_guest %}
-<details class="detail-collapse" open>
+<details class="detail-collapse" open data-yc-tour="order-detail-contact">
     <summary>📞 联系客人</summary>
     <div class="detail-collapse-body">
         <p class="card-meta" style="margin:0 0 10px;">有问题请先电话/微信联系客人协商，不要直接拒单。谈妥后可在「订单沟通」写一句确认留痕。</p>
@@ -137,7 +137,7 @@
     </div>
 </details>
 {% elif viewer_role == 'seller' %}
-<details class="detail-collapse" open>
+<details class="detail-collapse" open data-yc-tour="order-detail-buyer">
     <summary>👤 买家信息</summary>
     <div class="detail-collapse-body">
         <div class="detail-row"><span>买家账号</span><span>{{ order.buyer_id }}</span></div>
@@ -269,7 +269,7 @@
 </details>
 {% endif %}
 
-<details class="detail-collapse">
+<details class="detail-collapse" open data-yc-tour="order-detail-fee-total">
     <summary>💰 费用合计</summary>
     <div class="detail-collapse-body">
         <div class="detail-row"><span>商品小计</span><span>¥{{ subtotal }}</span></div>
@@ -282,7 +282,7 @@
     </div>
 </details>
 
-<details class="detail-collapse">
+<details class="detail-collapse" open data-yc-tour="order-detail-payment">
     <summary>💳 支付情况</summary>
     <div class="detail-collapse-body">
         <div class="detail-row"><span>支付状态</span><span>{{ order.get_payment_status_display }}</span></div>
@@ -303,7 +303,7 @@
     </div>
 </details>
 
-<details class="detail-collapse" open>
+<details class="detail-collapse" open data-yc-tour="order-detail-timeline">
     <summary>📦 订单进度</summary>
     <div class="detail-collapse-body">
         <div class="detail-row"><span>当前状态</span><span>{{ order.get_order_status_display }}</span></div>

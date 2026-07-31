@@ -19,6 +19,9 @@
 
     function scrollToAnchor(anchorId) {
         if (!anchorId || anchorId === 'cart') return false;
+        if (typeof window.ycExpandDishGroupForAnchor === 'function') {
+            window.ycExpandDishGroupForAnchor(anchorId);
+        }
         var el = document.getElementById(anchorId);
         if (!el) return false;
         el.scrollIntoView({ block: 'center', behavior: 'auto' });

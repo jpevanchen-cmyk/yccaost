@@ -1,0 +1,68 @@
+{# 客人点菜：默认简化一行，点开展开三档价、图片与加购 #}
+{% with dish=row.dish compact=row.compact %}
+<div class="dish-product-group" data-dish-group id="{{ compact.group_anchor }}">
+    <button type="button" class="dish-compact-row" data-dish-compact-toggle aria-expanded="false"
+            aria-controls="{{ compact.group_anchor }}-panel">
+        {% if compact.thumb_url %}
+        <img class="dish-compact-thumb" src="{{ compact.thumb_url }}" alt="" loading="lazy">
+        {% else %}
+        <span class="dish-compact-thumb dish-compact-thumb--empty" aria-hidden="true"></span>
+        {% endif %}
+        <span class="dish-compact-main">
+            <span class="dish-compact-title-row">
+                <span class="dish-compact-name">{{ compact.name }}</span>
+                {% if compact.cheapest_price is not None %}
+                <span class="dish-compact-price">
+                    ¥{{ compact.cheapest_price }}
+                    {% if compact.cheapest_tier != 'general' %}
+                    <small class="dish-compact-tier">{{ compact.cheapest_tier_label }}</small>
+                    {% endif %}
+                </span>
+                {% endif %}
+            </span>
+            {% if compact.summary %}
+            <span class="dish-compact-summary">{{ compact.summary }}</span>
+            {% endif %}
+        </span>
+    </button>
+    <div class="dish-expanded-panel" id="{{ compact.group_anchor }}-panel" hidden>
+        <div class="dish-expanded-toolbar">
+            <button type="button" class="btn btn-sm btn-outline" data-dish-collapse>收起</button>
+        </div>
+        {% for opt in row.tier_options %}
+        <div class="dish-offer-card dish-offer-sub" id="dish-{{ dish.dish_id.hex|slice:":8" }}-{{ opt.tier }}">
+            <div class="dish-offer-row">
+                <div class="dish-offer-name">{{ opt.display_name }}</div>
+                <div class="dish-offer-price">¥{{ opt.price }}</div>
+                <form method="POST" class="dish-offer-cart-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_to_cart">
+                    <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                    <input type="hidden" name="price_tier" value="{{ opt.tier }}">
+                    <button type="submit" class="btn btn-green btn-sm dish-offer-cart-btn"
+                        {% if opt.disabled %}disabled title="{{ opt.reason }}"{% endif %}>
+                        {% if opt.disabled %}不可购买{% else %}加入购物车{% endif %}
+                    </button>
+                </form>
+            </div>
+            {% if opt.description %}
+            <div class="dish-desc">{{ opt.description }}</div>
+            {% endif %}
+            {% if opt.purchase_hints %}
+            <div class="dish-tier-hints">
+                {% for hint in opt.purchase_hints %}<span class="dish-tier-hint">{{ hint }}</span>{% endfor %}
+            </div>
+            {% endif %}
+            {% if opt.disabled and opt.reason %}
+            <div class="dish-tier-unavail">{{ opt.reason }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% if row.image_gallery %}
+        <div class="dish-offer-sub dish-offer-gallery-wrap">
+            {% include 'waimai/_dish_image_gallery.html' with gallery=row.image_gallery dish=dish only %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endwith %}

@@ -1,0 +1,18 @@
+{% if orders_page.paginator.count %}
+<div class="seller-order-pagination" data-yc-tour="orders-pagination">
+    <span class="card-meta">共 {{ orders_page.paginator.count }} 条 · 第 {{ orders_page.number }}/{{ orders_page.paginator.num_pages }} 页</span>
+    <span class="seller-order-pagination-label">每页</span>
+    {% for size in order_page_sizes %}
+    <a href="?{% if order_list_query %}{{ order_list_query }}&{% endif %}page=1&per_page={{ size }}"
+       class="btn btn-sm {% if order_per_page == size %}btn-green{% else %}btn-outline{% endif %}">{{ size }}</a>
+    {% endfor %}
+    {% if orders_page.has_previous %}
+    <a href="?{% if order_list_query %}{{ order_list_query }}&{% endif %}page={{ orders_page.previous_page_number }}&per_page={{ order_per_page }}"
+       class="btn btn-sm btn-outline">上一页</a>
+    {% endif %}
+    {% if orders_page.has_next %}
+    <a href="?{% if order_list_query %}{{ order_list_query }}&{% endif %}page={{ orders_page.next_page_number }}&per_page={{ order_per_page }}"
+       class="btn btn-sm btn-outline">下一页</a>
+    {% endif %}
+</div>
+{% endif %}

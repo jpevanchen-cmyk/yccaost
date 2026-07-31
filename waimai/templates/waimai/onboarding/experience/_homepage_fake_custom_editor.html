@@ -1,0 +1,63 @@
+{# 第 13 大步 · 假 UI：演示编辑自定义积木（字段布局与 _home_block_editor 一致） #}
+<details class="seller-panel-fold" id="experience-home-custom-demo" data-yc-tour="fold-home-custom-demo">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">自定义积木（演示）</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="card-meta" style="margin:0 0 8px;">自定义积木</p>
+        <div class="home-block-editor">
+            <div class="home-block-settings">
+                <p class="home-block-settings-label">显示设置</p>
+                <div class="home-block-settings-row">
+                    <label class="form-check" data-yc-tour="home-block-enabled">
+                        <input type="checkbox" name="is_enabled" value="1" checked> 在主页显示
+                    </label>
+                    <label class="form-check" data-yc-tour="home-block-show-nav">
+                        <input type="checkbox" name="demo_show_in_nav" value="1"> 进吸顶导航
+                    </label>
+                    <label class="home-block-inline-field" data-yc-tour="home-block-sort">
+                        <span>排序</span>
+                        <input class="form-input" type="number" name="sort_order" value="200">
+                    </label>
+                    <label class="home-block-inline-field" data-yc-tour="home-block-nav-label">
+                        <span>导航短名</span>
+                        <input class="form-input" type="text" name="nav_label" maxlength="32">
+                    </label>
+                </div>
+            </div>
+            <div class="home-block-content">
+                <p class="home-block-content-label">主页上会显示成这样（编辑区）</p>
+                <div class="home-block-content-preview showcase-block">
+                    <label class="form-label">标题</label>
+                    <input class="form-input home-block-title-input" type="text" name="title" maxlength="120" data-yc-tour="home-block-title">
+                    <div class="home-block-media-box" data-yc-tour="home-block-upload">
+                        <p class="form-label" style="margin-bottom:6px;">配图（可选，本账号已用 0 / 100 张）</p>
+                        <p class="card-meta" style="margin:0 0 10px;">从手机或电脑直接上传；单张不超过 5 MB。</p>
+                        <div class="home-block-path-row">
+                            <span class="home-block-path-label">上传图片</span>
+                            <label class="btn btn-sm btn-outline home-block-file-btn">
+                                选择图片
+                                <input type="file" class="home-block-file-input" accept="image/*" hidden disabled>
+                            </label>
+                            <input type="text" class="form-input home-block-path-display" readonly tabindex="-1"
+                                   placeholder="从手机/电脑直接上传，单张不超过 5 MB">
+                        </div>
+                    </div>
+                    <label class="form-label">正文</label>
+                    <textarea class="form-input home-block-body-input" name="body" rows="8" data-yc-tour="home-block-body"></textarea>
+                    <div class="home-block-link-box">
+                        <div class="home-block-path-row" data-yc-tour="home-block-link-url">
+                            <span class="home-block-path-label">附加链接</span>
+                            <input class="form-input home-block-path-input" type="text" name="link_url" maxlength="500"
+                                   placeholder="可选：粘贴网页地址，以 https:// 开头；会显示在标题旁">
+                        </div>
+                        <div class="home-block-path-row" style="margin-top:10px;" data-yc-tour="home-block-link-label">
+                            <span class="home-block-path-label">链接文字</span>
+                            <input class="form-input home-block-path-input" type="text" name="link_label" maxlength="32"
+                                   placeholder="显示在标题旁；留空则用「了解更多」">
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary" style="margin-top:12px;" data-yc-tour="home-block-save">保存本块</button>
+            </div>
+        </div>
+    </div>
+</details>

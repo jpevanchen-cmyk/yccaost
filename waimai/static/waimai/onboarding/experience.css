@@ -170,6 +170,11 @@ body.yc-exp-tour-active {
     border: 2px solid #c5e1a5;
     cursor: default;
 }
+/* 量位期间先隐藏说明窗，避免先出现在中间再跳到最终位置 */
+.yc-exp-tour-card.yc-exp-tour-card-measuring {
+    visibility: hidden;
+    pointer-events: none;
+}
 .yc-exp-tour-card .yc-exp-tour-title,
 .yc-exp-tour-card .yc-exp-tour-progress {
     cursor: move;
@@ -214,25 +219,31 @@ body.yc-exp-tour-active {
     line-height: 1.5;
     color: #b71c1c;
 }
-.yc-exp-tour-auto-count {
+.yc-exp-tour-auto-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     margin: 0 0 10px;
-    text-align: center;
+    flex-wrap: wrap;
+}
+.yc-exp-tour-auto-count {
+    margin: 0;
+    flex: 1 1 8em;
+    text-align: right;
     font-size: 13px;
     color: var(--yc-orange, #e65100);
+    white-space: nowrap;
 }
 .yc-exp-tour-auto-count[hidden] {
     display: none;
-}
-.yc-exp-tour-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
 }
 .yc-exp-tour-no-auto {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 0 0 10px;
+    margin: 0;
+    flex: 1 1 12em;
     font-size: 13px;
     line-height: 1.4;
     cursor: pointer;
@@ -344,4 +355,89 @@ body.yc-exp-seller-5-step12-screenshots .content {
 body.yc-exp-seller-5-step12-screenshots .yc-exp-tour-card {
     width: min(340px, calc(100vw - 24px));
     max-height: 70vh;
+}
+
+/* 第 13 大步 · 假 UI 整页壳（仅一套积木，不显示真实后台重复块） */
+body.yc-exp-seller-13-fake-shell #experience-home-real-shell {
+    display: none !important;
+}
+body.yc-exp-seller-13-fake-shell #experience-home-fake-shell {
+    display: block !important;
+}
+#experience-home-fake-shell[hidden] {
+    display: none !important;
+}
+body.yc-exp-seller-13-fake-shell #experience-home-fake-shell[hidden] {
+    display: block !important;
+}
+.experience-home-fake-presets .seller-panel-fold,
+.experience-home-fake-list > [data-yc-tour="demo-home-add-row"] .seller-panel-fold,
+#demo-home-added-block {
+    margin-bottom: 8px;
+}
+body.yc-exp-seller-13-fake-shell:not(.yc-exp-seller-13-blocks-five) #demo-home-added-block {
+    display: none !important;
+}
+body.yc-exp-seller-13-fake-shell.yc-exp-seller-13-blocks-five #demo-home-added-block {
+    display: block !important;
+}
+body.yc-exp-seller-13-fake-shell:not(.yc-exp-seller-13-show-custom-editor) #experience-home-custom-demo {
+    display: none !important;
+}
+body.yc-exp-seller-13-fake-shell:not(.yc-exp-seller-13-show-settings) #experience-home-fake-settings {
+    display: none !important;
+}
+.showcase-nav-about-target {
+    display: inline-block;
+    line-height: 1.2;
+}
+.showcase-nav-about-target a {
+    display: inline-block;
+    padding: 2px 0;
+}
+
+/* 跳过欢迎窗后：仅高亮顶栏「体验开店」，精简提示（与正式引导分离） */
+#yc-exp-skip-hint-root {
+    position: fixed;
+    inset: 0;
+    z-index: 10150;
+}
+#yc-exp-skip-hint-root[hidden] {
+    display: none !important;
+}
+.yc-exp-skip-hint-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    cursor: default;
+}
+.yc-exp-skip-hint-spotlight {
+    position: fixed;
+    z-index: 10151;
+    border: 2px solid var(--yc-orange, #e65100);
+    border-radius: 8px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}
+.yc-exp-skip-hint-spotlight[hidden] {
+    display: none !important;
+}
+.yc-exp-skip-hint-card {
+    position: fixed;
+    z-index: 10152;
+    width: min(210px, calc(50vw - 24px));
+    min-width: 168px;
+    padding: 14px;
+    margin: 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+    border: 1px solid var(--yc-border, #ddd);
+    cursor: default;
+}
+.yc-exp-skip-hint-body {
+    margin: 0 0 12px;
+    font-size: 14px;
+    line-height: 1.55;
+}
+.yc-exp-skip-hint-ok {
+    margin: 0;
 }

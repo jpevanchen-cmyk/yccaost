@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 from django.urls import reverse, reverse_lazy
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from .delivery_helpers import build_delivery_fee_breakdown, calc_order_delivery_fee, get_delivery_settings
@@ -1085,6 +1086,7 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
     )
 
     from .product_shell_helpers import build_product_shell
+    from .product_helpers import build_dish_tier_options, build_dish_shop_compact
     from .product_image_helpers import build_dish_image_gallery
 
     product_shell = build_product_shell(seller_id)
@@ -1099,17 +1101,18 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
 
     dish_rows = []
     if shop_channel:
-        dish_rows = [
-            {
+        for dish in dishes:
+            gallery = build_dish_image_gallery(dish)
+            tier_options = build_dish_tier_options(
+                dish, request.user, seller_id, cart,
+                menu_item=menu_items_map.get(dish.dish_id),
+            )
+            dish_rows.append({
                 'dish': dish,
-                'image_gallery': build_dish_image_gallery(dish),
-                'tier_options': build_dish_tier_options(
-                    dish, request.user, seller_id, cart,
-                    menu_item=menu_items_map.get(dish.dish_id),
-                ),
-            }
-            for dish in dishes
-        ]
+                'image_gallery': gallery,
+                'tier_options': tier_options,
+                'compact': build_dish_shop_compact(dish, tier_options, gallery),
+            })
     ctx = {
         'dishes': dishes,
         'dish_rows': dish_rows,
@@ -1661,6 +1664,7 @@ def seller_panel_attendance_logs(request):
 
 
 @login_required
+@never_cache
 def seller_panel_section(request, section):
     """卖家管理分区（仅店主生态登录）"""
     if request.user.role != 'seller':
@@ -1759,29 +1763,16 @@ def seller_panel_section(request, section):
     if section == 'orders':
         from .order_search_helpers import (
             ORDER_DATE_RANGE_CHOICES,
-            build_order_search_querystring,
-            parse_seller_order_search,
-            query_seller_orders,
+            build_seller_orders_list_context,
         )
         from .models import BuyOrder
 
-        order_search = parse_seller_order_search(request.GET)
-        orders = list(query_seller_orders(seller_id, order_search))
-        from .order_message_helpers import unread_map_for_orders
-
-        unread_map = unread_map_for_orders(orders, side='shop')
-        for o in orders:
-            o.unread_msg_count = unread_map.get(o.order_id, 0)
+        context.update(build_seller_orders_list_context(seller_id, request.GET))
         from .order_shell_helpers import (
-            build_order_shell,
             fulfillment_filter_choices,
             order_search_placeholder,
         )
 
-        for o in orders:
-            o.order_shell = build_order_shell(o)
-        context['orders'] = orders
-        context['order_search'] = order_search
         context['order_search_placeholder'] = order_search_placeholder(seller_id)
         context['order_date_range_choices'] = ORDER_DATE_RANGE_CHOICES
         context['order_status_choices'] = BuyOrder.ORDER_STATUS_CHOICES

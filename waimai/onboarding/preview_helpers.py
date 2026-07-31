@@ -403,6 +403,184 @@ def build_experience_delivery_context(request) -> dict[str, Any]:
     return ctx
 
 
+def build_experience_payment_context(request) -> dict[str, Any]:
+    """新版支付设置演示页：只观摩，表单不真保存"""
+    shop = get_official_shop_profile()
+    if not shop:
+        return {}
+    seller_id = shop.seller_id
+    from waimai.experience_helpers import experience_site_enabled, seller_blocked_from_real_wechat
+    from waimai.forms import ShopPaymentSettingsForm
+    from waimai.payments import get_payment_settings
+    from waimai.plugin_runtime.registry import is_plugin_enabled
+    from waimai.rider_cash_helpers import rider_cash_summary
+
+    fulfillment_on = is_plugin_enabled('fulfillment', seller_id)
+    payment_form = ShopPaymentSettingsForm(instance=get_payment_settings(seller_id))
+    if not fulfillment_on and 'enable_cod' in payment_form.fields:
+        del payment_form.fields['enable_cod']
+    ctx = base_experience_preview_context('支付设置（演示）', 'payment')
+    ctx.update({
+        'onboarding_readonly': True,
+        'experience_writable': False,
+        'experience_tour_query': _experience_tour_query(request),
+        'payment_form': payment_form,
+        'experience_block_wechat': seller_blocked_from_real_wechat(seller_id),
+        'experience_site': experience_site_enabled(),
+        'show_rider_cash': fulfillment_on,
+        'rider_cash': rider_cash_summary(seller_id) if fulfillment_on else None,
+    })
+    return ctx
+
+
+def build_experience_orders_context(request) -> dict[str, Any]:
+    """新版订单管理演示页：只观摩，表单不真保存"""
+    shop = get_official_shop_profile()
+    if not shop:
+        return {}
+    seller_id = shop.seller_id
+    from waimai.forms import ShopBossOrderNotifyForm
+    from waimai.models import BuyOrder
+    from waimai.operating_helpers import get_operating_settings
+    from waimai.order_alert_helpers import list_shop_new_order_links
+    from waimai.order_notify_ui_helpers import smtp_not_ready_message
+    from waimai.order_search_helpers import (
+        ORDER_DATE_RANGE_CHOICES,
+        build_seller_orders_list_context,
+    )
+    from waimai.order_shell_helpers import (
+        fulfillment_filter_choices,
+        order_search_placeholder,
+    )
+
+    ctx = base_experience_preview_context('订单管理（演示）', 'orders')
+    ctx.update({
+        'onboarding_readonly': True,
+        'experience_writable': False,
+        'experience_tour_query': _experience_tour_query(request),
+    })
+    ctx.update(build_seller_orders_list_context(seller_id, request.GET))
+    ctx['order_search_placeholder'] = order_search_placeholder(seller_id)
+    ctx['order_date_range_choices'] = ORDER_DATE_RANGE_CHOICES
+    ctx['order_status_choices'] = BuyOrder.ORDER_STATUS_CHOICES
+    ctx['payment_status_choices'] = BuyOrder.PAYMENT_STATUS_CHOICES
+    ctx['fulfillment_type_choices'] = fulfillment_filter_choices(seller_id)
+    new_order_links = list_shop_new_order_links(seller_id)
+    ctx['seller_new_order_links'] = new_order_links
+    ctx['seller_new_order_ts'] = max((x['created_ts'] for x in new_order_links), default=0)
+    ctx['shop_unread_msg_orders'] = shop_unread_message_summary(seller_id)['orders']
+    operating = get_operating_settings(seller_id)
+    ctx['boss_order_notify_form'] = ShopBossOrderNotifyForm(instance=operating)
+    ctx['boss_order_notify_smtp_warn'] = smtp_not_ready_message(
+        operating.boss_order_notify_enabled,
+    )
+    return ctx
+
+
+def build_experience_order_detail_context(request, order_id) -> dict[str, Any] | None:
+    """新版订单详情演示页：只观摩"""
+    from django.urls import reverse
+
+    from waimai.onboarding_preview_helpers import build_onboarding_order_detail_context
+
+    ctx = build_onboarding_order_detail_context(request, order_id)
+    if not ctx:
+        return None
+    shop = get_official_shop_profile()
+    if not shop:
+        return None
+    ctx.update(base_experience_preview_context('订单详情（演示）', 'orders'))
+    ctx['home_url'] = reverse('experience_preview_orders')
+    ctx['experience_tour_query'] = _experience_tour_query(request)
+    return ctx
+
+
+def build_experience_homepage_context(request) -> dict[str, Any]:
+    """新版展示主页演示页：只观摩，表单不真保存"""
+    shop = get_official_shop_profile()
+    if not shop:
+        return {}
+    seller_id = shop.seller_id
+    from waimai.home_block_media import block_display_image_src, photo_quota_hint
+    from waimai.home_page_helpers import (
+        BLOCK_CUSTOM,
+        BLOCK_DIRECTORY,
+        BLOCK_ORDER_CTA,
+        MAX_SHOP_CUSTOM_BLOCKS,
+        SERVER_ONLY_BLOCK_TYPES,
+        SHOP_LEGACY_BLOCK_TYPES,
+        block_dom_id,
+        count_shop_custom_blocks,
+        ensure_home_page_for_seller,
+        get_shop_block_spec,
+    )
+    from waimai.models import User
+
+    shop_profile = shop
+    page = ensure_home_page_for_seller(seller_id, shop_profile)
+    blocks = list(
+        page.blocks.exclude(block_type__in=SERVER_ONLY_BLOCK_TYPES | SHOP_LEGACY_BLOCK_TYPES)
+        .order_by('sort_order', 'block_type')
+    )
+    for b in blocks:
+        b.spec = get_shop_block_spec(b.block_type)
+        b.dom_id = block_dom_id(b)
+        b.is_custom = b.block_type == BLOCK_CUSTOM
+        if b.is_custom:
+            b.fold_title = (b.title or '').strip() or '自定义积木'
+        else:
+            b.fold_title = b.spec.label if b.spec else b.block_type
+        b.display_image_src = block_display_image_src(b)
+        b.shows_rich_media = b.block_type not in (BLOCK_ORDER_CTA, BLOCK_DIRECTORY)
+    custom_count = count_shop_custom_blocks(page)
+    seller_user = User.objects.filter(username=seller_id, role='seller').first()
+    ctx = base_experience_preview_context('展示主页（演示）', 'homepage')
+    ctx.update(photo_quota_hint(seller_user) if seller_user else {})
+    ctx.update({
+        'onboarding_readonly': True,
+        'experience_writable': False,
+        'experience_tour_query': _experience_tour_query(request),
+        'home_page': page,
+        'home_blocks': blocks,
+        'custom_block_count': custom_count,
+        'max_custom_blocks': MAX_SHOP_CUSTOM_BLOCKS,
+        'can_add_custom_block': custom_count < MAX_SHOP_CUSTOM_BLOCKS,
+        'save_block_action_name': 'save_home_block',
+        'delete_block_action_name': 'delete_home_block',
+    })
+    if shop_profile and (shop_profile.shop_code or '').strip():
+        ctx['showcase_preview_url'] = f"/s/{shop_profile.shop_code.strip()}/home/"
+    return ctx
+
+
+def build_experience_homepage_showcase_context(request) -> dict[str, Any]:
+    """新版店铺主页预览演示（假 UI，结构与 showcase_home 一致）"""
+    shop = get_official_shop_profile()
+    if not shop:
+        return {}
+    ctx = base_experience_preview_context('店铺主页预览（演示）', 'homepage')
+    ctx.update({
+        'onboarding_readonly': True,
+        'experience_writable': False,
+        'experience_tour_query': _experience_tour_query(request),
+        'demo_shop_name': shop.shop_name,
+        'demo_shop_address': shop.address or '演示地址',
+        'home_url': reverse_experience_homepage(request),
+    })
+    return ctx
+
+
+def reverse_experience_homepage(request) -> str:
+    from django.urls import reverse
+    from urllib.parse import urlencode
+
+    base = reverse('experience_preview_homepage')
+    q = load_tour_query(request)
+    if not q:
+        return base
+    return f'{base}?{urlencode(q)}'
+
+
 def build_experience_table_stickers_context(request) -> dict[str, Any]:
     """桌贴预览页（体验引导 · 替代 PDF 下载）"""
     shop = get_official_shop_profile()

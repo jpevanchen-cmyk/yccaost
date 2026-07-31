@@ -202,24 +202,14 @@ def build_onboarding_seller_section_context(request, section: str) -> dict[str, 
         from .order_notify_ui_helpers import smtp_not_ready_message
         from .order_search_helpers import (
             ORDER_DATE_RANGE_CHOICES,
-            parse_seller_order_search,
-            query_seller_orders,
+            build_seller_orders_list_context,
         )
         from .order_shell_helpers import (
-            build_order_shell,
             fulfillment_filter_choices,
             order_search_placeholder,
         )
-        from .order_message_helpers import unread_map_for_orders
 
-        order_search = parse_seller_order_search(request.GET)
-        orders = list(query_seller_orders(seller_id, order_search))
-        unread_map = unread_map_for_orders(orders, side='shop')
-        for o in orders:
-            o.unread_msg_count = unread_map.get(o.order_id, 0)
-            o.order_shell = build_order_shell(o)
-        ctx['orders'] = orders
-        ctx['order_search'] = order_search
+        ctx.update(build_seller_orders_list_context(seller_id, request.GET))
         ctx['order_search_placeholder'] = order_search_placeholder(seller_id)
         ctx['order_date_range_choices'] = ORDER_DATE_RANGE_CHOICES
         ctx['order_status_choices'] = BuyOrder.ORDER_STATUS_CHOICES

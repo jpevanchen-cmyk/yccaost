@@ -27,10 +27,20 @@
     var typingTimer = null;
     var positionTimer = null;
     var scrollSettleTimer = null;
+    var headIntroTimer = null;
+    var headIntroExpandTimer = null;
+    var cardMeasureFallbackTimer = null;
     var tourNavInstant = false;
     var autoTimer = null;
     var menuAjaxPending = false;
     var productAjaxPending = false;
+    var skipHintActive = false;
+    var SKIP_HINT_SELECTOR = '[data-yc-tour="experience-start-btn"]';
+    var skipHintRoot = null;
+    var skipHintBackdrop = null;
+    var skipHintSpotlight = null;
+    var skipHintCard = null;
+    var skipHintResizeHandler = null;
 
     function isTourVisible() {
         return !!(tourRoot && !tourRoot.hidden && activeTrack);
@@ -73,6 +83,10 @@
         if (!major || !major.microSteps) return null;
         return major.microSteps[activeMicro] || null;
     }
+    /** 用步序号判断回调是否仍属于当前小步，避免对象引用比较失效 */
+    function isActiveMicroStep(stepIndex) {
+        return activeMicro === stepIndex;
+    }
     function saveSession() {
         if (!boot || !window.sessionStorage) return;
         if (activeTrack) {
@@ -85,8 +99,11 @@
             sessionStorage.removeItem(boot.sessionMicroKey);
         }
     }
-    function clearSession() {
+    function clearSession(opts) {
+        opts = opts || {};
         var needCleanup = activeTrack === 'seller' && activeMajor >= 2;
+        var redirectUrl = resolveExitHomeUrl();
+        var shouldRedirect = !opts.skipRedirect && shouldLeaveExperiencePage(redirectUrl);
         activeTrack = null;
         activeMajor = 0;
         activeMicro = 0;
@@ -98,16 +115,39 @@
         hideModal('experience-graduate-modal');
         stopTourUi();
         cleanTourUrl();
-        if (needCleanup) {
-            requestDemoCleanup();
+        function finishExit() {
+            if (shouldRedirect) {
+                window.location.href = redirectUrl;
+            }
         }
+        if (needCleanup) {
+            requestDemoCleanup(finishExit);
+        } else {
+            finishExit();
+        }
+    }
+    function resolveExitHomeUrl() {
+        if (boot && boot.exitHomeUrl) return boot.exitHomeUrl;
+        return '/';
+    }
+    function shouldLeaveExperiencePage(homeUrl) {
+        var path = window.location.pathname;
+        var homePath = (homeUrl || '/').split('?')[0];
+        if (path === homePath) return false;
+        if (homePath !== '/' && path === homePath + '/') return false;
+        if (path.indexOf('/experience/') === 0) return true;
+        if (path.indexOf('/onboarding/preview/') === 0) return true;
+        return false;
     }
     function getCsrfToken() {
         var m = document.cookie.match(/csrftoken=([^;]+)/);
         return m ? decodeURIComponent(m[1]) : '';
     }
-    function requestDemoCleanup() {
-        if (!boot || !boot.cleanupUrl) return;
+    function requestDemoCleanup(onDone) {
+        if (!boot || !boot.cleanupUrl) {
+            if (typeof onDone === 'function') onDone();
+            return;
+        }
         try {
             fetch(boot.cleanupUrl, {
                 method: 'POST',
@@ -116,8 +156,12 @@
                     'X-CSRFToken': getCsrfToken(),
                     'X-Requested-With': 'XMLHttpRequest',
                 },
-            }).catch(function () { /* 忽略 */ });
-        } catch (e) { /* 忽略 */ }
+            }).catch(function () { /* 忽略 */ }).finally(function () {
+                if (typeof onDone === 'function') onDone();
+            });
+        } catch (e) {
+            if (typeof onDone === 'function') onDone();
+        }
     }
     function isWritableTourPage() {
         if (document.body.classList.contains('yc-exp-writable')) return true;
@@ -195,11 +239,11 @@
         return any ? any.value : '';
     }
     function submitDemoImageUpload(onSuccess, onFail) {
-        if (productAjaxPending) return;
+        if (productAjaxPending) return false;
         var dishId = pickDemoDishId();
         if (!dishId) {
             if (typeof onFail === 'function') onFail(null);
-            return;
+            return false;
         }
         productAjaxPending = true;
         clearExperienceUnsavedDirty();
@@ -248,6 +292,7 @@
                 }
                 if (typeof onFail === 'function') onFail(null);
             });
+        return true;
     }
     function bumpMicroForNextStep() {
         var major = currentMajor();
@@ -329,6 +374,39 @@
             });
         });
     }
+    function firstErrorMessage(data) {
+        if (!data || !data.messages || !data.messages.length) return '';
+        var i;
+        for (i = 0; i < data.messages.length; i++) {
+            var m = data.messages[i];
+            if (m && m.level === 'error' && m.text) return m.text;
+        }
+        return '';
+    }
+    function notifyActionStepBlocked(reason) {
+        if (!window.YcNotice) return;
+        YcNotice.show({
+            level: 'warning',
+            text: reason || '上一操作还在进行中，请稍候再试。',
+            mustAck: true,
+        });
+    }
+    function notifyActionStepFailed(data, fallback) {
+        var text = firstErrorMessage(data) || fallback || '操作未成功，请按说明重试。';
+        if (!window.YcNotice) return;
+        YcNotice.show({
+            level: 'error',
+            text: text,
+            mustAck: true,
+        });
+    }
+    function productActionFailHint(data) {
+        var err = firstErrorMessage(data);
+        if (err && err.indexOf('同名') >= 0) {
+            return err + ' 请先点「退出体验」清理演示数据，再重新开始本大步。';
+        }
+        return err || '商品操作未成功。若已有「演示商品」，请先退出体验清理后再试。';
+    }
     function clearExperienceUnsavedDirty() {
         if (window.ycSellerUnsavedGuard && window.ycSellerUnsavedGuard.clearAllDirty) {
             window.ycSellerUnsavedGuard.clearAllDirty();
@@ -381,7 +459,7 @@
         }
     }
     function submitMenuFormAjax(form, onSuccess, onFail, submitter) {
-        if (menuAjaxPending) return;
+        if (menuAjaxPending) return false;
         menuAjaxPending = true;
         clearExperienceUnsavedDirty();
         ensureExpHiddenFieldsInForm(form);
@@ -409,6 +487,8 @@
                     if (typeof onSuccess === 'function') onSuccess(data);
                 } else if (typeof onFail === 'function') {
                     onFail(data);
+                } else if (data.messages) {
+                    showAjaxMessages(data.messages);
                 }
             }).catch(function () {
                 menuAjaxPending = false;
@@ -421,6 +501,7 @@
                 }
                 if (typeof onFail === 'function') onFail(null);
             });
+        return true;
     }
     function replaceProductListHtml(html, editPick) {
         var body = document.getElementById('product-list-body');
@@ -437,7 +518,7 @@
         if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
     function submitProductFormAjax(form, onSuccess, onFail, submitter) {
-        if (productAjaxPending) return;
+        if (productAjaxPending) return false;
         productAjaxPending = true;
         clearExperienceUnsavedDirty();
         ensureExpHiddenFieldsInForm(form);
@@ -470,6 +551,8 @@
                     if (typeof onSuccess === 'function') onSuccess(data);
                 } else if (typeof onFail === 'function') {
                     onFail(data);
+                } else if (data.messages) {
+                    showAjaxMessages(data.messages);
                 }
             }).catch(function () {
                 productAjaxPending = false;
@@ -482,6 +565,7 @@
                 }
                 if (typeof onFail === 'function') onFail(null);
             });
+        return true;
     }
     function fetchMenuProfilePick(profileId, onSuccess, onFail) {
         if (menuAjaxPending || !profileId) return;
@@ -536,7 +620,9 @@
                     bumpMicroForNextStep();
                     runMicroStep();
                 }
-            }, null, ev.submitter || null);
+            }, shouldAdvance ? function (data) {
+                notifyActionStepFailed(data, '清单操作未成功，请按说明重试。');
+            } : null, ev.submitter || null);
         }, true);
     }
     function bindExperienceProductAjax() {
@@ -554,7 +640,9 @@
                     bumpMicroForNextStep();
                     runMicroStep();
                 }
-            }, null, ev.submitter || null);
+            }, shouldAdvance ? function (data) {
+                notifyActionStepFailed(data, productActionFailHint(data));
+            } : null, ev.submitter || null);
         }, true);
     }
     function resolveSelectNameValue(el, step) {
@@ -588,10 +676,15 @@
             return true;
         }
         if (tourKey === 'demo-dish-image-upload-btn') {
-            submitDemoImageUpload(function () {
+            if (!submitDemoImageUpload(function () {
                 bumpMicroForNextStep();
                 runMicroStep();
-            });
+            }, function (data) {
+                notifyActionStepFailed(data, '演示图片上传未成功，请稍后重试。');
+            })) {
+                notifyActionStepBlocked('图片上传还在进行中，请稍候再试。');
+                return false;
+            }
             return true;
         }
         if (tourKey === 'preview-shop-order-link') {
@@ -629,18 +722,29 @@
             }
         }
         var form = el.closest('form');
+        var submitter = el.tagName === 'BUTTON' || el.tagName === 'INPUT' ? el : null;
         if (form && isExperienceMenuPostForm(form)) {
-            submitMenuFormAjax(form, function () {
+            if (!submitMenuFormAjax(form, function () {
                 bumpMicroForNextStep();
                 runMicroStep();
-            }, null, el.tagName === 'BUTTON' || el.tagName === 'INPUT' ? el : null);
+            }, function (data) {
+                notifyActionStepFailed(data, '清单操作未成功，请按说明重试。');
+            }, submitter)) {
+                notifyActionStepBlocked('清单操作还在进行中，请稍候再试。');
+                return false;
+            }
             return true;
         }
         if (form && isExperienceProductPostForm(form)) {
-            submitProductFormAjax(form, function () {
+            if (!submitProductFormAjax(form, function () {
                 bumpMicroForNextStep();
                 runMicroStep();
-            }, null, el.tagName === 'BUTTON' || el.tagName === 'INPUT' ? el : null);
+            }, function (data) {
+                notifyActionStepFailed(data, productActionFailHint(data));
+            }, submitter)) {
+                notifyActionStepBlocked('商品提交还在进行中，请稍候再试。');
+                return false;
+            }
             return true;
         }
         if (form && isExperienceDinePostForm(form)) {
@@ -722,6 +826,18 @@
         if (!boot || !window.localStorage) return true;
         return localStorage.getItem(boot.welcomeSeenKey) === '1';
     }
+    function skipHintStorageKey() {
+        return (boot && boot.skipHintSeenKey) || 'yc_experience_skip_btn_hint_seen';
+    }
+    function skipHintSeen() {
+        if (!window.localStorage) return true;
+        return localStorage.getItem(skipHintStorageKey()) === '1';
+    }
+    function markSkipHintSeen() {
+        if (window.localStorage) {
+            localStorage.setItem(skipHintStorageKey(), '1');
+        }
+    }
     function showModal(id) {
         var m = $(id);
         if (m) m.hidden = false;
@@ -733,6 +849,96 @@
     function hideExperienceWelcome() {
         hideModal('experience-welcome-modal');
         markWelcomeSeen();
+    }
+    function hideExperienceWelcomeAndShowSkipHint() {
+        hideExperienceWelcome();
+        window.setTimeout(showSkipExperienceBtnHint, 320);
+    }
+    function dismissSkipHint() {
+        if (!skipHintActive) return;
+        markSkipHintSeen();
+        stopSkipHintUi();
+    }
+    function stopSkipHintUi() {
+        skipHintActive = false;
+        if (skipHintRoot) skipHintRoot.hidden = true;
+        if (skipHintSpotlight) skipHintSpotlight.hidden = true;
+        if (skipHintResizeHandler) {
+            window.removeEventListener('resize', skipHintResizeHandler);
+            skipHintResizeHandler = null;
+        }
+    }
+    function placeSkipHintCard(btnRect) {
+        if (!skipHintCard) return;
+        var cardW = skipHintCard.offsetWidth || 210;
+        var cardH = skipHintCard.offsetHeight || 100;
+        var margin = 12;
+        var maxLeft = Math.max(margin, window.innerWidth - cardW - margin);
+        var left = btnRect.left + (btnRect.width - cardW) / 2;
+        left = Math.max(margin, Math.min(left, maxLeft));
+        var top = btnRect.bottom + 10;
+        if (top + cardH > window.innerHeight - margin) {
+            top = btnRect.top - cardH - 10;
+        }
+        top = Math.max(margin, top);
+        skipHintCard.style.left = left + 'px';
+        skipHintCard.style.top = top + 'px';
+    }
+    function applySkipHintSpotlight(btn) {
+        if (!skipHintSpotlight || !btn) return;
+        var pad = 8;
+        var rect = btn.getBoundingClientRect();
+        skipHintSpotlight.hidden = false;
+        skipHintSpotlight.style.top = (rect.top - pad) + 'px';
+        skipHintSpotlight.style.left = (rect.left - pad) + 'px';
+        skipHintSpotlight.style.width = (rect.width + pad * 2) + 'px';
+        skipHintSpotlight.style.height = (rect.height + pad * 2) + 'px';
+        placeSkipHintCard(rect);
+    }
+    function ensureSkipHintDom() {
+        if (skipHintRoot) return;
+        skipHintRoot = document.createElement('div');
+        skipHintRoot.id = 'yc-exp-skip-hint-root';
+        skipHintRoot.hidden = true;
+        skipHintRoot.innerHTML = ''
+            + '<div class="yc-exp-skip-hint-backdrop" aria-hidden="true"></div>'
+            + '<div class="yc-exp-skip-hint-spotlight" aria-hidden="true"></div>'
+            + '<div class="yc-exp-skip-hint-card card" role="dialog" aria-modal="true">'
+            + '<p class="yc-exp-skip-hint-body card-meta">您随时可以通过顶栏这个按钮，重新开始体验。</p>'
+            + '<button type="button" class="btn btn-orange btn-block yc-exp-skip-hint-ok">我知道了</button>'
+            + '</div>';
+        document.body.appendChild(skipHintRoot);
+        skipHintBackdrop = skipHintRoot.querySelector('.yc-exp-skip-hint-backdrop');
+        skipHintSpotlight = skipHintRoot.querySelector('.yc-exp-skip-hint-spotlight');
+        skipHintCard = skipHintRoot.querySelector('.yc-exp-skip-hint-card');
+        skipHintRoot.addEventListener('click', function () {
+            dismissSkipHint();
+        });
+        var okBtn = skipHintRoot.querySelector('.yc-exp-skip-hint-ok');
+        if (okBtn) {
+            okBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                dismissSkipHint();
+            });
+        }
+    }
+    function showSkipExperienceBtnHint() {
+        if (skipHintSeen() || skipHintActive || activeTrack) return;
+        var btn = findTarget(SKIP_HINT_SELECTOR);
+        if (!btn) return;
+        ensureSkipHintDom();
+        skipHintActive = true;
+        skipHintRoot.hidden = false;
+        btn.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        window.setTimeout(function () {
+            if (!skipHintActive) return;
+            applySkipHintSpotlight(btn);
+        }, 280);
+        skipHintResizeHandler = function () {
+            if (!skipHintActive) return;
+            applySkipHintSpotlight(findTarget(SKIP_HINT_SELECTOR));
+        };
+        window.addEventListener('resize', skipHintResizeHandler);
     }
     function pageKeyFromPath(path) {
         path = path || window.location.pathname;
@@ -747,6 +953,11 @@
         if (path.indexOf('/experience/preview/seller/dine') === 0) return 'preview_dine';
         if (path.indexOf('/experience/preview/seller/table-stickers') === 0) return 'preview_table_stickers';
         if (path.indexOf('/experience/preview/seller/delivery') === 0) return 'preview_delivery';
+        if (path.indexOf('/experience/preview/seller/payment') === 0) return 'preview_payment';
+        if (path.indexOf('/experience/preview/seller/orders/') === 0 && path !== '/experience/preview/seller/orders/' && path !== '/experience/preview/seller/orders') return 'preview_order_detail';
+        if (path.indexOf('/experience/preview/seller/orders') === 0) return 'preview_orders';
+        if (path.indexOf('/experience/preview/seller/homepage-showcase') === 0) return 'preview_homepage_showcase';
+        if (path.indexOf('/experience/preview/seller/homepage') === 0) return 'preview_homepage';
         if (path.indexOf('/onboarding/preview/seller/products') === 0) return 'preview_products';
         if (path.indexOf('/onboarding/preview/seller/print-qr') === 0) return 'preview_print_qr';
         if (path.indexOf('/onboarding/preview/seller/workbench') === 0) return 'preview_workbench_manage';
@@ -768,6 +979,9 @@
         return (boot && boot.pages && boot.pages[page]) || '/';
     }
     function stepPath(step) {
+        if (step && step.page && boot && boot.pages && boot.pages[step.page]) {
+            return boot.pages[step.page];
+        }
         if (step && step.path && step.path.indexOf('/') === 0) {
             return step.path;
         }
@@ -780,9 +994,30 @@
             el.open = true;
         }
     }
-    /** 按小步 foldLayout 同步工作台折叠区：该开的开、其余全关 */
-    function syncStepFoldLayout(step) {
+    /** 订单详情等折叠块：高亮前先展开，避免只框到标题条 */
+    function openTourTargetDetails(step) {
+        if (!step || !step.selector) return;
+        var el = findTarget(step.selector);
+        if (el && el.tagName === 'DETAILS') {
+            el.open = true;
+        }
+    }
+    /** 按小步 foldLayout 同步折叠区：该开的开、其余全关 */
+    function collapseAllFolds() {
+        var folds = document.querySelectorAll('details.seller-panel-fold');
+        var i;
+        for (i = 0; i < folds.length; i++) {
+            var d = folds[i];
+            if (d.id) d.open = false;
+        }
+    }
+    function syncStepFoldLayout(step, opts) {
+        opts = opts || {};
         if (!step || step.foldLayout === undefined || step.foldLayout === null) return;
+        if (opts.collapseAll) {
+            collapseAllFolds();
+            return;
+        }
         var want = {};
         var ids = step.foldLayout;
         var i;
@@ -853,10 +1088,12 @@
             + '<p class="yc-exp-tour-body card-meta"></p>'
             + '<ul class="yc-exp-tour-tips"></ul>'
             + '<p class="yc-exp-tour-warn"></p>'
-            + '<p class="yc-exp-tour-auto-count card-meta" hidden></p>'
+            + '<div class="yc-exp-tour-auto-row">'
             + '<label class="yc-exp-tour-no-auto">'
             + '<input type="checkbox" class="yc-exp-tour-no-auto-cb"> 不自动切换到下一步'
             + '</label>'
+            + '<p class="yc-exp-tour-auto-count card-meta" hidden></p>'
+            + '</div>'
             + '<div class="yc-exp-tour-nav-actions">'
             + '<button type="button" class="btn btn-sm btn-outline yc-exp-tour-prev">上一步</button>'
             + '<button type="button" class="btn btn-sm btn-orange yc-exp-tour-next">下一步</button>'
@@ -1020,9 +1257,13 @@
             positionTimer = null;
         }
         clearScrollSettleTimer();
+        clearHeadIntroTimers();
+        clearTourCardMeasureFallback();
+        revealTourCard();
         if (tourRoot) tourRoot.hidden = true;
         document.body.classList.remove('yc-exp-tour-active');
         syncSeller5Step12ScreenshotMode(null);
+        syncSeller13ShellMode(null);
         if (tourSpotlight) tourSpotlight.hidden = true;
     }
     function openMobileNav(cb) {
@@ -1038,10 +1279,81 @@
     function findTarget(selector) {
         if (!selector) return null;
         try {
+            var fakeShell = document.getElementById('experience-home-fake-shell');
+            var realShell = document.getElementById('experience-home-real-shell');
+            if (fakeShell && realShell) {
+                if (document.body.classList.contains('yc-exp-seller-13-fake-shell')) {
+                    var inFake = fakeShell.querySelector(selector);
+                    if (inFake) return inFake;
+                } else {
+                    var inReal = realShell.querySelector(selector);
+                    if (inReal) return inReal;
+                }
+            }
             return document.querySelector(selector);
         } catch (e) {
             return null;
         }
+    }
+    function isFoldHeadIntroStep(step) {
+        return !!(step && step.selector && step.selector.indexOf('-head"]') >= 0);
+    }
+    /** 须等二次量位后再显示说明窗，避免亮两次或中途跳动 */
+    function stepNeedsDeferredCardReveal(step, headIntro) {
+        if (headIntro) return true;
+        if (step && isSeller5Step12Mode(step)) return true;
+        if (step && isDineSettingsFieldStep(step)) return true;
+        if (isSeller6ScreenshotMode()) return true;
+        return false;
+    }
+    function beginTourCardMeasure() {
+        if (!tourCard) return;
+        if (tourCard.dataset.expUserDragged === '1') return;
+        tourCard.classList.add('yc-exp-tour-card-measuring');
+    }
+    function revealTourCard() {
+        if (!tourCard) return;
+        tourCard.classList.remove('yc-exp-tour-card-measuring');
+    }
+    function clearTourCardMeasureFallback() {
+        if (cardMeasureFallbackTimer) {
+            clearTimeout(cardMeasureFallbackTimer);
+            cardMeasureFallbackTimer = null;
+        }
+    }
+    /** 量位超时仍须露出说明窗，防止只剩遮罩 */
+    function scheduleTourCardRevealFallback(ms) {
+        clearTourCardMeasureFallback();
+        var delay = typeof ms === 'number' ? ms : 900;
+        cardMeasureFallbackTimer = window.setTimeout(function () {
+            cardMeasureFallbackTimer = null;
+            if (!tourCard || !isTourVisible()) return;
+            if (!tourCard.classList.contains('yc-exp-tour-card-measuring')) return;
+            placeCard(null, { reveal: true });
+        }, delay);
+    }
+    function isStaffEditPermissionsStep(step) {
+        return !!(step && step.selector && step.selector.indexOf('staff-edit-permissions') >= 0);
+    }
+    function isValidHighlightRect(rect) {
+        return !!(rect && rect.width >= 2 && rect.height >= 2);
+    }
+    /** 下拉选项等不可见元素，改用父级做高亮与摆位 */
+    function resolveSpotlightTarget(el) {
+        if (!el) return null;
+        if (el.tagName === 'OPTION') {
+            var selectEl = el.parentElement;
+            if (selectEl && selectEl.tagName === 'SELECT') return selectEl;
+        }
+        var rect = el.getBoundingClientRect();
+        if (!isValidHighlightRect(rect) && el.parentElement) {
+            var parent = el.parentElement;
+            if (parent.tagName === 'LABEL' && parent.parentElement) {
+                parent = parent.parentElement;
+            }
+            return resolveSpotlightTarget(parent) || el;
+        }
+        return el;
     }
     function runSelectDemo(el, step) {
         if (!el || !step) return;
@@ -1083,8 +1395,8 @@
     function runTypeDemo(el, text) {
         var field = resolveTextField(el);
         if (!field) return;
+        // 演示只改值、不 focus，避免安卓等设备弹出输入法挡屏
         field.value = '';
-        field.focus({ preventScroll: true });
         var i = 0;
         if (typingTimer) clearInterval(typingTimer);
         typingTimer = window.setInterval(function () {
@@ -1092,88 +1404,158 @@
                 clearInterval(typingTimer);
                 typingTimer = null;
                 field.dispatchEvent(new Event('input', { bubbles: true }));
+                if (document.activeElement === field) {
+                    field.blur();
+                }
                 return;
             }
             field.value += text.charAt(i);
             i += 1;
         }, 70);
     }
-    function applySpotlightRect(target, pad) {
+    function applySpotlightRect(target, pad, revealCard) {
         if (!tourSpotlight || !tourCard) return;
+        var reveal = revealCard !== false;
+        target = resolveSpotlightTarget(target);
         if (!target) {
             tourSpotlight.hidden = true;
-            placeCard(null);
+            if (tourCard.dataset.expUserDragged !== '1') {
+                placeCard(null, { reveal: reveal });
+            } else if (reveal) {
+                revealTourCard();
+                clearTourCardMeasureFallback();
+            }
             return;
         }
         var rect = target.getBoundingClientRect();
+        if (!isValidHighlightRect(rect)) {
+            tourSpotlight.hidden = true;
+            if (tourCard.dataset.expUserDragged !== '1') {
+                placeCard(null, { reveal: reveal });
+            } else if (reveal) {
+                revealTourCard();
+                clearTourCardMeasureFallback();
+            }
+            return;
+        }
         tourSpotlight.hidden = false;
         tourSpotlight.style.top = (rect.top - pad) + 'px';
         tourSpotlight.style.left = (rect.left - pad) + 'px';
         tourSpotlight.style.width = (rect.width + pad * 2) + 'px';
         tourSpotlight.style.height = (rect.height + pad * 2) + 'px';
         if (tourCard.dataset.expUserDragged !== '1') {
-            placeCard(rect);
+            placeCard(rect, { reveal: reveal });
+        } else if (reveal) {
+            revealTourCard();
+            clearTourCardMeasureFallback();
         }
     }
     function repositionSpotlightOnly(step) {
         if (!isTourVisible() || !step) return;
-        var target = findTarget(step.selector);
+        var target = resolveSpotlightTarget(findTarget(step.selector));
         var pad = 8;
         if (!target) {
             if (tourSpotlight) tourSpotlight.hidden = true;
+            if (tourCard && tourCard.dataset.expUserDragged !== '1') {
+                placeCard(null, { reveal: true });
+            } else {
+                revealTourCard();
+                clearTourCardMeasureFallback();
+            }
             return;
         }
         var rect = target.getBoundingClientRect();
+        if (!isValidHighlightRect(rect)) {
+            if (tourSpotlight) tourSpotlight.hidden = true;
+            if (tourCard && tourCard.dataset.expUserDragged !== '1') {
+                placeCard(null, { reveal: true });
+            } else {
+                revealTourCard();
+                clearTourCardMeasureFallback();
+            }
+            return;
+        }
         tourSpotlight.hidden = false;
         tourSpotlight.style.top = (rect.top - pad) + 'px';
         tourSpotlight.style.left = (rect.left - pad) + 'px';
         tourSpotlight.style.width = (rect.width + pad * 2) + 'px';
         tourSpotlight.style.height = (rect.height + pad * 2) + 'px';
         if (tourCard && tourCard.dataset.expUserDragged !== '1') {
-            placeCard(rect);
+            placeCard(rect, { reveal: true });
+        } else {
+            revealTourCard();
+            clearTourCardMeasureFallback();
         }
     }
     function positionTour(step, opts) {
         opts = opts || {};
         var instant = !!opts.instant;
+        var headIntro = !!opts.headIntro;
         if (!tourRoot || !step || !isTourVisible()) return;
+        var stepIndex = activeMicro;
+        var deferCardReveal = stepNeedsDeferredCardReveal(step, headIntro);
         if (positionTimer) {
             clearTimeout(positionTimer);
             positionTimer = null;
         }
         clearScrollSettleTimer();
+        clearHeadIntroTimers();
         var pad = 8;
-        function finalizeSpotlight() {
-            if (!isTourVisible() || currentMicroStep() !== step) return;
-            var target = findTarget(step.selector);
+        function measureSpotlight() {
+            if (!isTourVisible() || !isActiveMicroStep(stepIndex)) return;
+            var target = resolveSpotlightTarget(findTarget(step.selector));
+            var revealNow = !deferCardReveal;
             if (target) {
-                applySpotlightRect(target, pad);
-                if (isSeller5Step12Mode(step)) {
-                    window.setTimeout(function () {
-                        if (!isTourVisible()) return;
-                        repositionSpotlightOnly(step);
-                    }, 150);
-                } else if (isDineSettingsFieldStep(step)) {
-                    window.setTimeout(function () {
-                        if (!isTourVisible()) return;
-                        repositionSpotlightOnly(step);
-                    }, 180);
-                } else if (isSeller6ScreenshotMode()) {
-                    window.setTimeout(function () {
-                        if (!isTourVisible()) return;
-                        repositionSpotlightOnly(step);
-                    }, 150);
-                }
+                applySpotlightRect(target, pad, revealNow);
             } else {
-                applySpotlightRect(null, pad);
+                applySpotlightRect(null, pad, true);
             }
         }
-        var target = findTarget(step.selector);
+        function finalizeSpotlight() {
+            if (!isTourVisible() || !isActiveMicroStep(stepIndex)) return;
+            if (window.requestAnimationFrame) {
+                window.requestAnimationFrame(function () {
+                    window.requestAnimationFrame(measureSpotlight);
+                });
+            } else {
+                measureSpotlight();
+            }
+            if (headIntro) {
+                headIntroTimer = window.setTimeout(function () {
+                    if (!isTourVisible() || !isActiveMicroStep(stepIndex)) return;
+                    syncStepFoldLayout(step);
+                    var expandedTarget = resolveSpotlightTarget(findTarget(step.selector));
+                    if (expandedTarget) {
+                        scrollTourTarget(expandedTarget, true);
+                    }
+                    headIntroExpandTimer = window.setTimeout(function () {
+                        if (!isTourVisible() || !isActiveMicroStep(stepIndex)) return;
+                        repositionSpotlightOnly(step);
+                    }, 240);
+                }, 60);
+            } else if (isSeller5Step12Mode(step)) {
+                window.setTimeout(function () {
+                    if (!isTourVisible()) return;
+                    repositionSpotlightOnly(step);
+                }, 150);
+            } else if (isDineSettingsFieldStep(step)) {
+                window.setTimeout(function () {
+                    if (!isTourVisible()) return;
+                    repositionSpotlightOnly(step);
+                }, 180);
+            } else if (isSeller6ScreenshotMode()) {
+                window.setTimeout(function () {
+                    if (!isTourVisible()) return;
+                    repositionSpotlightOnly(step);
+                }, 150);
+            }
+        }
+        var target = resolveSpotlightTarget(findTarget(step.selector));
         if (target) {
             scrollTourTarget(target, instant);
-            afterScrollSettled(finalizeSpotlight, instant);
+            afterScrollSettled(finalizeSpotlight, instant, headIntro ? 140 : 0);
         } else {
-            applySpotlightRect(null, pad);
+            applySpotlightRect(null, pad, true);
         }
     }
     function resetTourCardPosition() {
@@ -1184,6 +1566,8 @@
             delete tourCard.dataset.expUserDragged;
             tourCard.style.transform = 'none';
         }
+        tourCard.style.margin = '0';
+        // 不在此先摆到屏幕正中，避免量位完成前闪一下
     }
     function isSeller6ScreenshotMode() {
         return document.body.classList.contains('yc-exp-seller-6-screenshots');
@@ -1219,6 +1603,30 @@
         var panel = document.getElementById('experience-s5-step12');
         if (panel) panel.hidden = !on;
     }
+    /** 第 13 大步 · 主页编辑假 UI（不含收尾小步与预览页） */
+    function isSeller13FakeShellStep(step) {
+        var major = currentMajor();
+        if (!major || major.id !== 'seller-13' || !step) return false;
+        if (step.page && step.page !== 'preview_homepage') return false;
+        if (!step.page && pageKeyFromPath() !== 'preview_homepage') return false;
+        return activeMicro < 26;
+    }
+    function syncSeller13ShellMode(step) {
+        var on = isSeller13FakeShellStep(step);
+        document.body.classList.toggle('yc-exp-seller-13-fake-shell', on);
+        var shell = document.getElementById('experience-home-fake-shell');
+        if (shell) shell.hidden = !on;
+        document.body.classList.toggle('yc-exp-seller-13-blocks-five', on && activeMicro >= 16);
+        document.body.classList.toggle('yc-exp-seller-13-show-custom-editor', on && activeMicro >= 6 && activeMicro <= 15);
+        document.body.classList.toggle('yc-exp-seller-13-show-settings', on && activeMicro >= 16 && activeMicro <= 22);
+    }
+    function syncHomeShowcaseNavScroll(step) {
+        if (!step || !step.selector || step.selector.indexOf('shop-home-nav-about') < 0) return;
+        window.setTimeout(function () {
+            if (!isTourVisible() || currentMicroStep() !== step) return;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 200);
+    }
     function preferCardAboveHighlight(step) {
         return false;
     }
@@ -1245,10 +1653,21 @@
             scrollSettleTimer = null;
         }
     }
+    function clearHeadIntroTimers() {
+        if (headIntroTimer) {
+            clearTimeout(headIntroTimer);
+            headIntroTimer = null;
+        }
+        if (headIntroExpandTimer) {
+            clearTimeout(headIntroExpandTimer);
+            headIntroExpandTimer = null;
+        }
+    }
     /** 滚动与折叠动画停稳后再量位置，避免上一步连点框错位 */
-    function afterScrollSettled(cb, instant) {
+    function afterScrollSettled(cb, instant, extraDelay) {
         clearScrollSettleTimer();
         var delay = instant ? 90 : 320;
+        if (extraDelay) delay += extraDelay;
         scrollSettleTimer = window.setTimeout(function () {
             scrollSettleTimer = null;
             cb();
@@ -1273,6 +1692,10 @@
         var tries = [
             { top: highlightRect.bottom + 16, left: centerLeft },
             { top: highlightRect.top - cardH - 16, left: centerLeft },
+            { top: highlightRect.top, left: highlightRect.right + 16 },
+            { top: highlightRect.top, left: highlightRect.left - cardW - 16 },
+            { top: Math.max(margin, highlightRect.top), left: maxLeft },
+            { top: Math.max(margin, highlightRect.top), left: margin },
             { top: window.innerHeight - cardH - margin, left: margin },
             { top: window.innerHeight - cardH - margin, left: maxLeft },
             { top: margin, left: centerLeft },
@@ -1297,28 +1720,8 @@
         tourCard.style.left = Math.max(margin, (window.innerWidth - cardW) / 2) + 'px';
         tourCard.style.top = (window.innerHeight - cardH - margin) + 'px';
     }
-    function placeCard(rect) {
-        if (!tourCard) return;
-        if (tourCard.dataset.expUserDragged === '1') return;
-        var cardW = tourCard.offsetWidth || Math.min(isSeller6ScreenshotMode() ? 360 : 420, window.innerWidth - 24);
-        var cardH = tourCard.offsetHeight || 220;
-        var margin = 12;
+    function placeCardNearHighlight(rect, cardW, cardH, margin) {
         var maxLeft = Math.max(margin, window.innerWidth - cardW - margin);
-        tourCard.style.transform = 'none';
-        tourCard.style.margin = '0';
-        if (!rect) {
-            tourCard.style.left = Math.max(margin, (window.innerWidth - cardW) / 2) + 'px';
-            tourCard.style.top = Math.max(margin, window.innerHeight * 0.18) + 'px';
-            return;
-        }
-        if (isSeller6ScreenshotMode()) {
-            placeCardClearOfHighlight(rect, cardW, cardH, margin);
-            return;
-        }
-        if (isSeller5Step12Mode(currentMicroStep())) {
-            placeCardSeller5Step12(rect, cardW, cardH, margin);
-            return;
-        }
         var below = rect.bottom + 16;
         var top;
         if (below + cardH < window.innerHeight - margin) {
@@ -1328,8 +1731,91 @@
         }
         var left = rect.left + (rect.width - cardW) / 2;
         left = Math.max(margin, Math.min(left, maxLeft));
-        tourCard.style.left = left + 'px';
-        tourCard.style.top = top + 'px';
+        var cardRect = {
+            top: top,
+            left: left,
+            right: left + cardW,
+            bottom: top + cardH,
+        };
+        var hl = {
+            top: rect.top,
+            left: rect.left,
+            right: rect.right,
+            bottom: rect.bottom,
+        };
+        if (!tourRectsOverlap(cardRect, hl, 12)) {
+            tourCard.style.left = left + 'px';
+            tourCard.style.top = top + 'px';
+            return;
+        }
+        placeCardClearOfHighlight(rect, cardW, cardH, margin);
+    }
+    /** 权限勾选步：说明框优先贴屏幕底部，避免挡住左侧勾选列表 */
+    function placeCardStaffPermissions(highlightRect, cardW, cardH, margin) {
+        var maxLeft = Math.max(margin, window.innerWidth - cardW - margin);
+        var tries = [
+            { top: window.innerHeight - cardH - margin, left: Math.max(margin, (window.innerWidth - cardW) / 2) },
+            { top: window.innerHeight - cardH - margin, left: margin },
+            { top: window.innerHeight - cardH - margin, left: maxLeft },
+            { top: Math.max(margin, highlightRect.bottom + 16), left: maxLeft },
+        ];
+        var hl = {
+            top: highlightRect.top,
+            left: highlightRect.left,
+            right: highlightRect.right,
+            bottom: highlightRect.bottom,
+        };
+        var i;
+        for (i = 0; i < tries.length; i++) {
+            var t = tries[i];
+            t.top = Math.max(margin, Math.min(t.top, window.innerHeight - cardH - margin));
+            t.left = Math.max(margin, Math.min(t.left, maxLeft));
+            var cr = {
+                top: t.top,
+                left: t.left,
+                right: t.left + cardW,
+                bottom: t.top + cardH,
+            };
+            if (!tourRectsOverlap(cr, hl, 12)) {
+                tourCard.style.left = t.left + 'px';
+                tourCard.style.top = t.top + 'px';
+                return;
+            }
+        }
+        placeCardClearOfHighlight(highlightRect, cardW, cardH, margin);
+    }
+    function placeCard(rect, opts) {
+        opts = opts || {};
+        var shouldReveal = opts.reveal !== false;
+        if (!tourCard) return;
+        if (tourCard.dataset.expUserDragged === '1') {
+            if (shouldReveal) {
+                revealTourCard();
+                clearTourCardMeasureFallback();
+            }
+            return;
+        }
+        var cardW = tourCard.offsetWidth || Math.min(isSeller6ScreenshotMode() ? 360 : 420, window.innerWidth - 24);
+        var cardH = tourCard.offsetHeight || 220;
+        var margin = 12;
+        tourCard.style.transform = 'none';
+        tourCard.style.margin = '0';
+        if (!rect) {
+            tourCard.style.left = Math.max(margin, (window.innerWidth - cardW) / 2) + 'px';
+            tourCard.style.top = Math.max(margin, window.innerHeight * 0.18) + 'px';
+        } else if (isSeller6ScreenshotMode()) {
+            placeCardClearOfHighlight(rect, cardW, cardH, margin);
+        } else if (isSeller5Step12Mode(currentMicroStep())) {
+            placeCardSeller5Step12(rect, cardW, cardH, margin);
+        } else if (isStaffEditPermissionsStep(currentMicroStep())) {
+            placeCardStaffPermissions(rect, cardW, cardH, margin);
+        } else {
+            placeCardNearHighlight(rect, cardW, cardH, margin);
+        }
+        if (shouldReveal) {
+            revealTourCard();
+            clearTourCardMeasureFallback();
+        }
     }
     function fillTourCard(step) {
         var major = currentMajor();
@@ -1376,6 +1862,45 @@
         );
         link.setAttribute('data-unsaved-skip', '1');
     }
+    function syncExperienceOrderDetailLinkHref() {
+        var link = document.querySelector('[data-yc-tour="orders-detail-link"]');
+        if (!link || !boot || !isTourVisible()) return;
+        var major = currentMajor();
+        if (!major || major.id !== 'seller-12') return;
+        var step = currentMicroStep();
+        if (!step || !step.selector || step.selector.indexOf('orders-detail-link') < 0) return;
+        var detailPath = (boot.pages && boot.pages.preview_order_detail) || '';
+        if (!detailPath) return;
+        // 点链接进入详情页时，应落在「订单详情总览」小步（本步 micro + 1）
+        link.href = buildTourUrl(
+            detailPath,
+            activeTrack,
+            activeMajor,
+            activeMicro + 1
+        );
+        link.setAttribute('data-unsaved-skip', '1');
+    }
+    function syncExperienceHomePreviewLinkHref() {
+        if (!boot || !isTourVisible()) return;
+        var major = currentMajor();
+        if (!major || major.id !== 'seller-13') return;
+        var link = findTarget('[data-yc-tour="home-preview-link"]');
+        if (!link) return;
+        if (activeMicro !== 22) {
+            link.href = '#';
+            link.removeAttribute('data-unsaved-skip');
+            return;
+        }
+        var showcasePath = (boot.pages && boot.pages.preview_homepage_showcase) || '/experience/preview/seller/homepage-showcase/';
+        link.href = buildTourUrl(
+            showcasePath,
+            activeTrack,
+            activeMajor,
+            activeMicro + 1
+        );
+        link.removeAttribute('target');
+        link.setAttribute('data-unsaved-skip', '1');
+    }
     function showMicroUi(step) {
         var instantScroll = tourNavInstant;
         tourNavInstant = false;
@@ -1384,16 +1909,28 @@
         fillTourCard(step);
         tourRoot.hidden = false;
         document.body.classList.add('yc-exp-tour-active');
+        var headIntro = isFoldHeadIntroStep(step);
+        beginTourCardMeasure();
+        scheduleTourCardRevealFallback(headIntro ? 1100 : 900);
         syncSeller5Step12ScreenshotMode(step);
+        syncSeller13ShellMode(step);
         syncExperiencePrintLinkHref();
-        syncStepFoldLayout(step);
+        syncExperienceOrderDetailLinkHref();
+        syncExperienceHomePreviewLinkHref();
+        if (headIntro) {
+            syncStepFoldLayout(step, { collapseAll: true });
+        } else {
+            syncStepFoldLayout(step);
+        }
         if (step.openFold) {
             openFoldSelector(step.openFold);
         }
+        openTourTargetDetails(step);
+        syncHomeShowcaseNavScroll(step);
         if (step.demoClick) {
             runDemoClick(step.demoClick);
         }
-        positionTour(step, { instant: instantScroll });
+        positionTour(step, { instant: instantScroll, headIntro: headIntro });
         bindStepInteractionListeners(step);
         ensureAllExpHiddenFields();
         if (step.demoType === 'type' && step.demoText && step.selector) {
@@ -1652,11 +2189,12 @@
     function bindExperienceHome() {
         document.querySelectorAll('[data-experience-start]').forEach(function (btn) {
             btn.addEventListener('click', function () {
+                if (skipHintActive) dismissSkipHint();
                 showStepPicker(btn.getAttribute('data-experience-start'));
             });
         });
         var skipBtn = document.querySelector('[data-experience-skip-welcome]');
-        if (skipBtn) skipBtn.addEventListener('click', hideExperienceWelcome);
+        if (skipBtn) skipBtn.addEventListener('click', hideExperienceWelcomeAndShowSkipHint);
         document.querySelectorAll('[data-experience-close="welcome"]').forEach(function (el) {
             el.addEventListener('click', hideExperienceWelcome);
         });

@@ -9,7 +9,7 @@
 {% include 'waimai/seller/_experience_seller5_step12_screenshot.html' %}
 {% endif %}
 <details class="seller-panel-fold" id="sales-ranking" data-yc-tour="fold-sales-ranking">
-    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📊 {{ product_shell.sales_title }}</span></summary>
+    <summary class="seller-panel-fold-head" data-yc-tour="sales-ranking-head"><span class="seller-panel-fold-title">📊 {{ product_shell.sales_title }}</span></summary>
     <div class="seller-panel-fold-body">
         <p class="page-desc">只统计<strong>已完成</strong>的订单。</p>
         <div class="sales-rank-tabs" role="tablist" data-yc-tour="sales-rank-tabs">
@@ -36,7 +36,7 @@
 
 {% if product_shell.show_menu_catalog %}
 <details class="seller-panel-fold" id="menu-panel" data-yc-tour="fold-menu-panel">
-    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📋 {{ product_shell.catalog_panel_title }}</span></summary>
+    <summary class="seller-panel-fold-head" data-yc-tour="menu-panel-head"><span class="seller-panel-fold-title">📋 {{ product_shell.catalog_panel_title }}</span></summary>
     <div class="seller-panel-fold-body" id="menu-panel-body">
         {% include 'waimai/seller/_menu_catalog_panel.html' %}
     </div>

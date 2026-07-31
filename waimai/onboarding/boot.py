@@ -13,6 +13,7 @@ from .constants import (
     SESSION_MAJOR_KEY,
     SESSION_MICRO_KEY,
     SESSION_TRACK_KEY,
+    SKIP_HINT_SEEN_KEY,
     URL_FLAG,
     URL_MAJOR,
     URL_MICRO,
@@ -67,6 +68,16 @@ def build_experience_boot_payload() -> dict[str, Any]:
         demo_dish = get_demo_dish_for_seller(seller_id)
         if demo_dish:
             demo_dish_edit_pick = demo_dish.dish_id.hex[:8]
+    pages = dict(TOUR_PAGES)
+    if seller_id:
+        from waimai.models import BuyOrder
+
+        demo_order = BuyOrder.objects.filter(seller_id=seller_id).order_by('-created_at').first()
+        if demo_order:
+            pages['preview_order_detail'] = reverse(
+                'experience_preview_order_detail',
+                kwargs={'order_id': demo_order.order_id},
+            )
     return {
         'enabled': bool(shop),
         'version': 2,
@@ -77,6 +88,7 @@ def build_experience_boot_payload() -> dict[str, Any]:
         'cleanupUrl': reverse('experience_cleanup'),
         'writablePages': ['preview_products', 'preview_dine'],
         'welcomeSeenKey': WELCOME_SEEN_KEY,
+        'skipHintSeenKey': SKIP_HINT_SEEN_KEY,
         'sessionTrackKey': SESSION_TRACK_KEY,
         'sessionMajorKey': SESSION_MAJOR_KEY,
         'sessionMicroKey': SESSION_MICRO_KEY,
@@ -84,9 +96,10 @@ def build_experience_boot_payload() -> dict[str, Any]:
         'urlTrack': URL_TRACK,
         'urlMajor': URL_MAJOR,
         'urlMicro': URL_MICRO,
-        'pages': dict(TOUR_PAGES),
+        'pages': pages,
         'tracks': {'seller': seller_majors},
         'homeUrl': reverse('experience_home'),
+        'exitHomeUrl': reverse('home'),
         'autoAdvanceSeconds': AUTO_ADVANCE_SECONDS,
         'autoAdvanceSecondsTypeDemo': AUTO_ADVANCE_SECONDS_TYPE_DEMO,
     }

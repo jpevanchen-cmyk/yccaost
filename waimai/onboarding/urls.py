@@ -41,5 +41,30 @@ urlpatterns = [
         views.experience_preview_delivery,
         name='experience_preview_delivery',
     ),
+    path(
+        'preview/seller/payment/',
+        views.experience_preview_payment,
+        name='experience_preview_payment',
+    ),
+    path(
+        'preview/seller/orders/',
+        views.experience_preview_orders,
+        name='experience_preview_orders',
+    ),
+    path(
+        'preview/seller/orders/<uuid:order_id>/',
+        views.experience_preview_order_detail,
+        name='experience_preview_order_detail',
+    ),
+    path(
+        'preview/seller/homepage/',
+        views.experience_preview_homepage,
+        name='experience_preview_homepage',
+    ),
+    path(
+        'preview/seller/homepage-showcase/',
+        views.experience_preview_homepage_showcase,
+        name='experience_preview_homepage_showcase',
+    ),
     path('cleanup/', views.experience_cleanup, name='experience_cleanup'),
 ]

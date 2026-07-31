@@ -16,6 +16,12 @@ TOUR_PAGES: dict[str, str] = {
     'preview_dine': '/experience/preview/seller/dine/',
     'preview_table_stickers': '/experience/preview/seller/table-stickers/',
     'preview_delivery': '/experience/preview/seller/delivery/',
+    'preview_payment': '/experience/preview/seller/payment/',
+    'preview_orders': '/experience/preview/seller/orders/',
+    # 占位路径；boot 会按官方店最新订单写入 pages['preview_order_detail']
+    'preview_order_detail': '/experience/preview/seller/orders/demo/',
+    'preview_homepage': '/experience/preview/seller/homepage/',
+    'preview_homepage_showcase': '/experience/preview/seller/homepage-showcase/',
 }
 
 

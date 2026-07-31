@@ -14,7 +14,7 @@ from waimai.dispatch_helpers import (
     try_dispatch_pending_for_rider,
 )
 from waimai.kitchen_helpers import kitchen_order_can_start, query_kitchen_board_orders
-from waimai.product_helpers import build_dish_tier_options, get_tier_description
+from waimai.product_helpers import build_dish_shop_compact, build_dish_tier_options, get_tier_description
 from waimai.models import BuyOrder, DeliveryOrder, Dish, ShopProfile, User
 from waimai.operating_helpers import get_operating_settings
 from waimai.order_desk_helpers import (
@@ -546,6 +546,25 @@ class ProductTierDescriptionTests(WorkflowImprovementBase):
         self.assertEqual(by_tier['general']['description'], '普通\n第二行')
         self.assertEqual(by_tier['member']['description'], '会员专享说明')
         self.assertEqual(by_tier['special']['description'], '今日特价说明')
+
+    def test_shop_compact_picks_cheapest_and_first_image(self):
+        dish = Dish.objects.create(
+            seller_id=self.seller.username,
+            name='简化展示菜',
+            price=Decimal('20.00'),
+            description='第一行简介\n第二行不应出现',
+            special_price_enabled=True,
+            special_price_mode='fixed',
+            special_price_fixed=Decimal('9.90'),
+        )
+        options = build_dish_tier_options(dish, None, self.seller.username, {})
+        gallery = [{'url': '/media/a.jpg', 'sort_index': 1, 'label': 'A-1'}]
+        compact = build_dish_shop_compact(dish, options, gallery)
+        self.assertEqual(compact['name'], '简化展示菜')
+        self.assertEqual(compact['thumb_url'], '/media/a.jpg')
+        self.assertEqual(compact['cheapest_price'], Decimal('9.90'))
+        self.assertEqual(compact['cheapest_tier'], 'special')
+        self.assertEqual(compact['summary'], '第一行简介 第二行不应出现')
 
 
 class GenericProductCatalogTests(WorkflowImprovementBase):

@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}野草系统{% endblock %}</title>
     {% if yc_page_view_id %}<meta name="yc-page-view-id" content="{{ yc_page_view_id }}">{% endif %}
-    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=49">
+    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=51">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -108,7 +108,7 @@
     {% block pre_mobile_js %}{% endblock %}
     {% include 'waimai/_flash_modal.html' %}
     {% include 'waimai/onboarding/_graduate_modal.html' %}
-    <script src="{% static 'waimai/mobile.js' %}?v=10"></script>
+    <script src="{% static 'waimai/mobile.js' %}?v=11"></script>
     {% if session_guard_enabled %}
     <script>
     window.YC_SESSION_GUARD = {
@@ -129,11 +129,11 @@
     <script src="{% static 'waimai/onboarding.js' %}?v=9"></script>
     {% endif %}
     {% if experience_boot_json %}
-    <link rel="stylesheet" href="{% static 'waimai/onboarding/experience.css' %}?v=2">
+    <link rel="stylesheet" href="{% static 'waimai/onboarding/experience.css' %}?v=5">
     {% include 'waimai/onboarding/experience/_modals.html' %}
     <script type="application/json" id="yc-experience-boot">{{ experience_boot_json|safe }}</script>
     <script src="{% static 'waimai/onboarding/experience_modal.js' %}?v=1"></script>
-    <script src="{% static 'waimai/onboarding/experience.js' %}?v=8"></script>
+    <script src="{% static 'waimai/onboarding/experience.js' %}?v=22"></script>
     {% endif %}
     {% if yc_track_visitor %}
     <script src="{% static 'owner_toolkit/visitor_beacon.js' %}?v=1"></script>

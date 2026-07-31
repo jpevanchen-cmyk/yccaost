@@ -23,7 +23,7 @@
         </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 
-{% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-settings-form' fold_title='⚙️ 工作台协作设置' %}
+{% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-settings-form' fold_title='⚙️ 工作台协作设置' fold_head_tour='workbench-settings-head' %}
         <div data-yc-tour="fold-workbench-settings">
         <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard enctype="multipart/form-data" data-yc-tour="workbench-settings-hint">
             {% csrf_token %}
@@ -41,7 +41,7 @@
         </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
 
-{% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-attendance' fold_title='🗂 员工状态与考勤' %}
+{% include 'waimai/seller/_panel_fold.html' with fold_id='workbench-attendance' fold_title='🗂 员工状态与考勤' fold_head_tour='workbench-attendance-head' %}
         <div data-yc-tour="fold-workbench-attendance">
         <p class="card-meta" data-yc-tour="workbench-attendance-body">这里可看当前状态、今日上班情况与最近考勤流水；老板也可在此兜底补改。<strong>默认只显示今天的流水</strong>，可筛选或打开全部。</p>
         <form method="GET" class="seller-panel-form auth-form" style="margin:10px 0 14px;" data-yc-tour="attendance-filter">

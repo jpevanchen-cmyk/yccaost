@@ -357,6 +357,30 @@ def build_dish_tier_options(
     return options
 
 
+def build_dish_shop_compact(dish: Dish, tier_options: list[dict], image_gallery: list[dict]) -> dict:
+    """点菜页简化行：首图缩略、最低价、一行简介（展开后见完整档位与加购）。"""
+    thumb_url = image_gallery[0]['url'] if image_gallery else ''
+    cheapest = None
+    for opt in tier_options:
+        price = opt.get('price')
+        if price is None:
+            continue
+        if cheapest is None or price < cheapest['price']:
+            cheapest = opt
+    summary = (dish.description or '').strip()
+    summary = ' '.join(summary.split())
+    dish_key = dish.dish_id.hex[:8]
+    return {
+        'name': dish.name,
+        'thumb_url': thumb_url,
+        'cheapest_price': cheapest['price'] if cheapest else None,
+        'cheapest_tier': cheapest['tier'] if cheapest else '',
+        'cheapest_tier_label': cheapest['label'] if cheapest else '',
+        'summary': summary,
+        'group_anchor': f'dish-group-{dish_key}',
+    }
+
+
 def parse_decimal_field(val, default=None):
     """表单小数解析"""
     val = (val or '').strip()

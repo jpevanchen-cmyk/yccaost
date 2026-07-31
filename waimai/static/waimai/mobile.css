@@ -2072,13 +2072,132 @@ body.seller-page .content {
 }
 
 /* 客人点菜：每种价格单独一行，整商品一个外框 */
+.dish-list {
+    position: relative;
+}
+
+.dish-expand-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(0, 0, 0, 0.12);
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+.dish-expand-backdrop[hidden] {
+    display: none !important;
+}
+
 .dish-product-group {
+    position: relative;
+    z-index: 1;
     margin-bottom: 14px;
     background: var(--yc-card);
     border: 1px solid var(--yc-border);
     border-radius: var(--yc-radius);
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.dish-product-group.is-expanded {
+    z-index: 100;
+}
+
+.dish-compact-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    margin: 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+}
+
+.dish-compact-row:focus-visible {
+    outline: 2px solid var(--yc-orange, #e65100);
+    outline-offset: -2px;
+}
+
+.dish-compact-thumb {
+    flex: 0 0 auto;
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid var(--yc-border);
+    background: #f5f5f5;
+}
+
+.dish-compact-thumb--empty {
+    display: block;
+    background: linear-gradient(135deg, #f0f0f0, #e8e8e8);
+}
+
+.dish-compact-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dish-compact-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.dish-compact-name {
+    flex: 1 1 auto;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.3;
+    min-width: 0;
+}
+
+.dish-compact-price {
+    flex: 0 0 auto;
+    color: var(--yc-orange);
+    font-weight: 700;
+    font-size: 16px;
+    white-space: nowrap;
+}
+
+.dish-compact-tier {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--yc-muted, #666);
+    text-align: right;
+}
+
+.dish-compact-summary {
+    display: block;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--yc-muted, #666);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dish-expanded-panel[hidden] {
+    display: none !important;
+}
+
+.dish-expanded-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 12px 0;
+    border-top: 1px solid var(--yc-border);
 }
 
 .dish-product-group .dish-offer-sub {
@@ -2384,6 +2503,90 @@ body.dish-lightbox-open {
     flex-wrap: wrap;
     gap: 6px;
     margin: 8px 0;
+}
+
+/* 订单列表 · 紧凑两行卡片 */
+.seller-order-row-compact {
+    padding: 10px 12px;
+}
+
+.seller-order-compact-grid {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.seller-order-compact-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.seller-order-compact-line1 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+}
+
+.seller-order-compact-id {
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1.35;
+    word-break: break-all;
+}
+
+.seller-order-badges-inline {
+    margin: 0;
+    gap: 4px;
+}
+
+.seller-order-compact-line2 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    margin-top: 6px;
+    color: var(--yc-muted);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.seller-order-compact-time {
+    white-space: nowrap;
+}
+
+.seller-order-compact-buyer {
+    min-width: 0;
+}
+
+.seller-order-compact-side {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    min-width: 88px;
+}
+
+.seller-order-detail-link {
+    font-size: 13px;
+    line-height: 1.35;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.seller-order-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: center;
+    margin: 10px 0 14px;
+}
+
+.seller-order-pagination-label {
+    font-size: 13px;
+    color: var(--yc-muted);
 }
 
 .seller-inline-form {

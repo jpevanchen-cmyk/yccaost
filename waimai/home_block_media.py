@@ -1,4 +1,4 @@
-# 主页积木配图：本机/服务器上传 + 公开链接；每账号最多 100 张，单张 5MB
+# 主页积木配图：本机/服务器上传；每账号最多 100 张，单张 5MB
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def block_display_link_label(block) -> str:
 
 
 def block_display_image_src(block) -> str:
-    """前台用：优先本站上传图，否则公开链接。"""
+    """前台用：仅本站上传图。"""
     img = getattr(block, 'image', None)
     if img:
         try:
@@ -44,7 +44,7 @@ def block_display_image_src(block) -> str:
                     return url
         except (ValueError, AttributeError):
             pass
-    return (getattr(block, 'image_url', None) or '').strip()
+    return ''
 
 
 def apply_home_block_image_from_post(user, block, request, *, scope: str) -> str | None:
@@ -87,8 +87,8 @@ def apply_home_block_image_from_post(user, block, request, *, scope: str) -> str
         block.image.delete(save=False)
 
     block.image = uploaded
-    # 有本站图时不强制清空公开链接；前台优先用上传图
-    block.save(update_fields=['image', 'updated_at'])
+    block.image_url = ''
+    block.save(update_fields=['image', 'image_url', 'updated_at'])
 
     if existing is None:
         UserUploadedPhoto.objects.create(
@@ -105,7 +105,8 @@ def _clear_block_image(user, block, scope: str) -> None:
     if block.image:
         block.image.delete(save=False)
         block.image = None
-        block.save(update_fields=['image', 'updated_at'])
+    block.image_url = ''
+    block.save(update_fields=['image', 'image_url', 'updated_at'])
     UserUploadedPhoto.objects.filter(
         owner=user, scope=scope, block_id=block.block_id,
     ).delete()

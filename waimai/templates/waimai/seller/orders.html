@@ -92,68 +92,52 @@
                 </select>
             </label>
         </div>
-        <p class="card-meta seller-order-search-hint" data-yc-tour="orders-search-hint">默认显示近 1 个月内的订单，最多 100 条。关键词会匹配买家备注。</p>
+        <p class="card-meta seller-order-search-hint" data-yc-tour="orders-search-hint">默认显示近 1 个月内的订单；列表分页展示，每页 10 / 15 / 20 条可选。</p>
     </form>
 
-    {% if orders %}
-        <p class="card-meta">共 {{ orders|length }} 条{% if orders|length >= 100 %}（已达上限，请缩小范围）{% endif %}</p>
+    {% if orders_page.paginator.count %}
+        {% include 'waimai/seller/_order_list_pagination.html' %}
         {% for order in orders %}
-        <div class="seller-order-row" id="order-{{ order.order_id.hex|slice:":8" }}" data-yc-tour="{% if forloop.first %}orders-sample-row{% endif %}">
-            <div class="seller-order-head">
-                <div>
-                    <strong>订单号：{{ order.get_display_order_no }}</strong>
-                    <div class="card-meta" style="margin-top:4px;">{{ order.created_at|beijing:"m-d H:i" }}</div>
+        <div class="seller-order-row seller-order-row-compact" id="order-{{ order.order_id.hex|slice:":8" }}" data-yc-tour="{% if forloop.first %}orders-sample-row{% endif %}">
+            <div class="seller-order-compact-grid">
+                <div class="seller-order-compact-main">
+                    <div class="seller-order-compact-line1">
+                        <span class="seller-order-compact-id">订单号：{{ order.get_display_order_no }}</span>
+                        <div class="seller-order-badges seller-order-badges-inline">
+                            <span class="badge badge-order-prep">{{ order.order_shell.fulfillment_label }}</span>
+                            {% if order.payment_status == 'paid' %}
+                            <span class="badge badge-pay-paid">{{ order.get_payment_status_display }}</span>
+                            {% elif order.payment_status == 'uncollected' %}
+                            <span class="badge badge-pay-uncollected">{{ order.get_payment_status_display }}</span>
+                            {% elif order.payment_status == 'pending_payment' %}
+                            <span class="badge badge-pay-pending">{{ order.get_payment_status_display }}</span>
+                            {% else %}
+                            <span class="badge badge-default">{{ order.get_payment_status_display }}</span>
+                            {% endif %}
+                            {% if order.cash_shortfall_status %}
+                            <span class="badge badge-pay-uncollected">{{ order.get_cash_shortfall_status_display }}</span>
+                            {% endif %}
+                            <span class="badge badge-order-prep">{{ order.get_order_status_display }}</span>
+                        </div>
+                    </div>
+                    <div class="seller-order-compact-line2" data-yc-tour="{% if forloop.first %}orders-sample-meta{% endif %}">
+                        <span class="seller-order-compact-time">{{ order.created_at|beijing:"m-d H:i" }}</span>
+                        <span class="seller-order-compact-buyer">买家：<strong>{{ order.get_buyer_display_name }}</strong>{% if order.is_guest_order %} <span class="card-meta">（游客）</span>{% endif %}</span>
+                    </div>
                 </div>
-                <div class="seller-order-amount">¥{{ order.total_amount }}</div>
-            </div>
-            <div class="seller-order-badges">
-                <span class="badge badge-order-prep">{{ order.order_shell.fulfillment_label }}</span>
-                {% if order.payment_status == 'paid' %}
-                <span class="badge badge-pay-paid">{{ order.get_payment_status_display }}</span>
-                {% elif order.payment_status == 'uncollected' %}
-                <span class="badge badge-pay-uncollected">{{ order.get_payment_status_display }}</span>
-                {% elif order.payment_status == 'pending_payment' %}
-                <span class="badge badge-pay-pending">{{ order.get_payment_status_display }}</span>
-                {% else %}
-                <span class="badge badge-default">{{ order.get_payment_status_display }}</span>
-                {% endif %}
-                {% if order.cash_shortfall_status %}
-                <span class="badge badge-pay-uncollected">{{ order.get_cash_shortfall_status_display }}</span>
-                {% endif %}
-                <span class="badge badge-order-prep">{{ order.get_order_status_display }}</span>
-            </div>
-            <div class="seller-order-meta" data-yc-tour="{% if forloop.first %}orders-sample-meta{% endif %}">
-                买家：<strong>{{ order.get_buyer_display_name }}</strong>{% if order.is_guest_order %} <span class="card-meta">（游客）</span>{% endif %}<br>
-                {% if order.order_shell.show_table_label %}{{ order.order_shell.table_label_caption }}：<strong>{{ order.order_shell.table_label }}</strong>{% if order.order_kind != 'normal' %} · {{ order.get_order_kind_display }}{% endif %}<br>{% endif %}
-                {{ order.order_shell.list_place_prefix }}：{{ order.delivery_address }}<br>
-                {% if order.order_shell.show_distance %}距离：{{ order.distance_km }} km<br>{% endif %}
-                {% if order.payment_method %}支付：{{ order.get_payment_method_display }}{% endif %}
-                {% if order.is_delivery_cod and order.cash_collected_amount %}
-                <br>现金对账：应收 ¥{{ order.total_amount }} · 实收 ¥{{ order.cash_collected_amount }}
-                    {% if order.cash_shortfall_amount %} · <strong style="color:#c62828;">少收 ¥{{ order.cash_shortfall_amount }}</strong>{% endif %}
-                    {% if order.cash_shortfall_reason %}<br>少收原因：{{ order.cash_shortfall_reason }}{% endif %}
-                    {% if order.cash_exception_note %}<br>异常/处理备注：{{ order.cash_exception_note }}{% endif %}
-                    <br>入金：{% if order.cash_remitted_at %}已确认{% else %}未确认{% endif %}
-                {% endif %}
-            </div>
-            <p style="margin:8px 0 0;" data-yc-tour="{% if forloop.first %}orders-detail-link{% endif %}">
-                <a href="{% if onboarding_preview %}{% url 'onboarding_seller_order_detail' order.order_id %}{% else %}{% url 'order_detail' order.order_id %}{% endif %}">
-                    查看订单详情
-                    {% if order.unread_msg_count %}
-                    <span class="msg-unread-dot" title="有未读沟通">{{ order.unread_msg_count }}</span>
-                    {% endif %}
-                </a>
-            </p>
-            <div class="seller-order-actions">
-                {% if order.estimated_ready_at and order.order_status != 'completed' and order.order_status != 'cancelled' %}
-                <span class="seller-dispatch-info">{{ order.order_shell.estimated_ready_label }}</span>
-                {% endif %}
-                {% if order.fulfillment_type == 'delivery' and order.delivery_order %}
-                <span class="seller-dispatch-info">配送骑手：{{ order.delivery_order.rider_id }}</span>
-                {% endif %}
+                <div class="seller-order-compact-side">
+                    <div class="seller-order-amount">¥{{ order.total_amount }}</div>
+                    <a class="seller-order-detail-link" href="{% if experience_preview %}{% url 'experience_preview_order_detail' order.order_id %}{% elif onboarding_preview %}{% url 'onboarding_seller_order_detail' order.order_id %}{% else %}{% url 'order_detail' order.order_id %}{% endif %}" data-yc-tour="{% if forloop.first %}orders-detail-link{% endif %}">
+                        查看订单详情
+                        {% if order.unread_msg_count %}
+                        <span class="msg-unread-dot" title="有未读沟通">{{ order.unread_msg_count }}</span>
+                        {% endif %}
+                    </a>
+                </div>
             </div>
         </div>
         {% endfor %}
+        {% include 'waimai/seller/_order_list_pagination.html' %}
     {% else %}
         <p class="card-meta">没有符合条件的订单，请调整搜索或时间范围。</p>
     {% endif %}

@@ -106,6 +106,9 @@ def seller_tour_majors(
         majors.append(_seller_dine())
     if fulfillment_enabled:
         majors.append(_seller_delivery())
+    majors.append(_seller_payment(fulfillment_enabled=fulfillment_enabled))
+    majors.append(_seller_orders())
+    majors.append(_seller_homepage())
     return majors
 
 
@@ -119,7 +122,7 @@ def _seller_operating(dine_hint: str) -> dict[str, Any]:
             _operating_ms('none', selector='[data-yc-tour="operating-intro"]', title='营业状态管什么',
                 body='控制是否接单与全天营业时间；与细分通道分开。',
                 tips=(dine_hint,)),
-            _operating_ms('form', selector='[data-yc-tour="fold-operating-form"]', title='展开「营业时间和状态设定」',
+            _operating_ms('form', selector='[data-yc-tour="operating-form-head"]', title='展开「营业时间和状态设定」',
                 body='点标题可展开或收起；本步起保持展开以便观摩各字段。'),
             _operating_ms('form', selector='[data-yc-tour="operating-open-time"]', title='开始营业时间',
                 body='新订单须落在设定时间段内。', demo_type='type', demo_text='09:00'),
@@ -157,7 +160,7 @@ def _seller_menu_catalog(
         ),
         'cleanupOnComplete': True,
         'microSteps': [
-            _products_ms('sales', selector='[data-yc-tour="fold-sales-ranking"]', title=f'卡片 1 · {sales_title}',
+            _products_ms('sales', selector='[data-yc-tour="sales-ranking-head"]', title=f'卡片 1 · {sales_title}',
                 body='看哪些卖得好；只统计已完成订单。'),
             _products_ms('sales', selector='[data-yc-tour="sales-rank-tabs"]', title='日 / 周 / 月排行',
                 body='点标签切换；演示用固定假数据。'),
@@ -167,7 +170,7 @@ def _seller_menu_catalog(
                 demo_click='.sales-rank-tab[data-panel="sales-week"]'),
             _products_ms('sales', selector='[data-yc-tour="sales-rank-month"]', title='月排行',
                 demo_click='.sales-rank-tab[data-panel="sales-month"]'),
-            _products_ms('menu', selector='[data-yc-tour="fold-menu-panel"]', title=f'卡片 2 · {catalog_title}',
+            _products_ms('menu', selector='[data-yc-tour="menu-panel-head"]', title=f'卡片 2 · {catalog_title}',
                 body=f'客人店铺页以「使用中」的{catalog}为准。'),
             _products_ms('menu', selector='[data-yc-tour="menu-intro"]', title=f'{catalog}做什么',
                 tips=('切换前须无未结束订单。',)),
@@ -176,7 +179,7 @@ def _seller_menu_catalog(
                 body=f'本演示预设输入「{DEMO_MENU_PROFILE_NAME}」。'),
             _products_ms('menu', selector='[data-yc-tour="menu-copy-select"]', title='展开「复制自」',
                 body='可选「全新」或复制已有清单；下面两步分别说明。'),
-            _products_ms('menu', selector='[data-yc-tour="menu-copy-new-option"]', title='「全新（纳入全部商品）」',
+            _products_ms('menu', selector='[data-yc-tour="menu-copy-select"]', title='「全新（纳入全部商品）」',
                 body=f'把所有已添加的{item}全部纳入新清单，展示设定从零配。'),
             _products_ms('menu', selector='[data-yc-tour="menu-copy-select"]', title='复制「通用清单」',
                 body=(
@@ -376,7 +379,7 @@ def _seller_workbench_manage(*, fulfillment_enabled: bool) -> dict[str, Any]:
         _wb_ms('qr', selector='[data-yc-tour="workbench-qr-link"]', title='点开链接看一看',
             body='可点开链接，在新标签页预览工作台登录页长什么样；本步只观摩，不必真登录。',
             demo_click='[data-yc-tour="workbench-qr-link"]'),
-        _wb_ms('settings', selector='[data-yc-tour="fold-workbench-settings"]', title='协作设置',
+        _wb_ms('settings', selector='[data-yc-tour="workbench-settings-head"]', title='协作设置',
             body='配送交接、新单提醒、考勤保留时长等，都在这里配置。'),
     ]
     if fulfillment_enabled:
@@ -398,7 +401,7 @@ def _seller_workbench_manage(*, fulfillment_enabled: bool) -> dict[str, Any]:
             body='可上传自己的提示音；留空则用系统默认提示音。'),
         _wb_ms('settings', selector='[data-yc-tour="workbench-settings-save"]', title='保存协作设置',
             body='改完后须点保存；体验模式不会真保存。'),
-        _wb_ms('attendance', selector='[data-yc-tour="fold-workbench-attendance"]', title='员工状态与考勤',
+        _wb_ms('attendance', selector='[data-yc-tour="workbench-attendance-head"]', title='员工状态与考勤',
             body=(
                 '可看当前状态、今日上班情况与最近考勤流水；老板也可在此兜底补改。'
                 '考勤流水默认只显示今天；需要查更早记录可筛选，或正式店点「打开全部考勤」。'
@@ -406,13 +409,15 @@ def _seller_workbench_manage(*, fulfillment_enabled: bool) -> dict[str, Any]:
         _wb_ms('attendance', selector='[data-yc-tour="attendance-filter"]', title='筛选考勤',
             body='可按开始/结束日期、职务、名字筛选；演示默认已填今天。'),
         _wb_ms('attendance', selector='[data-yc-tour="attendance-status-table"]', title='员工状态表',
-            body='一行一名员工：当前上班/休息/下班、今日首次上班、今日最后状态；右侧可老板补改。',
-            tips=('演示员工下方流水共 5 条，均为今日示意。',)),
+            body='一行一名员工：当前上班/休息/下班、今日首次上班、今日最后状态；右侧可老板补改。'),
         _wb_ms('attendance', selector='[data-yc-tour="attendance-export"]', title='导出考勤 CSV',
             body='按当前筛选条件导出表格，方便存档或对账。'),
         _wb_ms('attendance', selector='[data-yc-tour="attendance-manager-form"]', title='老板补改',
             body='上班/下班须填一个时间点；休息须填开始与结束两个时间；体验不真提交。',
             warn='容易错：补改休息只填一个时间不够，须填开始+结束。'),
+        _wb_ms('attendance', selector='[data-yc-tour="attendance-demo-log-table"]', title='演示员工考勤流水',
+            body='下方表格为「演示员工」今日 5 条示意流水，便于对照上方状态表理解。',
+            tips=('均为演示示意数据，只供观摩。',)),
         _wb_ms('attendance', selector='[data-yc-tour="attendance-log-stream"]', title='最近考勤流水',
             body=(
                 '按时间倒序显示；默认只看今天。'
@@ -420,7 +425,7 @@ def _seller_workbench_manage(*, fulfillment_enabled: bool) -> dict[str, Any]:
             )),
         _wb_ms('attendance', selector='[data-yc-tour="attendance-log-pagination"]', title='流水分页',
             body='可切换每页 10 / 15 / 20 条。'),
-        _wb_ms('mgmt', selector='[data-yc-tour="fold-mgmt-staff"]', title='新建管理职务',
+        _wb_ms('mgmt', selector='[data-yc-tour="mgmt-staff-head"]', title='新建管理职务',
             body=(
                 '「店长、经理、大堂经理」都属于管理职务；职务名称由您填写，'
                 '能做什么以勾选权限为准，不再由“店长”二字自动决定。'
@@ -437,7 +442,7 @@ def _seller_workbench_manage(*, fulfillment_enabled: bool) -> dict[str, Any]:
             tips=('例如：只勾「仅看订单」= 只能看不能改。',)),
         _wb_ms('mgmt', selector='[data-yc-tour="mgmt-staff-submit"]', title='创建管理职务',
             body='体验不真提交；正式店点绿色按钮保存。'),
-        _wb_ms('emp', selector='[data-yc-tour="fold-emp-staff"]', title='新建普通员工',
+        _wb_ms('emp', selector='[data-yc-tour="emp-staff-head"]', title='新建普通员工',
             body='普通员工职务名与权限可自行填写；插件可提供常用模板。'),
         _wb_ms('emp', selector='[data-yc-tour="emp-staff-preset"]', title='预置模板（可选）',
             body='饮食/履约插件开启后，会出现服务员、后厨、配送员等模板；也可不套模板自己填。',
@@ -454,12 +459,13 @@ def _seller_workbench_manage(*, fulfillment_enabled: bool) -> dict[str, Any]:
             body='通常比管理职务少；例如一般不给「取消订单」。'),
         _wb_ms('emp', selector='[data-yc-tour="emp-staff-submit"]', title='创建普通员工',
             body='体验不真提交。'),
-        _wb_ms('list', selector='[data-yc-tour="fold-staff-list"]', title='子账号列表',
+        _wb_ms('list', selector='[data-yc-tour="staff-list-head"]', title='子账号列表',
             body='这里统一维护账号类别、职务名称与权限；停用插件不会删账号。'),
         _wb_ms('list', selector='[data-yc-tour="staff-account-row"]', title='展开已有账号',
             body='点一行可展开，修改职务名与权限；演示已展开「演示经理」。'),
         _wb_ms('list', selector='[data-yc-tour="staff-edit-permissions"]', title='修改权限',
-            body='随时可增删勾选；员工下次登录即按新权限显示 Tab。'),
+            body='勾选「允许做什么」决定员工能看哪些 Tab；员工下次登录即按新权限显示。',
+            tips=('本步只框权限勾选区，不含保存按钮。',)),
         _wb_ms('list', selector='[data-yc-tour="staff-edit-save"]', title='保存修改',
             body='体验不真提交。'),
         _wb_ms('list', selector='[data-yc-tour="staff-toggle-active"]', title='停用 / 启用账号',
@@ -513,7 +519,7 @@ def _seller_dine() -> dict[str, Any]:
         'microSteps': [
             _dine_ms('none', selector='[data-yc-tour="nav-dine"]', title='进入「堂食营业」',
                 body='点顶部菜单进入堂食设置页；饮食插件开启后才有此入口。'),
-            _dine_ms('rules', selector='[data-yc-tour="fold-dine-rules"]', title='展开「桌码主单硬规则」',
+            _dine_ms('rules', selector='[data-yc-tour="dine-rules-head"]', title='展开「桌码主单硬规则」',
                 body='做堂食营业必看，切勿偷懒！先展开这张卡片阅读规则。'),
             _dine_ms('rules', selector='[data-yc-tour="dine-rules-content"]', title='桌码主单硬规则',
                 body='做堂食营业必看，切勿偷懒！每桌一份主单、可多次加点；须营业中且堂食通道开启才能开单。',
@@ -563,7 +569,7 @@ def _seller_dine() -> dict[str, Any]:
                 tips=('同一种订单类型的时间段不能重叠。',)),
             _dine_ms('settings', selector='[data-yc-tour="dine-save-btn"]', title='保存堂食设置',
                 body='改完后须点保存；体验模式不会真保存。'),
-            _dine_ms('tables', selector='[data-yc-tour="fold-table-list"]', title='展开「实体桌台与桌码」',
+            _dine_ms('tables', selector='[data-yc-tour="table-list-head"]', title='展开「实体桌台与桌码」',
                 body='在这里批量建桌号、停用/启用、删除，以及导出桌贴。'),
             _dine_ms('tables', selector='[data-yc-tour="table-min-max"]', title='最小桌号 / 最大桌号',
                 demo_type='type_multi',
@@ -603,7 +609,7 @@ def _seller_dine() -> dict[str, Any]:
             _dine_sticker_ms(selector='[data-yc-tour="table-sticker-grid"]', title='桌贴预览',
                 body='打印出来剪下来，贴在桌子上，就可以让客人扫码点单了！',
                 tips=('每页正式 PDF 可排 12 张；此处为演示所选 5 张。',)),
-            _dine_ms('virtual', selector='[data-yc-tour="fold-virtual-list"]', title='展开「虚拟桌码池」',
+            _dine_ms('virtual', selector='[data-yc-tour="virtual-list-head"]', title='展开「虚拟桌码池」',
                 body='除了虚拟桌码编号和实体桌码不一样，其余操作方法完全相同。',
                 path='/experience/preview/seller/dine/'),
             _dine_ms('virtual', selector='[data-yc-tour="virtual-list-intro"]', title='虚拟桌码池说明',
@@ -627,7 +633,7 @@ def _seller_delivery() -> dict[str, Any]:
         'id': 'seller-10',
         'title': '配送费规则',
         'graduateTitle': '配送费规则已观摩',
-        'graduateSummary': '您已了解配送费各字段含义；工作台实操、支付设置等后续大步待上线。',
+        'graduateSummary': '您已了解配送费各字段含义；下一步观摩支付设置。',
         'microSteps': [
             _delivery_ms(selector='[data-yc-tour="nav-delivery"]', title='进入「配送费规则」',
                 body='点顶部菜单进入；须启用履约配送插件才有此入口。'),
@@ -657,8 +663,262 @@ def _seller_delivery() -> dict[str, Any]:
             _delivery_ms(selector='[data-yc-tour="delivery-workbench-hint"]', title='与工作台关系',
                 body='配送员取货送达在「店铺工作台 · 配送员」；现金入金在「支付设置」。'),
             _delivery_ms(selector='[data-yc-tour="delivery-intro"]', title='配送费规则体验结束',
-                body='本大步已走完；工作台实操等后续大步待上线。'),
+                body='本大步已走完；下一步观摩支付设置。'),
         ],
+    }
+
+
+def _payment_ms(**kwargs) -> dict[str, Any]:
+    """支付设置演示小步（只观摩，无折叠卡片）"""
+    kwargs.pop('open_fold', None)
+    return _ms('preview_payment', fold_layout=[], **kwargs)
+
+
+def _seller_payment(*, fulfillment_enabled: bool) -> dict[str, Any]:
+    """第 11 大步：支付设置（只观摩；不依赖插件，配送员入金小步依赖履约插件）"""
+    steps: list[dict[str, Any]] = [
+        _payment_ms(selector='[data-yc-tour="nav-payment"]', title='进入「支付设置」',
+            body='点顶部菜单进入本页。'),
+        _payment_ms(selector='[data-yc-tour="payment-settings-box"]', title='支付设置管什么',
+            body='各支付方式可单独开关，互不影响。'),
+        _payment_ms(selector='[data-yc-tour="payment-intro"]', title='怎么用本页',
+            body='先决定开哪些支付方式，再按需填写微信商户资料。'),
+        _payment_ms(selector='[data-yc-tour="payment-experience-hint"]', title='体验店说明',
+            body='体验店不能开真微信；请用「演示支付」走完整流程。',
+            warn='若需要测试真实支付，请到野草官方小店购买0.01元测试专用商品。'),
+        _payment_ms(selector='[data-yc-tour="payment-demo"]', title='开启模拟支付',
+            body='演示用，不扣真钱；正式营业请关闭。',
+            tips=('可与真微信同时开着做对比测试；上线前务必关掉。',)),
+        _payment_ms(selector='[data-yc-tour="payment-wechat"]', title='开启微信支付',
+            body='顾客扫码真付款；须填写下方微信商户信息。',
+            warn='体验店无法开通真微信。'),
+        _payment_ms(selector='[data-yc-tour="payment-cash"]', title='开启现金支付',
+            body='到店付、堂食等场景可用。'),
+    ]
+    if fulfillment_enabled:
+        steps.append(
+            _payment_ms(selector='[data-yc-tour="payment-cod"]', title='外卖现金货到付款',
+                body='外卖可选「送达时付现金」；关闭则外卖不显示现金。'),
+        )
+    steps.extend([
+        _payment_ms(selector='[data-yc-tour="payment-cashier"]', title='启用实体收银台',
+            body='开启后，工作台多一个「收银台」页，现场收当天待付单。'),
+        _payment_ms(selector='[data-yc-tour="payment-cashier-page-size"]', title='收银台每页条数',
+            body='只影响工作台收银台列表分页，与订单管理无关。'),
+        _payment_ms(selector='[data-yc-tour="payment-wechat-mch-id"]', title='微信商户号',
+            body='在微信商户平台申请后填写。'),
+        _payment_ms(selector='[data-yc-tour="payment-wechat-app-id"]', title='微信 AppID',
+            body='与商户号配套，用于对接微信支付。'),
+        _payment_ms(selector='[data-yc-tour="payment-wechat-api-key"]', title='微信 APIv2 密钥',
+            body='商户平台里设置，系统用来验签、查单。'),
+        _payment_ms(selector='[data-yc-tour="payment-public-site-url"]', title='店铺公网网址',
+            body='填好后才能用微信自动通知；没公网时可留空，靠轮询查单。'),
+        _payment_ms(selector='[data-yc-tour="payment-notify-url"]', title='微信异步通知地址',
+            body='填好公网网址后自动生成；复制到微信商户后台即可。'),
+        _payment_ms(selector='[data-yc-tour="payment-save"]', title='保存支付设置',
+            body='改完后须点保存；体验模式不会真保存。'),
+    ])
+    if fulfillment_enabled:
+        steps.append(
+            _payment_ms(selector='[data-yc-tour="rider-cash-box"]', title='配送员现金入金',
+                body='配送员在工作台申请交款；店主在这里核对后确认入金。'),
+        )
+    steps.append(
+        _payment_ms(selector='[data-yc-tour="payment-settings-box"]', title='支付设置体验结束',
+            body='本大步已走完；下一步观摩订单管理。'),
+    )
+    return {
+        'id': 'seller-11',
+        'title': '支付设置',
+        'graduateTitle': '支付设置已观摩',
+        'graduateSummary': '您已了解各支付方式开关与微信配置；下一步观摩订单管理。',
+        'microSteps': steps,
+    }
+
+
+# 第 12 大步 · 订单管理：折叠布局（老板邮件通知区）
+_ORDERS_FOLD_LAYOUTS: dict[str, list[str]] = {
+    'none': [],
+    'boss': ['boss-order-notify'],
+}
+
+
+def _orders_ms(fold_key: str = 'none', *, page: str = 'preview_orders', **kwargs) -> dict[str, Any]:
+    """订单管理演示小步（列表 + 详情页）"""
+    layout = _ORDERS_FOLD_LAYOUTS.get(fold_key)
+    if layout is None:
+        raise ValueError(f'未知订单页折叠布局: {fold_key}')
+    kwargs.pop('open_fold', None)
+    return _ms(page, fold_layout=layout, **kwargs)
+
+
+def _order_detail_ms(**kwargs) -> dict[str, Any]:
+    """订单详情演示小步"""
+    kwargs.pop('open_fold', None)
+    return _ms('preview_order_detail', fold_layout=[], **kwargs)
+
+
+def _seller_orders() -> dict[str, Any]:
+    """第 12 大步：订单管理（只观摩；列表 + 详情）"""
+    steps: list[dict[str, Any]] = [
+        _orders_ms('none', selector='[data-yc-tour="nav-orders"]', title='进入「订单管理」',
+            body='点顶部菜单进入本页。'),
+        _orders_ms('boss', selector='[data-yc-tour="fold-boss-notify"]', title='老板邮件通知',
+            body='店主不在工作台时的新单邮件；与 SMTP/值班邮件分开配置。'),
+        _orders_ms('boss', selector='[data-yc-tour="boss-notify-save"]', title='保存老板通知',
+            body='填写收件邮箱后点保存；体验模式不会真保存。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-intro"]', title='本页定位',
+            body='查单、核对历史订单；备货收款等现场操作请到店铺工作台。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-search-q"]', title='搜索',
+            demo_type='type', demo_text='YC-DEMO',
+            body='可搜订单号、买家名或备注关键词。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-filters"]', title='筛选条件',
+            body='可按订单状态、支付、履约方式、时间范围组合筛选。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-filter-status"]', title='订单状态',
+            body='例如：只看「已完成」或「待处理」。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-filter-pay"]', title='支付状态',
+            body='区分已支付、待支付、未收款等。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-filter-fulfillment"]', title='履约方式',
+            body='打包、堂食、配送等按店型显示。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-search-hint"]', title='默认范围',
+            body='默认近 1 个月；列表分页展示，每页 10 / 15 / 20 条可选；关键词也匹配买家备注。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-pagination"]', title='分页与每页条数',
+            body='订单多时可翻页；可切换每页显示条数。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-sample-row"]', title='订单卡片',
+            body='两行紧凑布局：订单号与状态标签、金额与详情入口。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-sample-meta"]', title='时间与买家',
+            body='第二行显示下单时间与买家名称；游客单会标注。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-detail-link"]', title='查看订单详情',
+            body='点进去可看完整明细与各分区；有未读留言会显示红点。',
+            tips=('也可点「下一步」进入详情页继续观摩。', '现场备货收款请去「店铺工作台」，本页以查单核对为主。')),
+        _order_detail_ms(selector='[data-yc-tour="preview-banner"]', title='订单详情（演示）',
+            body='本页只读观摩，不会真改订单或发留言。'),
+        _order_detail_ms(selector='[data-yc-tour="order-detail-hero"]', title='顶栏总览',
+            body='当前订单状态、订单号、履约方式与合计金额，一眼看清这单处于什么阶段。'),
+        _order_detail_ms(selector='[data-yc-tour="order-detail-contact"]', title='联系客人',
+            body='有问题先电话或微信沟通；这里可复制买家账号，桌号单会显示桌位信息。'),
+        _order_detail_ms(selector='[data-yc-tour="order-detail-buyer"]', title='买家与履约信息',
+            body='买家账号、打包/堂食/外卖方式、地址或桌号；外卖单还可看配送距离。'),
+        _order_detail_ms(selector='[data-yc-tour="order-detail-chat"]', title='订单沟通',
+            body='与买家的留言记录；重要协商请写在这里留痕。打开本页即视为已看过新留言。'),
+        _order_detail_ms(selector='[data-yc-tour="order-detail-items"]', title='订单内容',
+            body='每笔买了什么菜、数量多少、该行小计多少。'),
+        _order_detail_ms(selector='[data-yc-tour="order-detail-fee-total"]', title='费用合计',
+            body='商品小计、配送费（如有）与订单应付总额。'),
+        _order_detail_ms(selector='[data-yc-tour="order-detail-payment"]', title='支付情况',
+            body='支付状态、支付渠道与支付时间；未收款单会显示原因。'),
+        _order_detail_ms(selector='[data-yc-tour="order-detail-timeline"]', title='订单进度',
+            body='当前处理状态、配送骑手（如有）与各节点时间线，便于追溯这单怎么走过来的。'),
+        _orders_ms('none', selector='[data-yc-tour="orders-intro"]', title='订单管理体验结束',
+            body='本大步已走完；下一步观摩展示主页。'),
+    ]
+    return {
+        'id': 'seller-12',
+        'title': '订单管理',
+        'graduateTitle': '订单管理已观摩',
+        'graduateSummary': '您已了解订单查询、筛选与详情沟通；下一步观摩展示主页。',
+        'microSteps': steps,
+    }
+
+
+# 第 13 大步 · 展示主页：折叠布局（假 UI 积木 id）
+_HOMEPAGE_FOLD_LAYOUTS: dict[str, list[str]] = {
+    'none': [],
+    'fake_intro': ['demo-home-intro'],
+    'fake_add': ['demo-home-add-toolbar'],
+    'custom_demo': ['experience-home-custom-demo'],
+    'fake_settings': ['experience-home-fake-settings'],
+}
+
+
+def _homepage_ms(fold_key: str = 'none', *, page: str = 'preview_homepage', **kwargs) -> dict[str, Any]:
+    layout = _HOMEPAGE_FOLD_LAYOUTS.get(fold_key)
+    if layout is None:
+        raise ValueError(f'未知展示主页折叠布局: {fold_key}')
+    kwargs.pop('open_fold', None)
+    return _ms(page, fold_layout=layout, **kwargs)
+
+
+def _homepage_showcase_ms(**kwargs) -> dict[str, Any]:
+    kwargs.pop('open_fold', None)
+    return _ms('preview_homepage_showcase', fold_layout=[], **kwargs)
+
+
+_DEMO_HOME_BODY = (
+    '野草是开源免费的店铺管理系统，配合自部署服务器后，'
+    '可以实现线上经营和自配送外卖管理'
+)
+
+
+def _seller_homepage() -> dict[str, Any]:
+    """第 13 大步：展示主页（假 UI + 只读演示；卖家开店线收尾）"""
+    steps: list[dict[str, Any]] = [
+        _homepage_ms('none', selector='[data-yc-tour="nav-homepage"]', title='进入「展示主页」',
+            body='点顶部菜单进入本页；这里编辑客人看到的店铺门面。'),
+        _homepage_ms('none', selector='[data-yc-tour="demo-home-preset-labels"]', title='预设积木',
+            body='简介、公告、进入店铺是系统预设的三块；开店时自动创建，可按需改内容。'),
+        _homepage_ms('none', selector='[data-yc-tour="demo-home-add-row"]', title='添加自定义积木',
+            body='点「+ 自定义积木（添加）」可新增自由编辑的模块，例如活动介绍或「野草系统是什么」。'),
+        _homepage_ms('fake_intro', selector='[data-yc-tour="demo-home-fold-intro"]', title='简介积木',
+            body='简介、公告、进入店铺都可以在这里展开后编辑标题与正文等内容。'),
+        _homepage_ms('fake_add', selector='[data-yc-tour="fold-home-custom"]', title='添加自定义积木',
+            body='新加的块会出现在列表最下面；本演示接下来编辑一块示例积木。'),
+        _homepage_ms('fake_add', selector='[data-yc-tour="home-add-custom"]', title='添加按钮',
+            body='点这里新增一块；体验模式不会真写入数据库。'),
+        _homepage_ms('custom_demo', selector='[data-yc-tour="home-block-enabled"]', title='在主页显示',
+            body='勾选后客人在店铺主页能看到本块；不勾选则隐藏。'),
+        _homepage_ms('custom_demo', selector='[data-yc-tour="home-block-show-nav"]', title='进吸顶导航',
+            body='勾选后顶栏导航会出现本块的短名；方便客人一键跳到本模块。', demo_type='check', demo_checked=True),
+        _homepage_ms('custom_demo', selector='[data-yc-tour="home-block-sort"]', title='排序',
+            demo_type='type', demo_text='70',
+            body='这里输入的数字是排序用的，越小越靠前。'),
+        _homepage_ms('custom_demo', selector='[data-yc-tour="home-block-nav-label"]', title='导航短名',
+            demo_type='type', demo_text='关于野草',
+            body='勾选进吸顶导航后，在导航栏会显示关于野草的按钮，点击后直达本模块。'),
+        _homepage_ms('custom_demo', selector='[data-yc-tour="home-block-title"]', title='标题',
+            demo_type='type', demo_text='野草系统是什么',
+            body='本模块在主页展示时候的标题名称。'),
+        _homepage_ms('custom_demo', selector='[data-yc-tour="home-block-upload"]', title='上传配图',
+            body='可选：从手机或电脑上传一张图；单张不超过账号配额。体验不会真上传。'),
+        _homepage_ms('custom_demo', selector='[data-yc-tour="home-block-body"]', title='正文',
+            demo_type='type', demo_text=_DEMO_HOME_BODY,
+            body='在店铺主页展示的内容。'),
+        _homepage_ms('custom_demo', selector='[data-yc-tour="home-block-link-url"]', title='附加链接',
+            body='可选：在标题旁加外链按钮，例如活动页或说明文档。'),
+        _homepage_ms('custom_demo', selector='[data-yc-tour="home-block-link-label"]', title='链接文字',
+            body='外链按钮上显示的文字；留空则用「了解更多」。'),
+        _homepage_ms('custom_demo', selector='[data-yc-tour="home-block-save"]', title='保存本块',
+            body='改完后须点保存；保存后列表会多出新的一块「野草系统是什么」。体验模式不会真保存。'),
+        _homepage_ms('fake_settings', selector='[data-yc-tour="fold-home-settings"]', title='店铺主页总设置',
+            body='顶栏「下单」跳哪里、预览门面等在这里配置。'),
+        _homepage_ms('fake_settings', selector='[data-yc-tour="home-auto-read"]', title='自动读取的资料',
+            body='店名、营业状态、时间、地址从其它页面自动同步，不用重复填。'),
+        _homepage_ms('fake_settings', selector='[data-yc-tour="home-photo-quota"]', title='配图名额',
+            body='全店上传配图共享此名额；超出需先清除旧图。'),
+        _homepage_ms('fake_settings', selector='[data-yc-tour="home-preview-link"]', title='预览本店主页',
+            body='点这里可在新窗口预览；下一步会演示点击进入预览页。'),
+        _homepage_ms('fake_settings', selector='[data-yc-tour="home-nav-mode-select"]', title='顶栏「下单」行为',
+            body='可直达下单页，或滚到页内「进入店铺」按钮。'),
+        _homepage_ms('fake_settings', selector='[data-yc-tour="home-save-settings"]', title='保存主页设置',
+            body='改完顶栏行为后须点保存；体验不会真保存。'),
+        _homepage_ms('fake_settings', selector='[data-yc-tour="home-preview-link"]', title='点击进入预览',
+            body='请点「预览本店主页」或点下方「下一步」，进入客人看到的店铺主页演示。',
+            tips=('进入后将继续介绍顶栏导航与刚编辑的模块。',)),
+        _homepage_showcase_ms(selector='[data-yc-tour="shop-home-header"]', title='店铺主页预览',
+            body='顶栏下方自动显示店名、营业状态、营业时间与地址。'),
+        _homepage_showcase_ms(selector='[data-yc-tour="shop-home-nav-about"]', title='顶栏导航',
+            body='勾选「进吸顶导航」的积木会出现在这里；演示点击「关于野草」。', demo_click='[data-yc-tour="shop-home-nav-about"]'),
+        _homepage_showcase_ms(selector='[data-yc-tour="shop-home-custom-module"]', title='自定义模块',
+            body='这就是刚才自定义编辑好的模块：标题「野草系统是什么」与正文会展示在这里。'),
+        _homepage_ms('none', selector='[data-yc-tour="fold-home-settings"]', title='展示主页体验结束',
+            body='卖家开店线通用大步已走完；若已开启饮食/履约插件，还可选其它专项体验。'),
+    ]
+    return {
+        'id': 'seller-13',
+        'title': '展示主页',
+        'graduateTitle': '展示主页已观摩',
+        'graduateSummary': '您已了解店铺门面积木与预览；通用开店体验线至此结束。',
+        'microSteps': steps,
     }
 
 
@@ -671,8 +931,6 @@ def _seller_register() -> dict[str, Any]:
         'microSteps': [
             _ms('home', selector='[data-yc-tour="nav-shop-register"]', title='找到「店铺开通」入口',
                 body='开店从服务器主页菜单进入；手机请先点 ☰。', open_nav=True),
-            _ms('home', selector='[data-yc-tour="experience-start-btn"]', title='「体验开店」按钮',
-                body='点顶栏此按钮开始开店体验；首次进主页时欢迎弹窗里也有同样按钮。'),
             _ms('shop_register', selector='[data-yc-tour="shop-register-title"]', title='开通页做什么',
                 body='同时创建店主账号与店铺资料；体验不真提交。'),
             _ms('shop_register', selector='#id_username', title='店主用户名', demo_type='type',

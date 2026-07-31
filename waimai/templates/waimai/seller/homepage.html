@@ -1,6 +1,14 @@
 {% extends 'waimai/seller/base.html' %}
 
 {% block seller_content %}
+{% if experience_preview %}
+<div id="experience-home-fake-shell" hidden>
+    {% include 'waimai/onboarding/experience/_homepage_fake_block_list.html' %}
+    {% include 'waimai/onboarding/experience/_homepage_fake_custom_editor.html' %}
+    {% include 'waimai/onboarding/experience/_homepage_fake_settings.html' %}
+</div>
+{% endif %}
+<div id="experience-home-real-shell">
 {% include 'waimai/seller/_panel_fold.html' with fold_id='home-page-settings' fold_title='🏠 店铺主页总设置' fold_open=True %}
     <div data-yc-tour="fold-home-settings">
     <p class="card-meta" style="margin:0 0 12px;" data-yc-tour="home-auto-read">
@@ -8,7 +16,7 @@
         您只需编辑下面的<strong>简介、公告、进入店铺</strong>，以及可选的<strong>自定义积木</strong>（第一版最多 {{ max_custom_blocks }} 块）。
         网站根地址的<strong>服务器主页</strong>由服务器管理者在「服务器设置」中管理。
     </p>
-    <p class="card-meta" style="margin:0 0 12px;">
+    <p class="card-meta" style="margin:0 0 12px;" data-yc-tour="home-photo-quota">
         配图上传名额：本账号已用 <strong>{{ photo_used }}</strong> / {{ photo_max }} 张（单张不超过 {{ photo_max_mb }} MB）。
     </p>
     <p style="margin-bottom:12px;">
@@ -22,7 +30,7 @@
             <option value="to_shop" {% if home_page.order_nav_mode == 'to_shop' %}selected{% endif %}>直接进入下单页</option>
             <option value="to_cta_block" {% if home_page.order_nav_mode == 'to_cta_block' %}selected{% endif %}>滚到页内「进入店铺」块</option>
         </select>
-        <button type="submit" class="btn btn-primary" style="margin-top:12px;">保存主页设置</button>
+        <button type="submit" class="btn btn-primary" style="margin-top:12px;" data-yc-tour="home-save-settings">保存主页设置</button>
     </form>
     </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
@@ -52,4 +60,5 @@
     {% endif %}
     </div>
 {% include 'waimai/seller/_panel_fold_end.html' %}
+</div>
 {% endblock %}

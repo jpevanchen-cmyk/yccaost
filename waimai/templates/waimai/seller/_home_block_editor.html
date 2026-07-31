@@ -10,17 +10,17 @@
         <p class="card-meta" style="margin:0 0 8px;">{{ block.spec.description }}</p>
         {% endif %}
         <div class="home-block-settings-row">
-            <label class="form-check">
+            <label class="form-check" data-yc-tour="home-block-enabled">
                 <input type="checkbox" name="is_enabled" value="1" {% if block.is_enabled %}checked{% endif %}> 在主页显示
             </label>
-            <label class="form-check">
+            <label class="form-check" data-yc-tour="home-block-show-nav">
                 <input type="checkbox" name="show_in_nav" value="1" {% if block.show_in_nav %}checked{% endif %}> 进吸顶导航
             </label>
-            <label class="home-block-inline-field">
+            <label class="home-block-inline-field" data-yc-tour="home-block-sort">
                 <span>排序</span>
                 <input class="form-input" type="number" name="sort_order" value="{{ block.sort_order }}" title="与所有积木（含默认块、自定义块）比大小，数字越小越靠前">
             </label>
-            <label class="home-block-inline-field">
+            <label class="home-block-inline-field" data-yc-tour="home-block-nav-label">
                 <span>导航短名</span>
                 <input class="form-input" type="text" name="nav_label" value="{{ block.nav_label }}" maxlength="32">
             </label>
@@ -36,7 +36,6 @@
             <label class="form-label">按钮上方说明</label>
             <textarea class="form-input home-block-body-input" name="body" rows="4" placeholder="浏览商品、加入购物车并下单">{{ block.body }}</textarea>
             <p class="card-meta" style="margin:8px 0 0;">本块在主页上是橙色大按钮；配图与附加链接对本块无效。</p>
-            <input type="hidden" name="image_url" value="{{ block.image_url }}">
             <input type="hidden" name="link_url" value="{{ block.link_url }}">
             <input type="hidden" name="link_label" value="{{ block.link_label }}">
             {% elif block.block_type == 'directory' %}
@@ -45,16 +44,15 @@
             <label class="form-label">说明文字</label>
             <textarea class="form-input home-block-body-input" name="body" rows="4">{{ block.body }}</textarea>
             <p class="card-meta" style="margin:8px 0 0;">名录块自带搜索与店铺列表；一般不用配图和附加链接。</p>
-            <input type="hidden" name="image_url" value="{{ block.image_url }}">
             <input type="hidden" name="link_url" value="{{ block.link_url }}">
             <input type="hidden" name="link_label" value="{{ block.link_label }}">
             {% else %}
             <label class="form-label">标题</label>
-            <input class="form-input home-block-title-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="显示在主页上的大标题">
+            <input class="form-input home-block-title-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="显示在主页上的大标题" data-yc-tour="home-block-title">
 
-            <div class="home-block-media-box">
+            <div class="home-block-media-box" data-yc-tour="home-block-upload">
                 <p class="form-label" style="margin-bottom:6px;">配图（可选，本账号已用 {{ photo_used }} / {{ photo_max }} 张）</p>
-                <p class="card-meta" style="margin:0 0 10px;">两种方式二选一，上传的图片优先显示。</p>
+                <p class="card-meta" style="margin:0 0 10px;">从手机或电脑直接上传；单张不超过 {{ photo_max_mb }} MB。</p>
 
                 {% if block.display_image_src %}
                 <div class="home-block-img-preview">
@@ -79,30 +77,25 @@
                            placeholder="从手机/电脑直接上传，单张不超过 {{ photo_max_mb }} MB"
                            title="{% if block.image %}已上传，本站地址：{{ block.image.url }}{% endif %}">
                 </div>
-
-                <div class="home-block-path-row" style="margin-top:10px;">
-                    <span class="home-block-path-label">图片链接</span>
-                    <input class="form-input home-block-path-input" type="text" name="image_url" value="{{ block.image_url }}" maxlength="500" placeholder="此处粘贴图片的公开链接，以 https:// 开头" inputmode="url" autocomplete="off">
-                </div>
-                <p class="card-meta" style="margin:8px 0 0;">粘贴后请点「保存本块」。主页正文下方会有「查看原图」按钮（上传图也会有）。若预览仍无图，可点该按钮打开，或改用上方「上传图片」。</p>
+                <p class="card-meta" style="margin:8px 0 0;">上传后请点「保存本块」。主页正文下方会有「查看原图」按钮。</p>
             </div>
 
             <label class="form-label">正文</label>
-            <textarea class="form-input home-block-body-input" name="body" rows="8" placeholder="客人在主页上看到的文字">{{ block.body }}</textarea>
+            <textarea class="form-input home-block-body-input" name="body" rows="8" placeholder="客人在主页上看到的文字" data-yc-tour="home-block-body">{{ block.body }}</textarea>
 
             <div class="home-block-link-box">
-                <div class="home-block-path-row">
+                <div class="home-block-path-row" data-yc-tour="home-block-link-url">
                     <span class="home-block-path-label">附加链接</span>
                     <input class="form-input home-block-path-input" type="text" name="link_url" value="{{ block.link_url }}" maxlength="500" placeholder="可选：粘贴网页地址，以 https:// 开头；会显示在标题旁" inputmode="url" autocomplete="off">
                 </div>
-                <div class="home-block-path-row" style="margin-top:10px;">
+                <div class="home-block-path-row" style="margin-top:10px;" data-yc-tour="home-block-link-label">
                     <span class="home-block-path-label">链接文字</span>
                     <input class="form-input home-block-path-input" type="text" name="link_label" value="{{ block.link_label }}" maxlength="32" placeholder="显示在标题旁；留空则用「了解更多」">
                 </div>
             </div>
             {% endif %}
         </div>
-        <button type="submit" class="btn btn-primary" style="margin-top:12px;">保存本块</button>
+        <button type="submit" class="btn btn-primary" style="margin-top:12px;" data-yc-tour="home-block-save">保存本块</button>
     </div>
 </form>
 {% if block.is_custom %}

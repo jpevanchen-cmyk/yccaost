@@ -82,8 +82,6 @@
         <div class="showcase-block-main">
         {% if block.display_image_src %}
         <img class="showcase-block-img" src="{{ block.display_image_src }}" alt="">
-        {% elif block.image_url %}
-        <img class="showcase-block-img" src="{{ block.image_url }}" alt="">
         {% endif %}
         {% if block.body %}
         <div class="showcase-body-wrap">
@@ -92,11 +90,9 @@
         </div>
         {% endif %}
         </div>
-        {% if block.display_image_src or block.image_url %}
+        {% if block.display_image_src %}
         <div class="showcase-block-actions">
-            {% if block.display_image_src or block.image_url %}
-            <a class="btn btn-sm btn-outline" href="{% if block.display_image_src %}{{ block.display_image_src }}{% else %}{{ block.image_url }}{% endif %}" target="_blank" rel="noopener">查看原图</a>
-            {% endif %}
+            <a class="btn btn-sm btn-outline" href="{{ block.display_image_src }}" target="_blank" rel="noopener">查看原图</a>
         </div>
         {% endif %}
     {% endif %}

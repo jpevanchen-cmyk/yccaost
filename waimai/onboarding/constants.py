@@ -3,6 +3,7 @@
 URL_PREFIX = '/experience/'
 
 WELCOME_SEEN_KEY = 'yc_experience_welcome_seen'
+SKIP_HINT_SEEN_KEY = 'yc_experience_skip_btn_hint_seen'
 SESSION_TRACK_KEY = 'yc_experience_track'
 SESSION_MAJOR_KEY = 'yc_experience_major'
 SESSION_MICRO_KEY = 'yc_experience_micro'

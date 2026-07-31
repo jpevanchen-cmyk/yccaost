@@ -4,7 +4,7 @@
 
 {% block seller_content %}
 <details class="seller-panel-fold dine-rules-box" id="dine-rules" data-yc-tour="fold-dine-rules">
-    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">⚠ 桌码主单硬规则（必读）</span></summary>
+    <summary class="seller-panel-fold-head" data-yc-tour="dine-rules-head"><span class="seller-panel-fold-title">⚠ 桌码主单硬规则（必读）</span></summary>
     <div class="seller-panel-fold-body" data-yc-tour="dine-rules-content">
         <div class="hard-rule-block">
             <p><strong>硬规则 1 · 桌码主单</strong></p>
@@ -243,7 +243,7 @@
 </details>
 
 <details class="seller-panel-fold" id="table-list" data-yc-tour="fold-table-list">
-    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">🪑 实体桌台与桌码</span></summary>
+    <summary class="seller-panel-fold-head" data-yc-tour="table-list-head"><span class="seller-panel-fold-title">🪑 实体桌台与桌码</span></summary>
     <div class="seller-panel-fold-body">
         <p class="page-desc">桌号只能是<strong>纯数字</strong>。填最小～最大桌号，可一次建好一整批（如 1 到 30）。点选桌号后，用下方按钮批量操作；<strong>导出桌贴 PDF</strong> 可打印贴桌（每页 12 张）。二维码地址优先用上方「堂食接单细则」里的<strong>桌码局域网固定地址</strong>（推荐店内访客 WiFi 可访问的地址，勿填宽带公网 IP）；未填则用支付页公网网址；再没有则用当前浏览器地址。桌贴会印「先连店内访客 WiFi → 再扫此码点餐」。</p>
         <form method="POST" id="table-add-form" class="seller-panel-form seller-inline-form" data-unsaved-guard>
@@ -310,7 +310,7 @@
 
 {% if operating.share_table_enabled and operating.share_table_mode == 'virtual' %}
 <details class="seller-panel-fold" id="virtual-list" data-yc-tour="fold-virtual-list">
-    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">🔢 虚拟桌码池（模式 B）</span></summary>
+    <summary class="seller-panel-fold-head" data-yc-tour="virtual-list-head"><span class="seller-panel-fold-title">🔢 虚拟桌码池（模式 B）</span></summary>
     <div class="seller-panel-fold-body">
         <p class="page-desc" data-yc-tour="virtual-list-intro">虚拟码以 <strong>V</strong> 开头（如 V01、V12），不能与实体桌号重复。点选后可批量操作或导出桌贴 PDF。</p>
         <form method="POST" class="seller-panel-form seller-inline-form" data-unsaved-guard>

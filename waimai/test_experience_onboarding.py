@@ -102,17 +102,43 @@ class ExperienceBootTests(TestCase):
 
         seller = boot['tracks']['seller']
 
-        self.assertEqual(len(seller), 8)
+        self.assertEqual(len(seller), 11)
 
         self.assertEqual(seller[0]['id'], 'seller-1')
 
         self.assertEqual(seller[7]['id'], 'seller-8')
+
+        self.assertEqual(seller[8]['id'], 'seller-11')
+
+        self.assertEqual(seller[9]['id'], 'seller-12')
+
+        self.assertEqual(seller[10]['id'], 'seller-13')
 
         self.assertTrue(seller[2].get('cleanupOnComplete'))
 
         self.assertTrue(seller[5].get('cleanupOnComplete'))
 
         self.assertTrue(seller[7].get('cleanupOnComplete'))
+
+        orders_major = seller[9]
+
+        self.assertEqual(orders_major['id'], 'seller-12')
+
+        self.assertEqual(len(orders_major['microSteps']), 24)
+
+        self.assertEqual(orders_major['microSteps'][1]['foldLayout'], ['boss-order-notify'])
+
+        self.assertEqual(orders_major['microSteps'][14]['selector'], '[data-yc-tour="preview-banner"]')
+
+        self.assertIn('/experience/preview/seller/orders/', boot['pages']['preview_orders'])
+
+        homepage_major = seller[10]
+
+        self.assertEqual(homepage_major['id'], 'seller-13')
+
+        self.assertEqual(len(homepage_major['microSteps']), 27)
+
+        self.assertIn('/experience/preview/seller/homepage/', boot['pages']['preview_homepage'])
 
 
 
@@ -130,11 +156,17 @@ class ExperienceBootTests(TestCase):
 
         seller = boot['tracks']['seller']
 
-        self.assertEqual(len(seller), 9)
+        self.assertEqual(len(seller), 12)
 
         self.assertEqual(seller[7]['id'], 'seller-8')
 
         self.assertEqual(seller[8]['id'], 'seller-10')
+
+        self.assertEqual(seller[9]['id'], 'seller-11')
+
+        self.assertEqual(seller[10]['id'], 'seller-12')
+
+        self.assertEqual(seller[11]['id'], 'seller-13')
 
         delivery_major = seller[8]
 
@@ -147,6 +179,32 @@ class ExperienceBootTests(TestCase):
         self.assertIn('/experience/preview/seller/delivery/', boot['pages']['preview_delivery'])
 
         self.assertNotIn('preview_delivery', boot['writablePages'])
+
+        payment_major = seller[9]
+
+        self.assertEqual(payment_major['microSteps'][0]['selector'], '[data-yc-tour="nav-payment"]')
+
+        self.assertEqual(payment_major['microSteps'][-1]['title'], '支付设置体验结束')
+
+        self.assertIn('订单管理', payment_major['microSteps'][-1]['body'])
+
+        self.assertIn('/experience/preview/seller/payment/', boot['pages']['preview_payment'])
+
+        self.assertNotIn('preview_payment', boot['writablePages'])
+
+        orders_major = seller[10]
+
+        self.assertEqual(orders_major['microSteps'][0]['selector'], '[data-yc-tour="nav-orders"]')
+
+        self.assertEqual(orders_major['microSteps'][-1]['title'], '订单管理体验结束')
+
+        self.assertIn('/experience/preview/seller/orders/', boot['pages']['preview_orders'])
+
+        homepage_major = seller[11]
+
+        self.assertEqual(homepage_major['id'], 'seller-13')
+
+        self.assertIn('/experience/preview/seller/homepage-showcase/', boot['pages']['preview_homepage_showcase'])
 
 
 
@@ -182,8 +240,8 @@ class ExperienceBootTests(TestCase):
 
         workbench_major = boot['tracks']['seller'][6]
         self.assertEqual(workbench_major['id'], 'seller-7')
-        # 合并 3 个小步后共 37 步；有履约插件时 +2
-        self.assertIn(len(workbench_major['microSteps']), (37, 39))
+        # 合并 3 个小步后共 38 步；有履约插件时 +2
+        self.assertIn(len(workbench_major['microSteps']), (38, 40))
         self.assertEqual(workbench_major['microSteps'][-1]['title'], '本大步结束')
         self.assertEqual(workbench_major['microSteps'][-1]['selector'], '[data-yc-tour="fold-staff-list"]')
         self.assertEqual(workbench_major['microSteps'][0]['foldLayout'], [])
@@ -208,10 +266,12 @@ class ExperienceBootTests(TestCase):
         self.assertEqual(edit_major['microSteps'][0]['foldLayout'], [])
 
         register_major = boot['tracks']['seller'][0]
+        self.assertEqual(len(register_major['microSteps']), 9)
         self.assertEqual(
             register_major['microSteps'][1]['selector'],
-            '[data-yc-tour="experience-start-btn"]',
+            '[data-yc-tour="shop-register-title"]',
         )
+        self.assertIn('skipHintSeenKey', boot)
 
         menu_major = boot['tracks']['seller'][2]
 
@@ -489,6 +549,148 @@ class ExperienceViewTests(TestCase):
         self.assertEqual(resp.status_code, 302)
 
         self.assertIn('/experience/', resp.url)
+
+
+
+    def test_experience_payment_preview_ok(self):
+
+        from waimai.operating_helpers import get_operating_settings
+
+        settings = get_operating_settings(self.seller.username)
+
+        settings.plugin_fulfillment_enabled = True
+
+        settings.save(update_fields=['plugin_fulfillment_enabled'])
+
+        resp = self.client.get(
+
+            '/experience/preview/seller/payment/?exp=1&exp_track=seller&exp_major=8&exp_micro=0',
+
+        )
+
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertContains(resp, 'payment-intro')
+
+        self.assertContains(resp, 'payment-wechat-mch-id')
+
+        self.assertContains(resp, 'payment-notify-url')
+
+        self.assertContains(resp, 'nav-payment')
+
+        self.assertContains(resp, 'rider-cash-box')
+
+
+
+    def test_experience_orders_preview_ok(self):
+
+        from decimal import Decimal
+
+        from waimai.models import BuyOrder
+
+        order = BuyOrder.objects.filter(seller_id=self.seller.username).first()
+
+        if not order:
+
+            order = BuyOrder.objects.create(
+
+                seller_id=self.seller.username,
+
+                buyer_id='demo_buyer',
+
+                total_amount=Decimal('12.00'),
+
+                order_status='pending',
+
+                payment_status='pending_payment',
+
+                dish_items=[{'name': '演示菜', 'price': 8.88, 'quantity': 1}],
+
+            )
+
+        resp = self.client.get(
+
+            '/experience/preview/seller/orders/?exp=1&exp_track=seller&exp_major=9&exp_micro=0',
+
+        )
+
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertContains(resp, 'orders-intro')
+
+        self.assertContains(resp, 'orders-pagination')
+
+        self.assertContains(resp, 'nav-orders')
+
+        self.assertContains(resp, 'fold-boss-notify')
+
+        boot = build_experience_boot_payload()
+
+        detail_url = boot['pages'].get('preview_order_detail', '')
+
+        self.assertIn(str(order.order_id), detail_url)
+
+        resp = self.client.get(
+
+            f'/experience/preview/seller/orders/{order.order_id}/?exp=1&exp_track=seller&exp_major=9&exp_micro=14',
+
+        )
+
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertContains(resp, 'preview-banner')
+
+        self.assertContains(resp, 'order-detail-hero')
+
+        self.assertContains(resp, 'order-detail-contact')
+
+        self.assertContains(resp, 'order-detail-buyer')
+
+        self.assertContains(resp, 'order-detail-items')
+
+        self.assertContains(resp, 'order-detail-fee-total')
+
+        self.assertContains(resp, 'order-detail-payment')
+
+        self.assertContains(resp, 'order-detail-timeline')
+
+
+
+    def test_experience_homepage_preview_ok(self):
+
+        resp = self.client.get(
+
+            '/experience/preview/seller/homepage/?exp=1&exp_track=seller&exp_major=10&exp_micro=0',
+
+        )
+
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertContains(resp, 'fold-home-settings')
+
+        self.assertContains(resp, 'demo-home-preset-labels')
+
+        self.assertContains(resp, 'experience-home-custom-demo')
+
+        self.assertContains(resp, 'nav-homepage')
+
+        self.assertNotContains(resp, '图片链接')
+
+        resp2 = self.client.get(
+
+            '/experience/preview/seller/homepage-showcase/?exp=1&exp_track=seller&exp_major=10&exp_micro=23',
+
+        )
+
+        self.assertEqual(resp2.status_code, 200)
+
+        self.assertContains(resp2, 'shop-home-header')
+
+        self.assertContains(resp2, 'shop-home-nav-about')
+
+        self.assertContains(resp2, 'shop-home-custom-module')
+
+        self.assertContains(resp2, '野草系统是什么')
 
 
 
@@ -880,7 +1082,7 @@ class ExperienceViewTests(TestCase):
 
         self.assertContains(resp, 'experience-welcome-modal')
 
-        self.assertContains(resp, '7 大步')
+        self.assertContains(resp, '欢迎来到野草生态')
 
         self.assertNotContains(resp, 'block-experience')
 

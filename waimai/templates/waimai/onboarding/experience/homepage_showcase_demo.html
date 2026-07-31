@@ -1,0 +1,55 @@
+{% extends 'waimai/base.html' %}
+{% load static %}
+{% block title %}店铺主页预览（演示） - 野草系统{% endblock %}
+{% block body_class %}showcase-home-page yc-exp-homepage-showcase-demo{% endblock %}
+{% block page_back %}{% endblock %}
+
+{% block content %}
+<nav class="showcase-sticky-nav" aria-label="主页导航" data-yc-tour="shop-home-sticky-nav">
+    <div class="showcase-sticky-inner">
+        <a class="showcase-brand" href="#top">{{ demo_shop_name|default:"野草官方小店" }}</a>
+        <div class="showcase-nav-links">
+            <a href="#block-intro">简介</a>
+            <a href="#block-order_cta">店铺</a>
+            <a class="showcase-nav-about-target" href="#block-demo-yecao" data-yc-tour="shop-home-nav-about">关于野草</a>
+            <a class="showcase-nav-order" href="#">下单</a>
+        </div>
+    </div>
+</nav>
+
+<div id="top" class="showcase-stack">
+<div class="card showcase-shop-header" data-yc-tour="shop-home-header" style="padding:12px 16px;margin-bottom:12px;">
+    <strong>{{ demo_shop_name|default:"野草官方小店" }}</strong>
+    <span class="card-meta" style="margin-left:8px;">营业中</span>
+    <div class="card-meta" style="margin-top:6px;white-space:pre-wrap;">全天营业：00:00 – 23:59
+堂食通道：开；打包通道：开；外卖通道：开</div>
+    <div class="card-meta" style="margin-top:4px;">{{ demo_shop_address|default:"演示地址" }}</div>
+</div>
+
+<section class="showcase-block card showcase-block-article" id="block-intro">
+    <h2 class="showcase-block-title">简介</h2>
+    <div class="showcase-block-main">
+        <div class="showcase-body-wrap">
+            <div class="showcase-body">{{ demo_shop_name|default:"野草官方小店" }}欢迎您。</div>
+        </div>
+    </div>
+</section>
+
+<section class="showcase-block card showcase-block-cta" id="block-order_cta">
+    <h2 class="showcase-block-title">进入店铺</h2>
+    <div class="showcase-block-main">
+        <p class="card-meta" style="margin-bottom:12px;">浏览商品、加入购物车并下单</p>
+        <a class="btn btn-orange btn-block" href="#">进入店铺</a>
+    </div>
+</section>
+
+<section class="showcase-block card showcase-block-article" id="block-demo-yecao" data-yc-tour="shop-home-custom-module">
+    <h2 class="showcase-block-title">野草系统是什么</h2>
+    <div class="showcase-block-main">
+        <div class="showcase-body-wrap">
+            <div class="showcase-body">野草是开源免费的店铺管理系统，配合自部署服务器后，可以实现线上经营和自配送外卖管理</div>
+        </div>
+    </div>
+</section>
+</div>
+{% endblock %}

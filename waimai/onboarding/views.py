@@ -27,7 +27,12 @@ from .demo_dine_write import handle_experience_dine_post, is_experience_dine_pos
 from .preview_helpers import (
     build_experience_dine_context,
     build_experience_delivery_context,
+    build_experience_homepage_context,
+    build_experience_homepage_showcase_context,
     build_experience_operating_context,
+    build_experience_order_detail_context,
+    build_experience_orders_context,
+    build_experience_payment_context,
     build_experience_print_qr_context,
     build_experience_products_context,
     build_experience_table_stickers_context,
@@ -231,6 +236,82 @@ def experience_preview_delivery(request):
     ctx['experience_boot_json'] = build_experience_boot_json()
     ctx['onboarding_boot_json'] = ''
     return render(request, 'waimai/seller/delivery.html', ctx)
+
+
+def experience_preview_payment(request):
+    """新版支付设置演示页（只读观摩）"""
+    redir = _shop_or_redirect()
+    if redir:
+        return redir
+    ctx = build_experience_payment_context(request)
+    if not ctx:
+        return redirect('experience_home')
+    if ctx.get('_redirect'):
+        return redirect(ctx['_redirect'])
+    touch_experience_tour_session(request)
+    ctx['experience_boot_json'] = build_experience_boot_json()
+    ctx['onboarding_boot_json'] = ''
+    return render(request, 'waimai/seller/payment.html', ctx)
+
+
+def experience_preview_orders(request):
+    """新版订单管理演示页（只读观摩）"""
+    redir = _shop_or_redirect()
+    if redir:
+        return redir
+    ctx = build_experience_orders_context(request)
+    if not ctx:
+        return redirect('experience_home')
+    if ctx.get('_redirect'):
+        return redirect(ctx['_redirect'])
+    touch_experience_tour_session(request)
+    ctx['experience_boot_json'] = build_experience_boot_json()
+    ctx['onboarding_boot_json'] = ''
+    return render(request, 'waimai/seller/orders.html', ctx)
+
+
+def experience_preview_order_detail(request, order_id):
+    """新版订单详情演示页（只读观摩）"""
+    redir = _shop_or_redirect()
+    if redir:
+        return redir
+    ctx = build_experience_order_detail_context(request, order_id)
+    if not ctx:
+        return redirect('experience_preview_orders')
+    touch_experience_tour_session(request)
+    ctx['experience_boot_json'] = build_experience_boot_json()
+    ctx['onboarding_boot_json'] = ''
+    return render(request, 'waimai/order_detail.html', ctx)
+
+
+def experience_preview_homepage(request):
+    """新版展示主页演示页（只读观摩）"""
+    redir = _shop_or_redirect()
+    if redir:
+        return redir
+    ctx = build_experience_homepage_context(request)
+    if not ctx:
+        return redirect('experience_home')
+    if ctx.get('_redirect'):
+        return redirect(ctx['_redirect'])
+    touch_experience_tour_session(request)
+    ctx['experience_boot_json'] = build_experience_boot_json()
+    ctx['onboarding_boot_json'] = ''
+    return render(request, 'waimai/seller/homepage.html', ctx)
+
+
+def experience_preview_homepage_showcase(request):
+    """新版店铺主页预览演示（假 UI）"""
+    redir = _shop_or_redirect()
+    if redir:
+        return redir
+    ctx = build_experience_homepage_showcase_context(request)
+    if not ctx:
+        return redirect('experience_home')
+    touch_experience_tour_session(request)
+    ctx['experience_boot_json'] = build_experience_boot_json()
+    ctx['onboarding_boot_json'] = ''
+    return render(request, 'waimai/onboarding/experience/homepage_showcase_demo.html', ctx)
 
 
 @require_POST

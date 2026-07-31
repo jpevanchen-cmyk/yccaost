@@ -3,13 +3,15 @@
 from datetime import timedelta
 from datetime import datetime
 
+from django.core.paginator import EmptyPage, Paginator
 from django.db.models import Q
 from django.utils import timezone
 
 from .models import BuyOrder
 
-# 列表最多返回条数（防止一次拉太多）
-ORDER_LIST_LIMIT = 100
+# 分页：每页条数可选值
+ORDER_LIST_PAGE_SIZES = (10, 15, 20)
+DEFAULT_ORDER_LIST_PAGE_SIZE = 15
 
 # 时间范围选项（表单与说明共用）
 ORDER_DATE_RANGE_CHOICES = (
@@ -29,6 +31,17 @@ def default_order_date_range() -> str:
     return 'month'
 
 
+def resolve_order_list_page_size(raw) -> int:
+    """解析每页条数；非法值回落默认 15"""
+    try:
+        size = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_ORDER_LIST_PAGE_SIZE
+    if size in ORDER_LIST_PAGE_SIZES:
+        return size
+    return DEFAULT_ORDER_LIST_PAGE_SIZE
+
+
 def parse_seller_order_search(get_params) -> dict:
     """从网址参数解析订单搜索条件"""
     date_range = (get_params.get('date_range') or default_order_date_range()).strip()
@@ -44,11 +57,8 @@ def parse_seller_order_search(get_params) -> dict:
     }
 
 
-def build_order_search_querystring(get_params) -> str:
-    """把搜索条件拼回网址（操作订单后跳回列表时保留筛选）"""
-    from urllib.parse import urlencode
-
-    search = parse_seller_order_search(get_params)
+def _order_filter_query_dict(search: dict, *, per_page: int | None = None) -> dict:
+    """筛选条件拼成网址参数字典（不含页码）"""
     data = {'date_range': search['date_range']}
     if search['q']:
         data['q'] = search['q']
@@ -60,7 +70,27 @@ def build_order_search_querystring(get_params) -> str:
         data['fulfillment_type'] = search['fulfillment_type']
     if search['cash_issue']:
         data['cash_issue'] = search['cash_issue']
-    return urlencode(data)
+    if per_page is not None:
+        data['per_page'] = str(per_page)
+    return data
+
+
+def build_order_search_querystring(get_params) -> str:
+    """把搜索条件拼回网址（操作订单后跳回列表时保留筛选）"""
+    from urllib.parse import urlencode
+
+    search = parse_seller_order_search(get_params)
+    per_page = resolve_order_list_page_size(get_params.get('per_page'))
+    return urlencode(_order_filter_query_dict(search, per_page=per_page))
+
+
+def build_order_list_pagination_query(get_params) -> str:
+    """分页链接用：保留筛选与每页条数，不含当前页码"""
+    from urllib.parse import urlencode
+
+    search = parse_seller_order_search(get_params)
+    per_page = resolve_order_list_page_size(get_params.get('per_page'))
+    return urlencode(_order_filter_query_dict(search, per_page=per_page))
 
 
 def _apply_date_range(qs, date_range: str):
@@ -119,8 +149,8 @@ def _apply_keyword_filter(qs, keyword: str):
     return filtered
 
 
-def query_seller_orders(seller_id: str, search: dict):
-    """按条件查询本店订单列表"""
+def query_seller_orders_qs(seller_id: str, search: dict):
+    """按条件查询本店订单（QuerySet，供分页）"""
     valid_order_status = {c[0] for c in BuyOrder.ORDER_STATUS_CHOICES}
     valid_payment_status = {c[0] for c in BuyOrder.PAYMENT_STATUS_CHOICES}
     valid_fulfillment = {c[0] for c in BuyOrder.FULFILLMENT_TYPE_CHOICES}
@@ -140,4 +170,53 @@ def query_seller_orders(seller_id: str, search: dict):
         qs = qs.exclude(cash_shortfall_status='')
 
     qs = _apply_keyword_filter(qs, search.get('q', ''))
-    return list(qs.order_by('-created_at')[:ORDER_LIST_LIMIT])
+    return qs.order_by('-created_at')
+
+
+def paginate_seller_orders(qs, page_number, per_page: int):
+    """订单列表分页；页码越界时落到末页或第一页"""
+    paginator = Paginator(qs, per_page)
+    try:
+        page_num = int(page_number or 1)
+    except (TypeError, ValueError):
+        page_num = 1
+    if page_num < 1:
+        page_num = 1
+    try:
+        return paginator.page(page_num)
+    except EmptyPage:
+        if paginator.num_pages:
+            return paginator.page(paginator.num_pages)
+        return paginator.page(1)
+
+
+def build_seller_orders_list_context(seller_id: str, get_params) -> dict:
+    """卖家订单列表：筛选、分页，并挂上未读数与展示壳"""
+    from .order_message_helpers import unread_map_for_orders
+    from .order_shell_helpers import build_order_shell
+
+    order_search = parse_seller_order_search(get_params)
+    per_page = resolve_order_list_page_size(get_params.get('per_page'))
+    orders_page = paginate_seller_orders(
+        query_seller_orders_qs(seller_id, order_search),
+        get_params.get('page'),
+        per_page,
+    )
+    orders = list(orders_page.object_list)
+    unread_map = unread_map_for_orders(orders, side='shop')
+    for o in orders:
+        o.unread_msg_count = unread_map.get(o.order_id, 0)
+        o.order_shell = build_order_shell(o)
+    return {
+        'orders_page': orders_page,
+        'orders': orders,
+        'order_search': order_search,
+        'order_per_page': per_page,
+        'order_page_sizes': ORDER_LIST_PAGE_SIZES,
+        'order_list_query': build_order_list_pagination_query(get_params),
+    }
+
+
+def query_seller_orders(seller_id: str, search: dict):
+    """兼容旧调用：返回当前筛选下全部结果（无分页）"""
+    return list(query_seller_orders_qs(seller_id, search))

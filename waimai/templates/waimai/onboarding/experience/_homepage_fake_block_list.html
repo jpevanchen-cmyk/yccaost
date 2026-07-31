@@ -1,0 +1,36 @@
+{# 第 13 大步 · 假 UI 积木列表（仅一套；先 4 块，保存自定义块后变 5 块） #}
+<div class="experience-home-fake-list" data-yc-tour="demo-home-block-list">
+    <div class="experience-home-fake-presets" data-yc-tour="demo-home-preset-labels">
+        <details class="seller-panel-fold" id="demo-home-intro" data-yc-tour="demo-home-fold-intro">
+            <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">简介</span></summary>
+            <div class="seller-panel-fold-body">
+                <p class="card-meta" style="margin:0;">预设积木：可改标题与正文，体验不会真保存。</p>
+            </div>
+        </details>
+        <details class="seller-panel-fold" id="demo-home-notice">
+            <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">公告</span></summary>
+            <div class="seller-panel-fold-body"></div>
+        </details>
+        <details class="seller-panel-fold" id="demo-home-cta">
+            <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">进入店铺</span></summary>
+            <div class="seller-panel-fold-body"></div>
+        </details>
+    </div>
+    <div data-yc-tour="demo-home-add-row">
+        <details class="seller-panel-fold" id="demo-home-add-toolbar">
+            <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">➕ 自定义积木（添加）</span></summary>
+            <div class="seller-panel-fold-body" data-yc-tour="fold-home-custom">
+                <p class="card-meta" style="margin:0 0 10px;" data-yc-tour="home-add-custom-hint">
+                    已用 0 / 10 块。新加的块会出现在最下面。
+                </p>
+                <button type="button" class="btn btn-sm btn-outline" data-yc-tour="home-add-custom">+ 添加一块自定义积木</button>
+            </div>
+        </details>
+    </div>
+    <details class="seller-panel-fold" id="demo-home-added-block" data-yc-tour="demo-home-added-block" hidden>
+        <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">野草系统是什么</span></summary>
+        <div class="seller-panel-fold-body">
+            <p class="card-meta" style="margin:0;">刚添加并保存的自定义积木会出现在这里。</p>
+        </div>
+    </details>
+</div>
