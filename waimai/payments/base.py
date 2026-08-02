@@ -22,6 +22,7 @@ class PaymentInitResult:
 
     ok: bool
     message: str = ''
+    messages: list[str] | None = None
     redirect_url: Optional[str] = None
     template_name: Optional[str] = None
     extra_context: Optional[dict] = None

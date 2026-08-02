@@ -104,6 +104,21 @@ class ShopOperatingSettings(models.Model):
         max_length=255, blank=True, default='',
         verbose_name='值班防漏单收件邮箱（多个用逗号分隔）',
     )
+    # 入金申请邮件双轨（与 new_order 对称）
+    boss_remittance_notify_enabled = models.BooleanField(
+        default=False, verbose_name='开启老板入金申请邮件',
+    )
+    boss_remittance_notify_email = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name='老板入金申请收件邮箱（多个用逗号分隔）',
+    )
+    duty_remittance_notify_enabled = models.BooleanField(
+        default=False, verbose_name='开启值班入金申请邮件',
+    )
+    duty_remittance_notify_email = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name='值班入金申请收件邮箱（多个用逗号分隔）',
+    )
     # ---- 三类订单默认等待时间 ----
     dine_default_wait_minutes = models.PositiveSmallIntegerField(
         default=20, verbose_name='堂食默认等待时间（分钟）',
@@ -308,6 +323,9 @@ class MenuProfileItem(models.Model):
     dish = models.ForeignKey('Dish', on_delete=models.CASCADE, related_name='menu_items')
     sort_order = models.IntegerField(default=0, verbose_name='排序')
     is_listed = models.BooleanField(default=True, verbose_name='本清单上架')
+    general_price_listed = models.BooleanField(
+        default=True, verbose_name='本清单展示通用价',
+    )
     member_price_listed = models.BooleanField(
         default=False, verbose_name='本清单展示会员价',
     )

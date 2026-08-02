@@ -1,0 +1,18 @@
+{# 店铺工作台：值班入金申请邮件 #}
+{% if duty_remittance_notify_form %}
+<details class="seller-panel-fold" id="duty-remittance-notify">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📧 值班入金申请邮件</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="card-meta">有现金管理权限的同事未一直开着页面时，可用邮件补发入金申请提醒。</p>
+        {% if duty_remittance_notify_smtp_warn %}
+        <p class="msg-warn">{{ duty_remittance_notify_smtp_warn }}</p>
+        {% endif %}
+        <form method="POST" action="{{ form_action }}" class="seller-panel-form auth-form">
+            {% csrf_token %}
+            <input type="hidden" name="save_duty_remittance_notify" value="1">
+            {{ duty_remittance_notify_form.as_p }}
+            <button type="submit" class="btn btn-green">保存值班入金申请邮件</button>
+        </form>
+    </div>
+</details>
+{% endif %}

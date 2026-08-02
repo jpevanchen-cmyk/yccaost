@@ -127,7 +127,7 @@
                 </div>
                 <div class="seller-order-compact-side">
                     <div class="seller-order-amount">¥{{ order.total_amount }}</div>
-                    <a class="seller-order-detail-link" href="{% if experience_preview %}{% url 'experience_preview_order_detail' order.order_id %}{% elif onboarding_preview %}{% url 'onboarding_seller_order_detail' order.order_id %}{% else %}{% url 'order_detail' order.order_id %}{% endif %}" data-yc-tour="{% if forloop.first %}orders-detail-link{% endif %}">
+                    <a class="seller-order-detail-link" href="{% if experience_preview %}{% url 'experience_preview_order_detail' order.order_id %}{% else %}{% url 'order_detail' order.order_id %}{% endif %}" data-yc-tour="{% if forloop.first %}orders-detail-link{% endif %}">
                         查看订单详情
                         {% if order.unread_msg_count %}
                         <span class="msg-unread-dot" title="有未读沟通">{{ order.unread_msg_count }}</span>

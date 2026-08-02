@@ -4,12 +4,6 @@
 <div class="msg-err">{{ error }}</div>
 {% endif %}
 
-{% if messages %}
-    {% for message in messages %}
-    <div class="{% if message.tags == 'error' %}msg-err{% else %}msg-ok{% endif %}" style="margin-bottom:12px;">{{ message }}</div>
-    {% endfor %}
-{% endif %}
-
 {% if not can_operate %}
 <p class="card-meta" style="margin-bottom:12px;padding:10px;background:#fff8e1;border-radius:8px;">
     {{ workbench_shell.waiter_readonly_hint|safe }}

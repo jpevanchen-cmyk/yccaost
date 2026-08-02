@@ -45,6 +45,9 @@ STAFF_ROLE = 'staff'
 LEGACY_STAFF_ROLES = ('waiter', 'kitchen', 'rider', 'manager')
 ALL_STAFF_ROLES = (STAFF_ROLE,) + LEGACY_STAFF_ROLES
 
+# 野草生态主账号（买家 / 店主）；与工牌子账号查重分线
+MAIN_ECO_ACCOUNT_ROLES = ('buyer', 'seller')
+
 PERM_CANCEL_ORDER = 'orders.cancel'
 PERM_ORDERS_VIEW = 'orders.view'
 PERM_ORDERS_UPDATE_STATUS = 'orders.update_status'
@@ -286,21 +289,94 @@ def staff_username_taken(seller_id: str, display_name: str) -> bool:
     return User.objects.filter(username=internal).exists()
 
 
+def main_eco_account_username_taken(username: str) -> bool:
+    """主账号（买家/店主）用户名是否已被占用；不查工牌内部名。"""
+    name = (username or '').strip()
+    if not name:
+        return False
+    return User.objects.filter(username=name, role__in=MAIN_ECO_ACCOUNT_ROLES).exists()
+
+
+def validate_staff_display_username(seller_id: str, raw_name: str, *, field_label: str = '员工登录名') -> str:
+    """工牌显示名校验：仅本店查重，允许与店主主账号同名。"""
+    from django.core.exceptions import ValidationError
+
+    name = (raw_name or '').strip()
+    if not name:
+        raise ValidationError(f'请输入{field_label}')
+    if STAFF_USERNAME_SEP in name:
+        raise ValidationError(f'{field_label}不能包含 ::')
+    sid = (seller_id or '').strip()
+    if not sid:
+        raise ValidationError('店铺信息无效')
+    if staff_username_taken(sid, name):
+        raise ValidationError(f'本店已有该{field_label}')
+    return name
+
+
+def validate_main_eco_username(raw_name: str) -> str:
+    """主账号注册名校验：只与买家/店主比，不与工牌比。"""
+    from django.core.exceptions import ValidationError
+
+    name = (raw_name or '').strip()
+    if not name:
+        raise ValidationError('请输入用户名')
+    if STAFF_USERNAME_SEP in name:
+        raise ValidationError('用户名不能包含 ::')
+    if main_eco_account_username_taken(name):
+        raise ValidationError('该用户名已被使用')
+    return name
+
+
+def all_staff_permission_codes(seller_id: str) -> list[str]:
+    """本店当前可用的全部员工权限编号（含已启用插件）。"""
+    return sorted({
+        item['code']
+        for item in get_staff_permission_definitions(seller_id)
+        if item.get('code')
+    })
+
+
+def create_owner_workbench_staff(seller_user, raw_password: str):
+    """
+    新店注册时自动创建店主工牌：登录名同主账号、初始同密码、全权限。
+    主账号只进卖家后台，工作台须用工牌登录。
+    """
+    seller_id = (getattr(seller_user, 'username', '') or '').strip()
+    if not seller_id or getattr(seller_user, 'role', '') != 'seller':
+        return None
+
+    internal = staff_internal_username(seller_id, seller_id)
+    if User.objects.filter(username=internal).exists():
+        return None
+
+    permissions = all_staff_permission_codes(seller_id)
+    user = User(
+        username=internal,
+        role=STAFF_ROLE,
+        employer_seller_id=seller_id,
+        staff_account_type='management',
+        staff_job_title='店主工牌',
+        staff_permissions=permissions,
+        perm_cancel_order=PERM_CANCEL_ORDER in permissions,
+        is_active=True,
+    )
+    user.set_password(raw_password)
+    user.save()
+    from .experience_helpers import inherit_experience_from_employer
+
+    inherit_experience_from_employer(user, seller_id)
+    return user
+
+
 def authenticate_shop_work_user(request, seller_id: str, login_name: str, password: str):
     """
-    店铺工作台登录：
-    - 店主用生态用户名
-    - 员工用工牌名（仅在本店查重）
+    店铺工作台登录：仅员工工牌（店主须用注册时自动创建的工牌，不进工作台）。
     """
     login_name = (login_name or '').strip()
     seller_id = (seller_id or '').strip()
     if not login_name or not password:
         return None
-
-    # 店主
-    user = authenticate(request, username=login_name, password=password)
-    if user and user.is_active and user.role == 'seller' and user.username == seller_id:
-        return user
 
     # 员工（新规则：带店铺前缀）
     internal = staff_internal_username(seller_id, login_name)

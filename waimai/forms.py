@@ -12,12 +12,26 @@ from .models import (
 from .shop_code_helpers import assign_shop_code_on_create
 
 
-class BuyerRegistrationForm(UserCreationForm):
+class _SkipUsernameUniqueValidationMixin:
+    """跳过 Django 对 username 的全库唯一校验（工牌/主账号各自查重）。"""
+
+    def _get_validation_exclusions(self):
+        exclude = super()._get_validation_exclusions()
+        exclude.add('username')
+        return exclude
+
+
+class BuyerRegistrationForm(_SkipUsernameUniqueValidationMixin, UserCreationForm):
     """买家注册：仅允许注册买家身份"""
 
     class Meta(UserCreationForm.Meta):
         model = User
         fields = UserCreationForm.Meta.fields
+
+    def clean_username(self):
+        from .staff_account_helpers import validate_main_eco_username
+
+        return validate_main_eco_username(self.cleaned_data.get('username'))
 
     def clean(self):
         cleaned = super().clean()
@@ -39,7 +53,7 @@ class BuyerRegistrationForm(UserCreationForm):
         return user
 
 
-class ShopRegistrationForm(UserCreationForm):
+class ShopRegistrationForm(_SkipUsernameUniqueValidationMixin, UserCreationForm):
     """店铺注册服务器：创建卖家账号 + 店铺信息"""
 
     shop_name = forms.CharField(max_length=100, label='店铺名称')
@@ -49,6 +63,11 @@ class ShopRegistrationForm(UserCreationForm):
     class Meta(UserCreationForm.Meta):
         model = User
         fields = UserCreationForm.Meta.fields
+
+    def clean_username(self):
+        from .staff_account_helpers import validate_main_eco_username
+
+        return validate_main_eco_username(self.cleaned_data.get('username'))
 
     def clean(self):
         cleaned = super().clean()
@@ -89,10 +108,13 @@ class ShopRegistrationForm(UserCreationForm):
             ensure_home_page_for_seller(user.username, profile)
             ensure_active_menu_catalog(user.username)
             ensure_server_home_page()
+            from .staff_account_helpers import create_owner_workbench_staff
+
+            create_owner_workbench_staff(user, self.cleaned_data['password1'])
         return user
 
 
-class CreateRiderForm(UserCreationForm):
+class CreateRiderForm(_SkipUsernameUniqueValidationMixin, UserCreationForm):
     """卖家为本店创建专属骑手账号（工牌名仅本店唯一）"""
 
     perm_cancel_order = forms.BooleanField(
@@ -110,18 +132,11 @@ class CreateRiderForm(UserCreationForm):
         self.fields['username'].help_text = '只在本店不能重复；别的店可以用同名'
 
     def clean_username(self):
-        from .staff_account_helpers import STAFF_USERNAME_SEP, staff_username_taken
+        from .staff_account_helpers import validate_staff_display_username
 
-        name = (self.cleaned_data.get('username') or '').strip()
-        if not name:
-            raise forms.ValidationError('请输入用户名')
-        if STAFF_USERNAME_SEP in name:
-            raise forms.ValidationError('用户名不能包含 ::')
-        if not self.seller_id:
-            raise forms.ValidationError('店铺信息无效')
-        if staff_username_taken(self.seller_id, name):
-            raise forms.ValidationError('本店已有该员工用户名')
-        return name
+        return validate_staff_display_username(
+            self.seller_id, self.cleaned_data.get('username'), field_label='员工用户名',
+        )
 
     def save(self, commit=True):
         from .staff_account_helpers import staff_internal_username
@@ -138,7 +153,7 @@ class CreateRiderForm(UserCreationForm):
         return user
 
 
-class CreateWaiterForm(UserCreationForm):
+class CreateWaiterForm(_SkipUsernameUniqueValidationMixin, UserCreationForm):
     """卖家为本店创建服务员子账号（工牌名仅本店唯一）"""
 
     perm_cancel_order = forms.BooleanField(
@@ -156,18 +171,11 @@ class CreateWaiterForm(UserCreationForm):
         self.fields['username'].help_text = '只在本店不能重复；别的店可以用同名'
 
     def clean_username(self):
-        from .staff_account_helpers import STAFF_USERNAME_SEP, staff_username_taken
+        from .staff_account_helpers import validate_staff_display_username
 
-        name = (self.cleaned_data.get('username') or '').strip()
-        if not name:
-            raise forms.ValidationError('请输入用户名')
-        if STAFF_USERNAME_SEP in name:
-            raise forms.ValidationError('用户名不能包含 ::')
-        if not self.seller_id:
-            raise forms.ValidationError('店铺信息无效')
-        if staff_username_taken(self.seller_id, name):
-            raise forms.ValidationError('本店已有该员工用户名')
-        return name
+        return validate_staff_display_username(
+            self.seller_id, self.cleaned_data.get('username'), field_label='员工用户名',
+        )
 
     def save(self, commit=True):
         from .staff_account_helpers import staff_internal_username
@@ -184,7 +192,7 @@ class CreateWaiterForm(UserCreationForm):
         return user
 
 
-class CreateKitchenForm(UserCreationForm):
+class CreateKitchenForm(_SkipUsernameUniqueValidationMixin, UserCreationForm):
     """卖家为本店创建后厨子账号（工牌名仅本店唯一）"""
 
     perm_cancel_order = forms.BooleanField(
@@ -202,18 +210,11 @@ class CreateKitchenForm(UserCreationForm):
         self.fields['username'].help_text = '只在本店不能重复；别的店可以用同名'
 
     def clean_username(self):
-        from .staff_account_helpers import STAFF_USERNAME_SEP, staff_username_taken
+        from .staff_account_helpers import validate_staff_display_username
 
-        name = (self.cleaned_data.get('username') or '').strip()
-        if not name:
-            raise forms.ValidationError('请输入用户名')
-        if STAFF_USERNAME_SEP in name:
-            raise forms.ValidationError('用户名不能包含 ::')
-        if not self.seller_id:
-            raise forms.ValidationError('店铺信息无效')
-        if staff_username_taken(self.seller_id, name):
-            raise forms.ValidationError('本店已有该员工用户名')
-        return name
+        return validate_staff_display_username(
+            self.seller_id, self.cleaned_data.get('username'), field_label='员工用户名',
+        )
 
     def save(self, commit=True):
         from .staff_account_helpers import staff_internal_username
@@ -230,7 +231,7 @@ class CreateKitchenForm(UserCreationForm):
         return user
 
 
-class CreateManagerForm(UserCreationForm):
+class CreateManagerForm(_SkipUsernameUniqueValidationMixin, UserCreationForm):
     """卖家为本店创建店长子账号（工牌名仅本店唯一）"""
 
     perm_cancel_order = forms.BooleanField(
@@ -249,18 +250,11 @@ class CreateManagerForm(UserCreationForm):
         self.fields['username'].help_text = '只在本店不能重复；别的店可以用同名'
 
     def clean_username(self):
-        from .staff_account_helpers import STAFF_USERNAME_SEP, staff_username_taken
+        from .staff_account_helpers import validate_staff_display_username
 
-        name = (self.cleaned_data.get('username') or '').strip()
-        if not name:
-            raise forms.ValidationError('请输入用户名')
-        if STAFF_USERNAME_SEP in name:
-            raise forms.ValidationError('用户名不能包含 ::')
-        if not self.seller_id:
-            raise forms.ValidationError('店铺信息无效')
-        if staff_username_taken(self.seller_id, name):
-            raise forms.ValidationError('本店已有该员工用户名')
-        return name
+        return validate_staff_display_username(
+            self.seller_id, self.cleaned_data.get('username'), field_label='员工用户名',
+        )
 
     def save(self, commit=True):
         from .staff_account_helpers import staff_internal_username
@@ -277,7 +271,7 @@ class CreateManagerForm(UserCreationForm):
         return user
 
 
-class CreateStaffAccountForm(UserCreationForm):
+class CreateStaffAccountForm(_SkipUsernameUniqueValidationMixin, UserCreationForm):
     """目标态子账号：两大类 + 自填职务名 + 可扩展权限。"""
 
     account_type = forms.ChoiceField(
@@ -342,18 +336,11 @@ class CreateStaffAccountForm(UserCreationForm):
             ]
 
     def clean_username(self):
-        from .staff_account_helpers import STAFF_USERNAME_SEP, staff_username_taken
+        from .staff_account_helpers import validate_staff_display_username
 
-        name = (self.cleaned_data.get('username') or '').strip()
-        if not name:
-            raise forms.ValidationError('请输入员工登录名')
-        if STAFF_USERNAME_SEP in name:
-            raise forms.ValidationError('登录名不能包含 ::')
-        if not self.seller_id:
-            raise forms.ValidationError('店铺信息无效')
-        if staff_username_taken(self.seller_id, name):
-            raise forms.ValidationError('本店已有该员工登录名')
-        return name
+        return validate_staff_display_username(
+            self.seller_id, self.cleaned_data.get('username'),
+        )
 
     def clean(self):
         cleaned = super().clean()
@@ -792,6 +779,90 @@ class ShopDutyOrderNotifyForm(forms.ModelForm):
         return _clean_comma_separated_emails(self.cleaned_data.get('duty_order_notify_email') or '')
 
 
+class ShopBossRemittanceNotifyForm(forms.ModelForm):
+    """卖家后台：老板入金申请邮件（不在店时收提醒）"""
+
+    class Meta:
+        from .dine_models import ShopOperatingSettings
+
+        model = ShopOperatingSettings
+        fields = ['boss_remittance_notify_enabled', 'boss_remittance_notify_email']
+        labels = {
+            'boss_remittance_notify_enabled': '开启老板入金申请邮件',
+            'boss_remittance_notify_email': '老板收件邮箱（多个用逗号分隔）',
+        }
+        help_texts = {
+            'boss_remittance_notify_enabled': '配送员发起交款申请时可发邮件；须服务器已配置发信邮箱才会发出。',
+            'boss_remittance_notify_email': '可填多个邮箱，用逗号分隔。',
+        }
+
+    def clean_boss_remittance_notify_email(self):
+        return _clean_comma_separated_emails(self.cleaned_data.get('boss_remittance_notify_email') or '')
+
+
+class ShopDutyRemittanceNotifyForm(forms.ModelForm):
+    """店铺工作台：值班入金申请邮件（页面未开响铃时的补充）"""
+
+    class Meta:
+        from .dine_models import ShopOperatingSettings
+
+        model = ShopOperatingSettings
+        fields = ['duty_remittance_notify_enabled', 'duty_remittance_notify_email']
+        labels = {
+            'duty_remittance_notify_enabled': '开启值班入金申请邮件',
+            'duty_remittance_notify_email': '值班收件邮箱（多个用逗号分隔）',
+        }
+        help_texts = {
+            'duty_remittance_notify_enabled': '适合有现金管理权限的同事未一直开着页面时补发邮件。',
+            'duty_remittance_notify_email': '可填值班手机能收到的邮箱；多个用逗号分隔。',
+        }
+
+    def clean_duty_remittance_notify_email(self):
+        return _clean_comma_separated_emails(self.cleaned_data.get('duty_remittance_notify_email') or '')
+
+
+class ShopBossRemittanceNotifyForm(forms.ModelForm):
+    """卖家后台：老板入金申请邮件（不在店时收提醒）"""
+
+    class Meta:
+        from .dine_models import ShopOperatingSettings
+
+        model = ShopOperatingSettings
+        fields = ['boss_remittance_notify_enabled', 'boss_remittance_notify_email']
+        labels = {
+            'boss_remittance_notify_enabled': '开启老板入金申请邮件',
+            'boss_remittance_notify_email': '老板收件邮箱（多个用逗号分隔）',
+        }
+        help_texts = {
+            'boss_remittance_notify_enabled': '配送员发起交款申请时可发邮件；须服务器已配置发信邮箱才会发出。',
+            'boss_remittance_notify_email': '可填多个邮箱，用逗号分隔。',
+        }
+
+    def clean_boss_remittance_notify_email(self):
+        return _clean_comma_separated_emails(self.cleaned_data.get('boss_remittance_notify_email') or '')
+
+
+class ShopDutyRemittanceNotifyForm(forms.ModelForm):
+    """店铺工作台：值班入金申请邮件（页面未开响铃时的补充）"""
+
+    class Meta:
+        from .dine_models import ShopOperatingSettings
+
+        model = ShopOperatingSettings
+        fields = ['duty_remittance_notify_enabled', 'duty_remittance_notify_email']
+        labels = {
+            'duty_remittance_notify_enabled': '开启值班入金申请邮件',
+            'duty_remittance_notify_email': '值班收件邮箱（多个用逗号分隔）',
+        }
+        help_texts = {
+            'duty_remittance_notify_enabled': '适合有现金管理权限的同事未一直开着页面时补发邮件。',
+            'duty_remittance_notify_email': '可填值班手机能收到的邮箱；多个用逗号分隔。',
+        }
+
+    def clean_duty_remittance_notify_email(self):
+        return _clean_comma_separated_emails(self.cleaned_data.get('duty_remittance_notify_email') or '')
+
+
 def _clean_comma_separated_emails(raw: str) -> str:
     """多个邮箱用逗号分隔；校验格式。"""
     raw = (raw or '').strip()
@@ -853,3 +924,45 @@ class ShopDutyOrderNotifyForm(forms.ModelForm):
 
     def clean_duty_order_notify_email(self):
         return _clean_comma_separated_emails(self.cleaned_data.get('duty_order_notify_email') or '')
+
+
+class ShopBossRemittanceNotifyForm(forms.ModelForm):
+    """卖家后台：老板入金申请邮件（不在店时收提醒）"""
+
+    class Meta:
+        from .dine_models import ShopOperatingSettings
+
+        model = ShopOperatingSettings
+        fields = ['boss_remittance_notify_enabled', 'boss_remittance_notify_email']
+        labels = {
+            'boss_remittance_notify_enabled': '开启老板入金申请邮件',
+            'boss_remittance_notify_email': '老板收件邮箱（多个用逗号分隔）',
+        }
+        help_texts = {
+            'boss_remittance_notify_enabled': '配送员发起交款申请时可发邮件；须服务器已配置发信邮箱才会发出。',
+            'boss_remittance_notify_email': '可填多个邮箱，用逗号分隔。',
+        }
+
+    def clean_boss_remittance_notify_email(self):
+        return _clean_comma_separated_emails(self.cleaned_data.get('boss_remittance_notify_email') or '')
+
+
+class ShopDutyRemittanceNotifyForm(forms.ModelForm):
+    """店铺工作台：值班入金申请邮件（页面未开响铃时的补充）"""
+
+    class Meta:
+        from .dine_models import ShopOperatingSettings
+
+        model = ShopOperatingSettings
+        fields = ['duty_remittance_notify_enabled', 'duty_remittance_notify_email']
+        labels = {
+            'duty_remittance_notify_enabled': '开启值班入金申请邮件',
+            'duty_remittance_notify_email': '值班收件邮箱（多个用逗号分隔）',
+        }
+        help_texts = {
+            'duty_remittance_notify_enabled': '适合有现金管理权限的同事未一直开着页面时补发邮件。',
+            'duty_remittance_notify_email': '可填值班手机能收到的邮箱；多个用逗号分隔。',
+        }
+
+    def clean_duty_remittance_notify_email(self):
+        return _clean_comma_separated_emails(self.cleaned_data.get('duty_remittance_notify_email') or '')

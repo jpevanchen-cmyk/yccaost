@@ -190,7 +190,7 @@ class CashReconciliationTests(WorkflowImprovementBase):
             fulfillment_type='delivery',
             payment_method='cash',
             payment_status='pending_payment',
-            order_status='delivering',
+            order_status='awaiting_delivery',
             delivery_address='现金试验地址',
         )
         DeliveryOrder.objects.create(

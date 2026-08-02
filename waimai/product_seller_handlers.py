@@ -263,6 +263,22 @@ def handle_products_post(request, seller_id):
         messages.success(request, f'「{item.dish.name}」在本清单已{state}')
         return _products_redirect('menu-panel', _menus_query(profile_id))
 
+    if 'toggle_menu_item_general' in request.POST:
+        profile_id = request.POST.get('profile_id')
+        item = _get_menu_item(seller_id, profile_id, request.POST.get('item_id'))
+        item.general_price_listed = not item.general_price_listed
+        item.save(update_fields=['general_price_listed'])
+        state = '展示' if item.general_price_listed else '不展示'
+        settings = get_operating_settings(seller_id)
+        if _is_active_menu_profile(settings, profile_id):
+            messages.success(request, f'「{item.dish.name}」通用价已{state}，店铺页已同步')
+        else:
+            messages.success(
+                request,
+                f'「{item.dish.name}」通用价已{state}；须将本清单「切换使用」后客人才看得到',
+            )
+        return _products_redirect('menu-panel', _menus_query(profile_id))
+
     if 'toggle_menu_item_member' in request.POST:
         profile_id = request.POST.get('profile_id')
         item = _get_menu_item(seller_id, profile_id, request.POST.get('item_id'))
@@ -322,6 +338,7 @@ def handle_products_post(request, seller_id):
             defaults={
                 'sales_cap': sales_cap,
                 'is_listed': True,
+                'general_price_listed': True,
                 'member_price_listed': dish.member_price_enabled,
                 'special_price_listed': dish.special_price_enabled,
             },

@@ -50,6 +50,7 @@ def _core_shell() -> dict:
         ),
         'pickup_label': '取货',
         'pickup_button': '我已取货',
+        'start_delivery_button': '开始送餐',
         'pickup_disabled_title': '请先取货',
         'handoff_wait_text': '商品尚未完成交接，请等店内先交给配送员。',
         'serve_dine_in': '交付',

@@ -25,3 +25,13 @@ def shop_special_label(field_key):
 def shop_hint_label(key):
     """用法：{% shop_hint_label 'login_required_buyer' %}"""
     return _shop_hint_label(key)
+
+
+@register.simple_tag
+def menu_item_has_guest_price(menu_item, seller_id):
+    """清单条目是否至少有一档客人可见价格（与点菜页档位规则一致）。"""
+    from ..menu_helpers import menu_item_has_visible_tier
+
+    if not menu_item or not menu_item.is_listed:
+        return False
+    return menu_item_has_visible_tier(menu_item, seller_id)

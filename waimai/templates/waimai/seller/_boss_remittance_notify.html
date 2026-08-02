@@ -1,0 +1,18 @@
+{# 卖家后台：老板入金申请邮件 #}
+{% if boss_remittance_notify_form %}
+<details class="seller-panel-fold" id="boss-remittance-notify" data-yc-tour="fold-boss-remittance-notify">
+    <summary class="seller-panel-fold-head"><span class="seller-panel-fold-title">📧 老板入金申请邮件</span></summary>
+    <div class="seller-panel-fold-body">
+        <p class="card-meta">配送员在工作台发起交款申请时，可发邮件提醒（与值班轨分开配置）。</p>
+        {% if boss_remittance_notify_smtp_warn %}
+        <p class="msg-warn">{{ boss_remittance_notify_smtp_warn }}</p>
+        {% endif %}
+        <form method="POST" class="seller-panel-form auth-form">
+            {% csrf_token %}
+            <input type="hidden" name="save_boss_remittance_notify" value="1">
+            {{ boss_remittance_notify_form.as_p }}
+            <button type="submit" class="btn btn-green">保存老板入金申请邮件</button>
+        </form>
+    </div>
+</details>
+{% endif %}

@@ -9,11 +9,6 @@
 {% endblock %}
 
 {% block content %}
-{% if messages %}
-    {% for message in messages %}
-    <div class="{% if message.tags == 'error' %}msg-err{% else %}msg-ok{% endif %}" style="margin-bottom:12px;">{{ message }}</div>
-    {% endfor %}
-{% endif %}
 
 <p class="card-meta" style="margin:0 0 10px;">
     工作台 · {{ work_user|staff_title }} {{ work_user.username|staff_display }}
@@ -79,6 +74,25 @@
             <button type="submit" class="btn btn-sm btn-primary" style="margin-top:8px;">发送留言</button>
         </form>
         {% endif %}
+    </div>
+</details>
+
+<details class="detail-collapse" open>
+    <summary>📦 订单进度</summary>
+    <div class="detail-collapse-body">
+        <div class="detail-row"><span>当前状态</span><span>{{ order.get_order_status_display }}</span></div>
+        {% if order.delivery_order %}
+        <div class="detail-row"><span>配送单状态</span><span>{{ order.delivery_order.get_delivery_status_display }}</span></div>
+        {% endif %}
+        <p class="card-meta" style="margin:12px 0 8px;"><strong>时间线</strong></p>
+        {% for label, dt in timeline %}
+        <div class="detail-row">
+            <span>{{ label }}</span>
+            <span>{% if dt %}{{ dt|beijing:"m-d H:i" }}{% else %}<span class="pending-text">—</span>{% endif %}</span>
+        </div>
+        {% empty %}
+        <p class="pending-text">暂无进度记录</p>
+        {% endfor %}
     </div>
 </details>
 

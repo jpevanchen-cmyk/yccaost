@@ -86,7 +86,11 @@ def handle_kitchen_board_post(request, seller_id: str, *, redirect_to=None):
 
     if 'start_preparing' in request.POST:
         if kitchen_order_can_start(order):
-            order.order_status = 'preparing'
+            from .order_status_transition_helpers import transition_order_status
+
+            transition_order_status(
+                order, 'preparing', source='kitchen_handlers.start_preparing',
+            )
             order.preparing_at = timezone.now()
             update_fields = ['order_status', 'preparing_at', 'updated_at']
             if not order.estimated_ready_at:

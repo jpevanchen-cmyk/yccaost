@@ -175,46 +175,11 @@ def pickup_delivery_address(shop_profile):
     return store_delivery_address(shop_profile, 'takeaway')
 
 
-def build_order_timeline(order):
-    """组装订单时间线，供详情页展示"""
-    if order.is_basic_order():
-        ready_label = '已备货'
-    elif order.is_dine_in():
-        ready_label = '已出餐'
-    elif order.is_takeaway():
-        ready_label = '已备好待取'
-    else:
-        ready_label = '出餐可配送'
-    rows = [
-        ('下单时间', order.created_at),
-        ('支付时间', order.payment_time),
-        ('开始备货', order.preparing_at),
-    ]
-    if order.estimated_ready_at:
-        if order.is_basic_order():
-            rows.append(('预计完成', order.estimated_ready_at))
-        elif order.is_dine_in():
-            rows.append(('预计出餐', order.estimated_ready_at))
-        elif order.is_takeaway():
-            rows.append(('预计可取餐', order.estimated_ready_at))
-        else:
-            rows.append(('预计出餐', order.estimated_ready_at))
-    rows.append((ready_label, order.ready_at))
-    delivery = getattr(order, 'delivery_order', None)
-    if delivery:
-        rows.extend([
-            ('骑手接单', delivery.accepted_at),
-            ('取餐时间', delivery.picked_up_at),
-            ('送达时间', delivery.completed_at),
-        ])
-    if order.cancelled_at or order.order_status == 'cancelled':
-        side = ''
-        if order.cancel_side == 'buyer':
-            side = '（买家）'
-        elif order.cancel_side == 'shop':
-            side = '（店家）'
-        rows.append((f'取消时间{side}', order.cancelled_at))
-    return rows
+def build_order_timeline(order, *, viewer: str = 'buyer'):
+    """组装订单时间线；正本在 order_timeline_helpers（进度 83）。"""
+    from .order_timeline_helpers import build_order_timeline as _build
+
+    return _build(order, viewer=viewer)
 
 
 def dish_items_with_line_totals(dish_items):

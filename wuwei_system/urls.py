@@ -5,7 +5,6 @@ from django.urls import path, include
 
 from waimai import views
 from waimai import owner_views as views_owner
-from waimai import onboarding_views
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -17,6 +16,7 @@ urlpatterns = [
     path('kitchen-home/', views.kitchen_home, name='kitchen_home'),
     path('s/<str:shop_code>/work/', views.shop_work, name='shop_work'),
     path('s/<str:shop_code>/work/new-orders.json', views.shop_work_new_orders_json, name='shop_work_new_orders_json'),
+    path('s/<str:shop_code>/work/remittances-pending.json', views.shop_work_pending_remittances_json, name='shop_work_pending_remittances_json'),
     path('s/<str:shop_code>/work/logout/', views.shop_work_logout, name='shop_work_logout'),
     path(
         's/<str:shop_code>/work/order/<uuid:order_id>/',
@@ -74,6 +74,7 @@ urlpatterns = [
     path('seller-panel/products/print-qr/', views.seller_product_qr_print, name='seller_product_qr_print'),
     path('seller-panel/workbench/attendance-logs/', views.seller_panel_attendance_logs, name='seller_panel_attendance_logs'),
     path('seller-panel/orders/pending.json', views.seller_pending_orders_json, name='seller_pending_orders_json'),
+    path('seller-panel/payment/remittances-pending.json', views.seller_pending_remittances_json, name='seller_pending_remittances_json'),
     path('seller-panel/<str:section>/', views.seller_panel_section, name='seller_panel_section'),
     path('place-order/', views.place_order, name='place_order'),
     path('pay/<uuid:order_id>/', views.pay_order, name='pay_order'),
@@ -86,23 +87,6 @@ urlpatterns = [
         views.seller_order_cashier_qr_print,
         name='seller_order_cashier_qr_print',
     ),
-    path('onboarding/preview/seller/operating/', onboarding_views.onboarding_preview_seller_operating, name='onboarding_seller_operating'),
-    path('onboarding/preview/seller/products/', onboarding_views.onboarding_preview_seller_products, name='onboarding_seller_products'),
-    path('onboarding/preview/seller/print-qr/', onboarding_views.onboarding_preview_seller_print_qr, name='onboarding_seller_print_qr'),
-    path('onboarding/preview/seller/workbench/', onboarding_views.onboarding_preview_seller_workbench_manage, name='onboarding_seller_workbench_manage'),
-    path('onboarding/preview/work/login/', onboarding_views.onboarding_preview_work_login, name='onboarding_work_login'),
-    path('onboarding/preview/work/<str:view>/', onboarding_views.onboarding_preview_work_hub, name='onboarding_work_hub'),
-    path('onboarding/preview/seller/orders/', onboarding_views.onboarding_preview_seller_orders, name='onboarding_seller_orders'),
-    path(
-        'onboarding/preview/seller/orders/<uuid:order_id>/',
-        onboarding_views.onboarding_preview_seller_order_detail,
-        name='onboarding_seller_order_detail',
-    ),
-    path('onboarding/preview/seller/payment/', onboarding_views.onboarding_preview_seller_payment, name='onboarding_seller_payment'),
-    path('onboarding/preview/seller/homepage/', onboarding_views.onboarding_preview_seller_homepage, name='onboarding_seller_homepage'),
-    path('onboarding/preview/seller/dine/', onboarding_views.onboarding_preview_seller_dine, name='onboarding_seller_dine'),
-    path('onboarding/preview/seller/delivery/', onboarding_views.onboarding_preview_seller_delivery, name='onboarding_seller_delivery'),
-    path('onboarding/preview/buyer/orders/', onboarding_views.onboarding_preview_buyer_orders, name='onboarding_buyer_orders'),
     path('experience/', include('waimai.onboarding.urls')),
 ]
 

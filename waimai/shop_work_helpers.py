@@ -487,4 +487,6 @@ def build_rider_board_context(user, seller_id: str, *, sort_mode: str = 'newest'
         'rider_can_claim': (not seller_mode and validate_shop_rider(seller_id, rider_id)),
         'rider_id': rider_id,
         'rider_cash_remittance': rider_cash,
+        # 真实工作台无演示入金数据；给 None 让模板 default: 可安全求值（演示预览仍有该变量）
+        'onboarding_demo_rider_cash': None,
     }

@@ -112,7 +112,7 @@ def get_waiter_phase_label(order: BuyOrder) -> str:
             return '已全部送达 · 待收款'
         if delivery and delivery.delivery_status == 'accepted':
             return f'已全部交{rider_w} · 待{rider_w} {delivery.rider_id} {pickup_w}'
-    if order.payment_status == 'pending_payment' and order.order_status == 'awaiting_payment':
+    if order.payment_status == 'pending_payment' and order.order_status in ('awaiting_payment', 'created'):
         return '新订单 · 待客人支付'
     if order.is_awaiting_in_store_order_confirm():
         return '待店家备货'
@@ -199,28 +199,21 @@ def sync_waiter_service_status(order: BuyOrder) -> list[str]:
         order.waiter_service_status = new_status
         update_fields.append('waiter_service_status')
 
-    if (
-        order.payment_status == 'paid'
-        and served >= total
-        and total > 0
-        and order.is_in_store()
-        and order.order_status in ('awaiting_prep', 'preparing', 'ready_pickup')
-    ):
-        order.order_status = 'completed'
-        order.waiter_service_status = WAITER_STATUS_SETTLED
-        update_fields.extend(['order_status', 'waiter_service_status'])
-        # 堂食结账完成 → 翻台：关掉桌台会话（游客本机随即看不见）
-        from .guest_order_helpers import maybe_close_table_session_after_settle
-        maybe_close_table_session_after_settle(order)
-    elif (
-        served >= total
-        and total > 0
-        and order.is_in_store()
-        and order.order_status in ('awaiting_prep', 'preparing')
-    ):
-        # 商品已全部交付/上桌，但尚未收款：进入「待取走/待结账」
-        order.order_status = 'ready_pickup'
-        update_fields.append('order_status')
+    from .order_status_event_helpers import (
+        EVENT_GOODS_FULLY_DELIVERED,
+        handle_order_status_event,
+    )
+
+    if served >= total and total > 0:
+        event_fields = handle_order_status_event(
+            order,
+            EVENT_GOODS_FULLY_DELIVERED,
+            source='waiter_helpers.sync_waiter_service_status',
+        )
+        update_fields.extend(event_fields)
+        if order.order_status == 'completed':
+            order.waiter_service_status = WAITER_STATUS_SETTLED
+            update_fields.append('waiter_service_status')
 
     if update_fields:
         update_fields.append('updated_at')

@@ -5,6 +5,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from ..models import BuyOrder, ShopPaymentSettings
+from ..order_status_event_helpers import (
+    EVENT_MANUAL_COMPLETE,
+    EVENT_PAYMENT_RECEIVED,
+    EVENT_PAYMENT_UNCOLLECTED_CLOSE,
+    handle_order_status_event,
+)
 from .base import PaymentInitResult
 from .core import get_payment_settings, mark_payment_received
 from waimai.plugins.dining.dining_bridge import (
@@ -14,13 +20,48 @@ from waimai.plugins.dining.dining_bridge import (
 from .registry import build_buyer_pay_options
 from .wechat_native import create_native_payment, try_sync_wechat_payment
 
+
+def _payment_fail(message: str, messages: list[str] | None = None) -> PaymentInitResult:
+    """支付失败：支持多条清单不足说明。"""
+    lines = messages or ([message] if message else [])
+    return PaymentInitResult(ok=False, message=lines[0] if lines else '', messages=lines)
+
+
+def _ensure_catalog_sales_for_cash(order: BuyOrder) -> PaymentInitResult | None:
+    """选现金/货到付款前占清单名额；失败返回 PaymentInitResult。"""
+    from ..menu_helpers import try_apply_catalog_sales_for_order
+
+    ok, errors = try_apply_catalog_sales_for_order(order)
+    if ok:
+        return None
+    return _payment_fail('', messages=errors)
+
+
 def confirm_order_paid(order: BuyOrder, payment_method: str, paid_at=None):
     """订单标记为已支付；主体订单不调用饮食履约。"""
+    from ..menu_helpers import release_catalog_sales_for_order, try_apply_catalog_sales_for_order
+
+    if payment_method == 'wechat_simulate':
+        release_catalog_sales_for_order(order)
+    elif payment_method != 'cash' or not order.catalog_sales_applied:
+        ok, errors = try_apply_catalog_sales_for_order(order)
+        if not ok:
+            import logging
+            logging.getLogger('waimai.payments').warning(
+                '清单名额不足，无法为已付单占名额 order=%s errors=%s',
+                order.order_id, errors,
+            )
+            return
+
     if order.fulfillment_type == 'order':
         newly = mark_payment_received(order, payment_method, paid_at=paid_at)
         if newly:
-            order.order_status = 'awaiting_prep'
-            order.save(update_fields=['order_status', 'updated_at'])
+            fields = handle_order_status_event(
+                order,
+                EVENT_PAYMENT_RECEIVED,
+                source='payments.service.confirm_order_paid',
+            )
+            order.save(update_fields=list(dict.fromkeys(fields)) or ['order_status', 'updated_at'])
             from ..order_alert_helpers import maybe_notify_merchant_new_order
 
             maybe_notify_merchant_new_order(order)
@@ -68,6 +109,9 @@ def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentIni
         return PaymentInitResult(ok=False, message='游客堂食请使用现场付现金')
 
     if method == 'wechat_simulate':
+        from ..menu_helpers import release_catalog_sales_for_order
+
+        release_catalog_sales_for_order(order)
         confirm_order_paid(order, 'wechat_simulate')
         return PaymentInitResult(
             ok=True,
@@ -78,23 +122,34 @@ def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentIni
         )
 
     if method == 'cash':
+        cap_fail = _ensure_catalog_sales_for_cash(order)
+        if cap_fail:
+            return cap_fail
         order.payment_method = 'cash'
         update_fields = ['payment_method', 'updated_at']
         if order.fulfillment_type == 'order':
             # 主体下单不套用饮食预计出餐；先进入待备货，店家后续确认现金。
-            order.order_status = 'awaiting_prep'
-            update_fields.append('order_status')
-        order.save(update_fields=update_fields)
-        from ..order_alert_helpers import maybe_notify_merchant_new_order
+            from ..order_status_transition_helpers import transition_order_status
 
-        maybe_notify_merchant_new_order(order)
-        return PaymentInitResult(
-            ok=True,
-            redirect_url=f'/order/{order.order_id}/?cash_pending=1&order=1',
-        )
+            transition_order_status(
+                order, 'awaiting_prep', source='payments.service.initiate_payment.cash_order',
+            )
+            update_fields.append('order_status')
+            order.save(update_fields=update_fields)
+            from ..order_alert_helpers import maybe_notify_merchant_new_order
+
+            maybe_notify_merchant_new_order(order)
+            return PaymentInitResult(
+                ok=True,
+                redirect_url=f'/order/{order.order_id}/?cash_pending=1&order=1',
+            )
         # 到店付（堂食/打包）与外卖货到付款：均立即进入待备货，先备货再收款。
         # 外卖货到付款改正：先备货、派单，送达时由骑手收款（不再「确认收款后才备货派单」）。
-        order.order_status = 'awaiting_prep'
+        from ..order_status_transition_helpers import transition_order_status
+
+        transition_order_status(
+            order, 'awaiting_prep', source='payments.service.initiate_payment.cash_dining',
+        )
         from ..wait_time_helpers import assign_default_wait_time
 
         assign_default_wait_time(order, save=False)
@@ -136,6 +191,11 @@ def confirm_cash_payment(order: BuyOrder) -> tuple[bool, str]:
             return False, '当前订单状态不能确认收款'
         # 仅到账，不再改履约状态（店内单已在备货流中）
         mark_payment_received(order, 'cash')
+        from ..waiter_helpers import sync_waiter_service_status
+
+        fields = sync_waiter_service_status(order)
+        if fields:
+            order.save(update_fields=list(dict.fromkeys(fields)))
         return True, '已确认收款'
 
     confirm_order_paid(order, 'cash')
@@ -285,12 +345,21 @@ def manager_approve_cash_exception(order: BuyOrder, manager_id: str, note: str) 
     order.cash_exception_note = note
     order.cash_exception_resolved_by = manager_id or ''
     order.cash_exception_resolved_at = now
-    order.order_status = 'completed'
+    from ..order_status_event_helpers import EVENT_DELIVERY_COMPLETED
+
     order.save(update_fields=[
         'cash_shortfall_status', 'cash_collected_at', 'payment_status',
         'payment_time', 'cash_exception_note', 'cash_exception_resolved_by',
-        'cash_exception_resolved_at', 'order_status', 'updated_at',
+        'cash_exception_resolved_at', 'updated_at',
     ])
+    fields = handle_order_status_event(
+        order,
+        EVENT_DELIVERY_COMPLETED,
+        source='payments.service.manager_approve_cash_exception',
+    )
+    if order.order_status != 'completed':
+        return False, '兜底结单失败：订单状态不允许完成'
+    order.save(update_fields=list(dict.fromkeys(fields)))
     delivery.delivery_status = 'completed'
     delivery.completed_at = now
     delivery.save(update_fields=['delivery_status', 'completed_at', 'updated_at'])
@@ -326,10 +395,14 @@ def close_uncollected_cash_order(order: BuyOrder, reason: str) -> tuple[bool, st
 
     order.payment_status = 'uncollected'
     order.cash_uncollected_reason = reason
-    order.order_status = 'completed'
-    order.save(update_fields=[
-        'payment_status', 'cash_uncollected_reason', 'order_status', 'updated_at',
-    ])
+    fields = handle_order_status_event(
+        order,
+        EVENT_PAYMENT_UNCOLLECTED_CLOSE,
+        source='payments.service.close_uncollected_cash_order',
+    )
+    order.save(update_fields=list(dict.fromkeys([
+        'payment_status', 'cash_uncollected_reason', *fields,
+    ])))
     # 未收款结案也算翻台：关掉桌台会话
     from ..guest_order_helpers import maybe_close_table_session_after_settle
     maybe_close_table_session_after_settle(order)

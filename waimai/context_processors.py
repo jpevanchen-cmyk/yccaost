@@ -132,40 +132,25 @@ def site_branding(request):
     }
 
 
+def yc_page_notices(request):
+    """全站操作提示：展示一次即失效（手机/电脑同一套）。"""
+    from .flash_notice_helpers import page_notices_json
+
+    boot = page_notices_json(request)
+    return {'yc_notice_boot': boot}
+
+
 def onboarding_boot(request):
-    """全站注入新手体验引导数据（幻灯片式小步演示需跨页）"""
-    from .onboarding_helpers import build_onboarding_boot_payload, official_shop_ready
+    """兼容旧模板变量：旧版 /onboarding/ 引导已废止，始终不注入"""
+    from .onboarding.official_shop import OFFICIAL_SHOP_NAME, get_official_shop_profile, official_shop_ready
 
-    path = request.path or ''
-
-    # 新版体验页、?exp=1、服务器主页：不注入旧版 boot，避免双引导
-    if (
-        request.GET.get('exp') == '1'
-        or path.startswith('/experience/')
-        or path in ('/', '/directory/')
-        or path.startswith('/directory/')
-    ):
-        ready = official_shop_ready()
-        name = ''
-        if ready:
-            boot = build_onboarding_boot_payload()
-            name = boot['officialShopName']
-        return {
-            'onboarding_enabled': False,
-            'onboarding_boot_json': '',
-            'official_shop_name': name,
-        }
-
-    if not official_shop_ready():
-        return {
-            'onboarding_enabled': False,
-            'onboarding_boot_json': '',
-            'official_shop_name': '',
-        }
-    boot = build_onboarding_boot_payload()
+    name = ''
+    if official_shop_ready():
+        shop = get_official_shop_profile()
+        name = shop.shop_name if shop else OFFICIAL_SHOP_NAME
     return {
-        'onboarding_enabled': True,
-        'onboarding_boot_json': json.dumps(boot, ensure_ascii=False),
-        'official_shop_name': boot['officialShopName'],
+        'onboarding_enabled': False,
+        'onboarding_boot_json': '',
+        'official_shop_name': name,
     }
 

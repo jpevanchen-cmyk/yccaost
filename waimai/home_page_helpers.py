@@ -455,7 +455,7 @@ def build_server_home_view_context(request=None) -> dict:
         'brand_title': site.site_name or '本服务器',
     }
     ctx = enrich_server_home_context(ctx)
-    from .onboarding_helpers import enrich_server_home_onboarding
+    from .onboarding.context import enrich_server_home_onboarding
     return enrich_server_home_onboarding(ctx)
 
 

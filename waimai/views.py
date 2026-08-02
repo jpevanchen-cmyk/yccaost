@@ -29,7 +29,7 @@ from .menu_helpers import (
     dish_visible_on_shop,
     get_active_menu_items_map,
     get_shop_dishes_for_sale,
-    increment_menu_sold_counts,
+    try_apply_catalog_sales_for_order,
     validate_dish_purchase,
 )
 from .operating_helpers import check_order_admission, get_operating_settings
@@ -390,6 +390,9 @@ def shop_work(request, shop_code):
             or perms.get(current_view)
             or (current_view == 'orders' and can_open_orders)
         )
+        from .remittance_alert_helpers import work_user_can_use_remittance_alert
+
+        can_use_remittance_alert = work_user_can_use_remittance_alert(work_user)
 
         if request.method == 'POST':
             is_status_action = 'staff_work_status_action' in request.POST
@@ -428,6 +431,7 @@ def shop_work(request, shop_code):
             'can_operate_kitchen': perms['kitchen'],
             'can_operate_rider': perms['rider'],
             'can_use_order_alert': can_use_order_alert,
+            'can_use_remittance_alert': can_use_remittance_alert,
             'show_rider_extras': staff_has_permission(work_user, PERM_DINING_RIDER),
             'is_work_staff': is_shop_staff_account(work_user),
             'work_user_title': (
@@ -443,7 +447,7 @@ def shop_work(request, shop_code):
         }
         context.update(build_shop_work_daily_history(seller_id, work_user))
         if work_user.role == 'seller':
-            from .forms import ShopDutyOrderNotifyForm
+            from .forms import ShopDutyOrderNotifyForm, ShopDutyRemittanceNotifyForm
             from .operating_helpers import get_operating_settings
             from .order_notify_ui_helpers import smtp_not_ready_message
 
@@ -451,6 +455,10 @@ def shop_work(request, shop_code):
             context['duty_order_notify_form'] = ShopDutyOrderNotifyForm(instance=operating)
             context['duty_order_notify_smtp_warn'] = smtp_not_ready_message(
                 operating.duty_order_notify_enabled,
+            )
+            context['duty_remittance_notify_form'] = ShopDutyRemittanceNotifyForm(instance=operating)
+            context['duty_remittance_notify_smtp_warn'] = smtp_not_ready_message(
+                operating.duty_remittance_notify_enabled,
             )
         from .audit_helpers import query_audit_logs, write_audit_log
         # 服务方仅看本人操作记录（A.12）
@@ -600,6 +608,35 @@ def shop_work_new_orders_json(request, shop_code):
     })
 
 
+@require_GET
+def shop_work_pending_remittances_json(request, shop_code):
+    """店铺工作台轮询：待核对入金申请数量与最新时间戳。"""
+    from .remittance_alert_helpers import remittance_alert_snapshot, work_user_can_use_remittance_alert
+    from .shop_work_auth import get_shop_work_seller_id, get_shop_work_user
+    from .shop_work_helpers import get_shop_profile_by_code, user_belongs_to_shop
+
+    shop_profile = get_shop_profile_by_code(shop_code)
+    if not shop_profile:
+        return JsonResponse({'ok': False, 'count': 0, 'latest_ts': 0}, status=404)
+    seller_id = shop_profile.seller_id
+    work_user = get_shop_work_user(request)
+    if (
+        not work_user
+        or get_shop_work_seller_id(request) != seller_id
+        or not user_belongs_to_shop(work_user, seller_id)
+        or not work_user_can_use_remittance_alert(work_user)
+    ):
+        return JsonResponse({'ok': False, 'count': 0, 'latest_ts': 0}, status=403)
+
+    count, latest_ts = remittance_alert_snapshot(seller_id)
+    from .operating_helpers import build_order_alert_config
+
+    return JsonResponse({
+        'ok': True, 'count': count, 'latest_ts': latest_ts,
+        'config': build_order_alert_config(seller_id),
+    })
+
+
 def shop_work_order(request, shop_code, order_id):
     """
     工作台订单中转页：仅认工作台登录身份。
@@ -611,7 +648,8 @@ def shop_work_order(request, shop_code, order_id):
         shop_can_cancel_order,
         shop_has_cancel_communication,
     )
-    from .order_helpers import dish_items_with_line_totals
+    from .order_helpers import dish_items_with_line_totals, build_order_timeline
+    from .order_timeline_helpers import VIEWER_WORK
     from .order_message_helpers import (
         mark_order_messages_read,
         post_order_message,
@@ -703,6 +741,7 @@ def shop_work_order(request, shop_code, order_id):
         'back_url': build_shop_work_path(code, view='orders'),
         'shop_work_logout_url': reverse('shop_work_logout', kwargs={'shop_code': code}),
         'workbench_shell': build_workbench_shell(seller_id),
+        'timeline': build_order_timeline(order, viewer=VIEWER_WORK),
         **qr_ctx,
     })
 
@@ -1107,6 +1146,9 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
                 dish, request.user, seller_id, cart,
                 menu_item=menu_items_map.get(dish.dish_id),
             )
+            # 清单模式下无任何可展示档位时不渲染空壳商品
+            if using_menu and not tier_options:
+                continue
             dish_rows.append({
                 'dish': dish,
                 'image_gallery': gallery,
@@ -1592,6 +1634,27 @@ def seller_pending_orders_json(request):
 
 
 @login_required
+@require_GET
+def seller_pending_remittances_json(request):
+    """卖家支付页轮询：待核对入金申请数量与最新时间戳。"""
+    if request.user.role != 'seller':
+        return JsonResponse({'ok': False, 'count': 0, 'latest_ts': 0}, status=403)
+    seller_id = request.user.username
+    from .plugin_runtime.registry import is_plugin_enabled
+    from .remittance_alert_helpers import remittance_alert_snapshot
+
+    if not is_plugin_enabled('fulfillment', seller_id):
+        return JsonResponse({'ok': True, 'count': 0, 'latest_ts': 0})
+    count, latest_ts = remittance_alert_snapshot(seller_id)
+    from .operating_helpers import build_order_alert_config
+
+    return JsonResponse({
+        'ok': True, 'count': count, 'latest_ts': latest_ts,
+        'config': build_order_alert_config(seller_id),
+    })
+
+
+@login_required
 def seller_panel(request):
     """卖家管理入口：默认进入订单页（仅店主生态登录）"""
     if request.user.role != 'seller':
@@ -1975,6 +2038,16 @@ def seller_panel_section(request, section):
         context['experience_site'] = experience_site_enabled()
         context['show_rider_cash'] = fulfillment_on
         context['rider_cash'] = rider_cash_summary(seller_id) if fulfillment_on else None
+        context['can_use_remittance_alert'] = fulfillment_on
+        if fulfillment_on:
+            from .forms import ShopBossRemittanceNotifyForm
+            from .order_notify_ui_helpers import smtp_not_ready_message
+
+            operating = get_operating_settings(seller_id)
+            context['boss_remittance_notify_form'] = ShopBossRemittanceNotifyForm(instance=operating)
+            context['boss_remittance_notify_smtp_warn'] = smtp_not_ready_message(
+                operating.boss_remittance_notify_enabled,
+            )
     elif section == 'audit':
         from .audit_helpers import (
             can_view_tech_logs,
@@ -2197,11 +2270,22 @@ def place_order(request):
                     if guest_nickname and not (merged.guest_nickname or '').strip():
                         merged.guest_nickname = guest_nickname
                         merged.save(update_fields=['guest_nickname', 'updated_at'])
-                    increment_menu_sold_counts(seller_id, cart_items)
                     set_shop_cart(request.session, seller_id, {})
+                    if merged.payment_method == 'cash' or (
+                        is_guest and merged.catalog_sales_applied
+                    ):
+                        ok_cap, cap_errors = try_apply_catalog_sales_for_order(merged)
+                        if not ok_cap:
+                            for err in cap_errors:
+                                messages.error(request, err)
+                            return redirect(f'/shop/?seller_id={seller_id}')
                     if is_guest:
                         if not merged.payment_method:
-                            apply_guest_onsite_cash(merged)
+                            ok_cash, cash_errors = apply_guest_onsite_cash(merged)
+                            if not ok_cash:
+                                for err in cash_errors:
+                                    messages.error(request, err)
+                                return redirect(f'/shop/?seller_id={seller_id}')
                         return redirect(
                             f'/order/{merged.order_id}/?cash_pending=1&dine_in=1'
                         )
@@ -2220,7 +2304,7 @@ def place_order(request):
         delivery_fee_detail=fee_detail,
         dish_items=dish_items_json,
         payment_status='pending_payment',
-        order_status='awaiting_payment',
+        order_status='created',
         delivery_address=delivery_address,
         fulfillment_type=fulfillment_type,
         distance_km=distance_km,
@@ -2230,7 +2314,10 @@ def place_order(request):
         guest_nickname=guest_nickname,
     )
 
-    increment_menu_sold_counts(seller_id, cart_items)
+    from .order_timeline_helpers import record_order_created
+
+    record_order_created(order)
+
     set_shop_cart(request.session, seller_id, {})
     from .audit_helpers import write_audit_log
     write_audit_log(
@@ -2245,7 +2332,18 @@ def place_order(request):
 
     # 游客堂食：直接现场付现金，跳过在线支付页
     if is_guest:
-        apply_guest_onsite_cash(order)
+        ok_cash, cash_errors = apply_guest_onsite_cash(order)
+        if not ok_cash:
+            from .order_status_transition_helpers import transition_order_status
+
+            transition_order_status(
+                order, 'cancelled', source='views.create_order.guest_catalog_cap_fail',
+            )
+            order.payment_status = 'cancelled'
+            order.save(update_fields=['payment_status', 'updated_at'])
+            for err in cash_errors:
+                messages.error(request, err)
+            return redirect(f'/shop/?seller_id={seller_id}')
         return redirect(f'/order/{order.order_id}/?cash_pending=1&dine_in=1')
 
     return redirect('pay_order', order_id=order.order_id)
@@ -2273,7 +2371,12 @@ def pay_order(request, order_id):
     # 游客堂食单不应进在线支付页：补走现场付
     if order.is_guest_order() and order.is_dine_in():
         from .guest_order_helpers import apply_guest_onsite_cash
-        apply_guest_onsite_cash(order)
+
+        ok_cash, cash_errors = apply_guest_onsite_cash(order)
+        if not ok_cash:
+            for err in cash_errors:
+                messages.error(request, err)
+            return redirect('pay_order', order_id=order.order_id)
         return redirect(f'/order/{order.order_id}/?cash_pending=1&dine_in=1')
 
     ctx = build_pay_page_context(order)
@@ -2282,7 +2385,9 @@ def pay_order(request, order_id):
         method = request.POST.get('payment_method', '').strip()
         result = initiate_payment(order, method, _client_ip(request))
         if not result.ok:
-            messages.error(request, result.message)
+            for err in (result.messages or [result.message]):
+                if err:
+                    messages.error(request, err)
             return redirect('pay_order', order_id=order.order_id)
         if result.redirect_url:
             return redirect(result.redirect_url)
@@ -2646,11 +2751,13 @@ def order_detail(request, order_id):
         show_buyer_hint=qr_buyer_hint,
     )
 
+    timeline_viewer = viewer_role if viewer_role in ('buyer', 'seller', 'rider') else 'buyer'
+
     return render(request, 'waimai/order_detail.html', {
         'order': order,
         'order_shell': order_shell,
         'shop_profile': shop_profile,
-        'timeline': build_order_timeline(order),
+        'timeline': build_order_timeline(order, viewer=timeline_viewer),
         'dish_lines': dish_items_with_line_totals(order.dish_items),
         'subtotal': order.get_subtotal(),
         'delivery_fee': order.get_delivery_fee_amount(),

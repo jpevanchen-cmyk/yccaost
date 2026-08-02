@@ -1,5 +1,7 @@
 # A.11.4 菜单清单与限购
 
+import uuid
+
 from django.db.models import F
 
 from .models import BuyOrder, Dish, MenuProfile, MenuProfileItem
@@ -93,6 +95,7 @@ def copy_profile_items(source: MenuProfile, target: MenuProfile):
             dish=item.dish,
             sort_order=item.sort_order,
             is_listed=item.is_listed,
+            general_price_listed=item.general_price_listed,
             member_price_listed=item.member_price_listed,
             special_price_listed=item.special_price_listed,
             sales_cap=item.sales_cap,
@@ -110,6 +113,7 @@ def populate_profile_with_dishes(profile: MenuProfile, seller_id: str):
             defaults={
                 'sort_order': dish.sort_order,
                 'is_listed': True,
+                'general_price_listed': True,
                 'member_price_listed': dish.member_price_enabled,
                 'special_price_listed': dish.special_price_enabled,
             },
@@ -126,6 +130,7 @@ def sync_new_dish_to_menu_profiles(dish: Dish, *, list_on_all_menus: bool = Fals
             defaults={
                 'sort_order': dish.sort_order,
                 'is_listed': listed,
+                'general_price_listed': True,
                 'member_price_listed': dish.member_price_enabled,
                 'special_price_listed': dish.special_price_enabled,
             },
@@ -133,36 +138,54 @@ def sync_new_dish_to_menu_profiles(dish: Dish, *, list_on_all_menus: bool = Fals
 
 
 def dish_visible_on_shop(seller_id: str, dish_id) -> bool:
-    """买家店铺页是否应展示该商品"""
+    """买家店铺页是否应展示该商品（须上架且至少有一档客人可见的价格）"""
     profile = get_active_menu_profile(seller_id)
     if not profile:
         return Dish.objects.filter(seller_id=seller_id, dish_id=dish_id, is_active=True).exists()
-    return MenuProfileItem.objects.filter(
+    item = MenuProfileItem.objects.filter(
         profile=profile, dish_id=dish_id, is_listed=True,
-    ).exists()
+    ).select_related('dish').first()
+    if not item:
+        return False
+    return menu_item_has_visible_tier(item, seller_id)
+
+
+def menu_item_has_visible_tier(
+    menu_item: MenuProfileItem, seller_id: str | None = None,
+) -> bool:
+    """
+    本清单条目是否至少有一档客人可见的价格。
+    与 build_dish_tier_options 同一套规则，避免列表过滤与点菜页不一致。
+    """
+    from .product_helpers import build_dish_tier_options
+
+    dish = menu_item.dish
+    sid = seller_id or menu_item.profile.seller_id
+    return bool(build_dish_tier_options(dish, None, sid, {}, menu_item=menu_item))
 
 
 def menu_item_allows_tier(
     menu_item: MenuProfileItem | None, tier: str, seller_id: str | None = None,
 ) -> bool:
     """
-    有使用中清单时：会员/特价须「商品允许」且「本清单勾选展示」。
-    无使用中清单时：只看商品是否配置了该档位。
+    有使用中清单时：各档须「商品允许（会员/特价）」且「本清单勾选展示」。
+    无使用中清单时：通用价始终允许；会员/特价沿用商品是否配置。
     """
-    if tier == 'general':
-        return True
-
     profile = get_active_menu_profile(seller_id) if seller_id else None
     if profile:
         if not menu_item:
             return False
         dish = menu_item.dish
+        if tier == 'general':
+            return bool(menu_item.general_price_listed)
         if tier == 'member':
             return bool(menu_item.member_price_listed and dish.member_price_enabled)
         if tier == 'special':
             return bool(menu_item.special_price_listed and dish.special_price_enabled)
         return True
 
+    if tier == 'general':
+        return True
     return True
 
 
@@ -179,9 +202,12 @@ def get_shop_dishes_for_sale(seller_id: str):
             'sort_order', '-created_at',
         ), False
 
-    dish_ids = MenuProfileItem.objects.filter(
+    dish_ids = []
+    for item in MenuProfileItem.objects.filter(
         profile=profile, is_listed=True,
-    ).values_list('dish_id', flat=True)
+    ).select_related('dish'):
+        if menu_item_has_visible_tier(item, seller_id):
+            dish_ids.append(item.dish_id)
     return Dish.objects.filter(
         seller_id=seller_id, dish_id__in=dish_ids,
     ).prefetch_related('product_images').order_by('sort_order', '-created_at'), True
@@ -287,15 +313,191 @@ def sanitize_cart_for_active_catalog(cart: dict, seller_id: str) -> tuple[dict, 
 
 
 def increment_menu_sold_counts(seller_id: str, cart_items):
-    """下单成功后增加商品列表/菜单清单已售计数"""
+    """
+    已废止：下单即加已售（进度 79 改付款后占名额）。
+    保留函数名避免旧引用报错；请改用 try_apply_catalog_sales_for_order。
+    """
+    return
+
+
+def aggregate_dish_quantities_from_order(order) -> dict[str, int]:
+    """按 dish_id（无连字符）汇总订单件数；各档共享清单可售上限。"""
+    totals: dict[str, int] = {}
+    for row in order.dish_items or []:
+        dish_id = str(row.get('dish_id', '')).replace('-', '').lower()
+        qty = int(row.get('quantity', 0) or 0)
+        if dish_id and qty > 0:
+            totals[dish_id] = totals.get(dish_id, 0) + qty
+    return totals
+
+
+def _catalog_sales_shortfall_message(dish_name: str) -> str:
+    return f'当前「{dish_name}」可售数量不足，无法完成支付'
+
+
+def check_catalog_sales_cap_for_order(order) -> tuple[bool, list[str]]:
+    """
+    检查本单相对已占用明细的增量是否超出清单可售上限。
+    返回 (可否占用, 不足说明列表)。
+    """
+    from .models import Dish
     from .product_shell_helpers import catalog_controls_shop_display
 
-    if not catalog_controls_shop_display(seller_id):
-        return
-    profile = get_active_menu_profile(seller_id)
+    if not catalog_controls_shop_display(order.seller_id):
+        return True, []
+
+    profile = get_active_menu_profile(order.seller_id)
     if not profile:
-        return
-    for item in cart_items:
-        MenuProfileItem.objects.filter(
-            profile=profile, dish_id=item['dish'].dish_id,
-        ).update(sold_count=F('sold_count') + item['quantity'])
+        return True, []
+
+    needed = aggregate_dish_quantities_from_order(order)
+    applied = order.catalog_sales_detail or {}
+    errors: list[str] = []
+
+    for dish_hex, total_qty in needed.items():
+        prev = int(applied.get(dish_hex, 0) or 0)
+        delta = total_qty - prev
+        if delta <= 0:
+            continue
+        try:
+            dish = Dish.objects.get(
+                dish_id=uuid.UUID(dish_hex), seller_id=order.seller_id,
+            )
+        except Dish.DoesNotExist:
+            errors.append(_catalog_sales_shortfall_message('部分商品'))
+            continue
+        menu_item = MenuProfileItem.objects.filter(
+            profile=profile, dish_id=dish.dish_id,
+        ).select_related('dish').first()
+        if not menu_item or menu_item.sales_cap is None:
+            continue
+        if menu_item.sold_count + delta > menu_item.sales_cap:
+            errors.append(_catalog_sales_shortfall_message(dish.name))
+
+    return (len(errors) == 0, errors)
+
+
+def try_apply_catalog_sales_for_order(order) -> tuple[bool, list[str]]:
+    """
+    为订单占用清单可售名额（幂等；支持主单加点增量）。
+    须在 transaction 内调用；失败时不部分占用。
+    """
+    from django.db import transaction
+
+    from .models import BuyOrder, Dish
+    from .product_shell_helpers import catalog_controls_shop_display
+
+    if not catalog_controls_shop_display(order.seller_id):
+        return True, []
+
+    profile = get_active_menu_profile(order.seller_id)
+    if not profile:
+        return True, []
+
+    needed = aggregate_dish_quantities_from_order(order)
+    if not needed:
+        return True, []
+
+    with transaction.atomic():
+        locked = BuyOrder.objects.select_for_update().get(pk=order.pk)
+        applied = dict(locked.catalog_sales_detail or {})
+        deltas: list[tuple] = []
+        errors: list[str] = []
+
+        for dish_hex, total_qty in needed.items():
+            prev = int(applied.get(dish_hex, 0) or 0)
+            delta = total_qty - prev
+            if delta <= 0:
+                continue
+            try:
+                dish = Dish.objects.get(
+                    dish_id=uuid.UUID(dish_hex), seller_id=locked.seller_id,
+                )
+            except Dish.DoesNotExist:
+                errors.append(_catalog_sales_shortfall_message('部分商品'))
+                continue
+            menu_item = (
+                MenuProfileItem.objects.select_for_update()
+                .filter(profile=profile, dish_id=dish.dish_id)
+                .select_related('dish')
+                .first()
+            )
+            if not menu_item:
+                errors.append(_catalog_sales_shortfall_message(dish.name))
+                continue
+            if menu_item.sales_cap is not None:
+                if menu_item.sold_count + delta > menu_item.sales_cap:
+                    errors.append(_catalog_sales_shortfall_message(dish.name))
+                    continue
+            deltas.append((menu_item, delta, dish_hex, total_qty))
+
+        if errors:
+            return False, errors
+
+        for menu_item, delta, dish_hex, total_qty in deltas:
+            MenuProfileItem.objects.filter(pk=menu_item.pk).update(
+                sold_count=F('sold_count') + delta,
+            )
+            applied[dish_hex] = total_qty
+
+        locked.catalog_sales_detail = applied
+        locked.catalog_sales_applied = bool(applied)
+        locked.save(update_fields=[
+            'catalog_sales_detail', 'catalog_sales_applied', 'updated_at',
+        ])
+        order.catalog_sales_detail = locked.catalog_sales_detail
+        order.catalog_sales_applied = locked.catalog_sales_applied
+
+    return True, []
+
+
+def release_catalog_sales_for_order(order) -> bool:
+    """取消或改模拟支付时释放本单已占清单名额；幂等。"""
+    from django.db import transaction
+
+    from .models import BuyOrder
+    from .product_shell_helpers import catalog_controls_shop_display
+
+    if not order.catalog_sales_applied and not (order.catalog_sales_detail or {}):
+        return False
+    if not catalog_controls_shop_display(order.seller_id):
+        return False
+
+    profile = get_active_menu_profile(order.seller_id)
+    if not profile:
+        return False
+
+    applied = order.catalog_sales_detail or {}
+    if not applied:
+        return False
+
+    with transaction.atomic():
+        locked = BuyOrder.objects.select_for_update().get(pk=order.pk)
+        applied = dict(locked.catalog_sales_detail or {})
+        if not applied:
+            locked.catalog_sales_applied = False
+            locked.save(update_fields=['catalog_sales_applied', 'updated_at'])
+            return False
+
+        for dish_hex, qty in applied.items():
+            qty = int(qty or 0)
+            if qty <= 0:
+                continue
+            menu_item = (
+                MenuProfileItem.objects.select_for_update()
+                .filter(profile=profile, dish_id=uuid.UUID(dish_hex))
+                .first()
+            )
+            if menu_item:
+                menu_item.sold_count = max(0, menu_item.sold_count - qty)
+                menu_item.save(update_fields=['sold_count'])
+
+        locked.catalog_sales_detail = {}
+        locked.catalog_sales_applied = False
+        locked.save(update_fields=[
+            'catalog_sales_detail', 'catalog_sales_applied', 'updated_at',
+        ])
+        order.catalog_sales_detail = {}
+        order.catalog_sales_applied = False
+
+    return True

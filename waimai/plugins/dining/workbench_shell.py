@@ -36,6 +36,7 @@ def contribute_dining_workbench_shell(seller_id: str) -> dict:
         ),
         'pickup_label': '取餐',
         'pickup_button': '我已取餐',
+        'start_delivery_button': '开始送餐',
         'pickup_disabled_title': '请先取餐',
         'handoff_wait_text': '餐品尚未完成交接，请等店内先交给骑手。',
         'serve_dine_in': '上桌',

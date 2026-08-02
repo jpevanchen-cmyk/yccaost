@@ -10,8 +10,17 @@ def apply_dining_after_paid(order) -> list[str]:
     饮食单在线/确认到账后的履约侧效果：进入待备货、写预计时间、同步服务员状态。
     返回建议写入的字段名（便于调用方扩展）；本函数已自行 save。
     """
-    update_fields = ['order_status', 'updated_at']
-    order.order_status = 'awaiting_prep'
+    from waimai.order_status_event_helpers import (
+        EVENT_PAYMENT_RECEIVED,
+        handle_order_status_event,
+    )
+
+    fields = handle_order_status_event(
+        order,
+        EVENT_PAYMENT_RECEIVED,
+        source='dining_bridge.apply_dining_after_paid',
+    )
+    update_fields = list(dict.fromkeys([*fields, 'updated_at']))
 
     from .wait_time_helpers import assign_default_wait_time
 

@@ -136,7 +136,6 @@
         if (path === homePath) return false;
         if (homePath !== '/' && path === homePath + '/') return false;
         if (path.indexOf('/experience/') === 0) return true;
-        if (path.indexOf('/onboarding/preview/') === 0) return true;
         return false;
     }
     function getCsrfToken() {
@@ -950,6 +949,8 @@
         if (path.indexOf('/experience/preview/seller/products') === 0) return 'preview_products';
         if (path.indexOf('/experience/preview/seller/print-qr') === 0) return 'preview_print_qr';
         if (path.indexOf('/experience/preview/seller/workbench') === 0) return 'preview_workbench_manage';
+        if (path.indexOf('/experience/preview/work/login') === 0) return 'preview_work_login';
+        if (path.indexOf('/experience/preview/work/') === 0) return 'preview_work_hub';
         if (path.indexOf('/experience/preview/seller/dine') === 0) return 'preview_dine';
         if (path.indexOf('/experience/preview/seller/table-stickers') === 0) return 'preview_table_stickers';
         if (path.indexOf('/experience/preview/seller/delivery') === 0) return 'preview_delivery';
@@ -958,18 +959,6 @@
         if (path.indexOf('/experience/preview/seller/orders') === 0) return 'preview_orders';
         if (path.indexOf('/experience/preview/seller/homepage-showcase') === 0) return 'preview_homepage_showcase';
         if (path.indexOf('/experience/preview/seller/homepage') === 0) return 'preview_homepage';
-        if (path.indexOf('/onboarding/preview/seller/products') === 0) return 'preview_products';
-        if (path.indexOf('/onboarding/preview/seller/print-qr') === 0) return 'preview_print_qr';
-        if (path.indexOf('/onboarding/preview/seller/workbench') === 0) return 'preview_workbench_manage';
-        if (path.indexOf('/onboarding/preview/work/login') === 0) return 'preview_work_login';
-        if (path.indexOf('/onboarding/preview/work/') === 0) return 'preview_work_hub';
-        if (path.indexOf('/onboarding/preview/seller/orders/') === 0 && path !== '/onboarding/preview/seller/orders/' && path !== '/onboarding/preview/seller/orders') return 'preview_order_detail';
-        if (path.indexOf('/onboarding/preview/seller/orders') === 0) return 'preview_orders';
-        if (path.indexOf('/onboarding/preview/seller/payment') === 0) return 'preview_payment';
-        if (path.indexOf('/onboarding/preview/seller/homepage') === 0) return 'preview_homepage';
-        if (path.indexOf('/onboarding/preview/seller/dine') === 0) return 'preview_dine';
-        if (path.indexOf('/onboarding/preview/seller/delivery') === 0) return 'preview_delivery';
-        if (path.indexOf('/onboarding/preview/buyer/orders') === 0) return 'preview_buyer_orders';
         return '';
     }
     function resolvePagePath(page) {

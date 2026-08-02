@@ -1,12 +1,6 @@
 {# 实体收银台：当天待支付列表 + 现场收款 #}
 {% load yc_time %}
 
-{% if messages %}
-    {% for message in messages %}
-    <div class="{% if message.tags == 'error' %}msg-err{% else %}msg-ok{% endif %}" style="margin-bottom:12px;">{{ message }}</div>
-    {% endfor %}
-{% endif %}
-
 <p class="card-meta" style="margin:0 0 12px;">
     只显示<strong>今天</strong>的<strong>待支付</strong>订单。确认收款后订单进入<strong>待备货</strong>，后厨/前台在各岗位 Tab 手动备货与交付。
     {% if not cashier_can_collect %}

@@ -1,12 +1,7 @@
 {# 主体通用订单台：处理基础「下单」通道 #}
 {% load yc_time %}
 
-{# 操作结果必须在本页显示并消费，避免积压到卖家后台一次性弹出 #}
-{% if messages %}
-    {% for message in messages %}
-    <div class="{% if message.tags == 'error' %}msg-err{% else %}msg-ok{% endif %}" style="margin-bottom:12px;">{{ message }}</div>
-    {% endfor %}
-{% endif %}
+{# 操作结果走全站弹窗（进度 83 · yc_notice）；本页不再堆叠绿色长条 #}
 
 {% if not order_desk_can_update and not order_desk_can_confirm %}
 <p class="card-meta" style="margin:0 0 12px;">{{ workbench_shell.orders_readonly_hint|safe }}</p>

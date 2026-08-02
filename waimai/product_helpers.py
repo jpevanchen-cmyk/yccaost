@@ -239,9 +239,7 @@ def validate_tier_purchase(
 
     if catalog_controls_shop_display(seller_id):
         menu_item = get_menu_item_for_dish(seller_id, dish.dish_id)
-        if tier in (PRICE_TIER_MEMBER, PRICE_TIER_SPECIAL) and not menu_item_allows_tier(
-            menu_item, tier, seller_id,
-        ):
+        if not menu_item_allows_tier(menu_item, tier, seller_id):
             word = build_product_shell(seller_id).get('catalog_word', '商品列表')
             return False, f'「{dish.name}」当前{word}未开放{TIER_LABELS.get(tier, tier)}'
         if menu_item and menu_item.sales_cap is not None:

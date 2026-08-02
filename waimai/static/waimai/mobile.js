@@ -298,6 +298,7 @@
                 } else if (drawerWasOpen) {
                     unlockPageBehindCart();
                 }
+                if (submitBtn) submitBtn.disabled = false;
             })
             .catch(function (err) {
                 window.alert(err.message || '购物车操作失败，请稍后再试');

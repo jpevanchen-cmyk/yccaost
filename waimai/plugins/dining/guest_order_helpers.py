@@ -56,10 +56,20 @@ def buyer_or_guest_can_access_order(request, order: BuyOrder, table_sess: TableS
     return guest_can_access_order(request, order, table_sess)
 
 
-def apply_guest_onsite_cash(order: BuyOrder) -> None:
-    """游客堂食第一阶段只走现场付现金：立即进入待备货并自动给预计时间。"""
+def apply_guest_onsite_cash(order: BuyOrder) -> tuple[bool, list[str]]:
+    """游客堂食现场付现金：占清单名额后进入待备货。"""
+    from waimai.menu_helpers import try_apply_catalog_sales_for_order
+
+    ok, errors = try_apply_catalog_sales_for_order(order)
+    if not ok:
+        return False, errors
+
     order.payment_method = 'cash'
-    order.order_status = 'awaiting_prep'
+    from waimai.order_status_transition_helpers import transition_order_status
+
+    transition_order_status(
+        order, 'awaiting_prep', source='guest_order_helpers.apply_guest_onsite_cash',
+    )
     assign_default_wait_time(order, save=False)
     order.save(update_fields=[
         'payment_method', 'order_status', 'estimated_ready_at', 'updated_at',
@@ -67,6 +77,7 @@ def apply_guest_onsite_cash(order: BuyOrder) -> None:
     from waimai.order_alert_helpers import maybe_notify_merchant_new_order
 
     maybe_notify_merchant_new_order(order)
+    return True, []
 
 
 def maybe_close_table_session_after_settle(order: BuyOrder) -> None:

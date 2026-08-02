@@ -1,4 +1,5 @@
 {# 菜单清单卡片正文（体验 AJAX 刷新与 products 页共用） #}
+{% load product_labels %}
         <p class="page-desc" data-yc-tour="menu-intro">
             切换{{ product_shell.catalog_word }}前须无未结束订单。客人店铺页以<strong>使用中</strong>的{{ product_shell.catalog_word }}为准。
             <span data-yc-tour="menu-active-state">当前使用中：{% if active_profile %}<strong>{{ active_profile.name }}</strong>{% else %}未选（客人见全部上架商品）{% endif %}</span>
@@ -6,16 +7,16 @@
             {% if experience_print_qr_url %}
             · <a href="{{ experience_print_qr_url }}" data-unsaved-skip data-yc-tour="menu-print-qr-link">批量打印本清单商品二维码</a>
             {% elif not experience_preview %}
-            · <a href="{% if onboarding_preview %}{% url 'onboarding_seller_print_qr' %}{% else %}{% url 'seller_product_qr_print' %}{% endif %}" target="_blank" rel="noopener" data-yc-tour="menu-print-qr-link">批量打印本清单商品二维码</a>
+            · <a href="{% url 'seller_product_qr_print' %}" target="_blank" rel="noopener" data-yc-tour="menu-print-qr-link">批量打印本清单商品二维码</a>
             {% endif %}
             {% endif %}
         </p>
         {% if selected_profile and active_profile and selected_profile.profile_id != active_profile.profile_id %}
         <p class="msg-warn">当前查看的是「{{ selected_profile.name }}」，客人店铺页仍以「{{ active_profile.name }}」为准；改完后请「切换使用」。</p>
         {% elif not active_profile %}
-        <p class="msg-warn">尚未有使用中的{{ product_shell.catalog_word }}，客人店铺页不会按下方「展示」设置过滤会员价/特价；请先点「切换使用」。</p>
+        <p class="msg-warn">尚未有使用中的{{ product_shell.catalog_word }}，客人店铺页不会按下方「展示」设置过滤各档价格；请先点「切换使用」。</p>
         {% endif %}
-        <p class="card-meta">说明：<strong>商品管理</strong>里设定是否<strong>允许</strong>会员价、特价；<strong>本{{ product_shell.catalog_word }}</strong>里设定是否<strong>对客人展示</strong>。两项都满足且本{{ product_shell.catalog_word }}已「切换使用」后，店铺页才会出现对应价格按钮。</p>
+        <p class="card-meta">说明：<strong>商品管理</strong>里设定是否<strong>允许</strong>会员价、特价；<strong>本{{ product_shell.catalog_word }}</strong>里设定<strong>通用价 / 会员价 / 特价</strong>是否<strong>对客人展示</strong>。勾选展示且本{{ product_shell.catalog_word }}已「切换使用」后，店铺页才会出现对应价格按钮。</p>
         <form method="POST" class="seller-inline-form menu-profile-create-form"{% if not experience_writable %} data-unsaved-guard{% endif %} data-yc-tour="menu-create-form">
             {% csrf_token %}
             {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
@@ -77,6 +78,7 @@
                     <tr>
                         <th>{{ product_shell.item_label }}</th>
                         <th>本清单上架</th>
+                        <th>展示通用价</th>
                         <th>展示会员价</th>
                         <th>展示特价</th>
                         <th>可售上限</th>
@@ -86,7 +88,7 @@
                 <tbody>
                 {% for item in selected_profile.items.all %}
                 <tr>
-                    <td>{{ item.dish.name }}</td>
+                    <td>{{ item.dish.name }}{% if item.is_listed %}{% menu_item_has_guest_price item seller_id as has_guest_price %}{% if not has_guest_price %}<br><span class="card-meta">无任何展示价格，客人看不到</span>{% endif %}{% endif %}</td>
                     <td>
                         <form method="POST" class="menu-item-toggle-form">
                             {% csrf_token %}
@@ -96,6 +98,18 @@
                             <input type="hidden" name="item_id" value="{{ item.item_id }}">
                             <button type="submit" class="btn btn-sm {% if item.is_listed %}btn-green{% else %}btn-outline{% endif %}"{% if tour_demo_menu_item_id and item.item_id == tour_demo_menu_item_id %} data-yc-tour="menu-item-listed-toggle"{% endif %}>
                                 {% if item.is_listed %}上架中{% else %}已下架{% endif %}
+                            </button>
+                        </form>
+                    </td>
+                    <td>
+                        <form method="POST" class="menu-item-toggle-form">
+                            {% csrf_token %}
+                            {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
+                            <input type="hidden" name="toggle_menu_item_general" value="1">
+                            <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <button type="submit" class="btn btn-sm {% if item.general_price_listed %}btn-green{% else %}btn-outline{% endif %}"{% if tour_demo_menu_item_id and item.item_id == tour_demo_menu_item_id %} data-yc-tour="menu-item-general-toggle"{% endif %}>
+                                {% if item.general_price_listed %}展示{% else %}不展示{% endif %}
                             </button>
                         </form>
                     </td>

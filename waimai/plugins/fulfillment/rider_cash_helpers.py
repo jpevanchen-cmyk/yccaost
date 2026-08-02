@@ -104,6 +104,9 @@ def create_cash_remittance_request(
         )
         for order in orders
     ])
+    from waimai.remittance_notify_helpers import maybe_notify_remittance_request
+
+    maybe_notify_remittance_request(request)
     return request, f'已发起交款申请：{len(orders)} 单，共 ¥{total}'
 
 

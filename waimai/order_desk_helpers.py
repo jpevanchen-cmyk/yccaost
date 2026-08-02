@@ -5,6 +5,10 @@ from __future__ import annotations
 from django.utils import timezone
 
 from .models import BuyOrder
+from .order_status_transition_helpers import (
+    transition_order_status,
+    transition_order_status_if_changed,
+)
 from .order_progress_helpers import (
     build_dual_progress_groups,
     build_progress_groups,
@@ -54,36 +58,33 @@ def build_order_desk_item_rows(order: BuyOrder) -> list[dict]:
 
 
 def sync_order_desk_progress(order: BuyOrder) -> list[str]:
-    """按件进度刷新整单状态；全部交付且已收款后自动完成。"""
+    """按件进度刷新整单状态；完成只经主状态机事件汇合。"""
+    from .order_status_event_helpers import (
+        EVENT_GOODS_FULLY_DELIVERED,
+        EVENT_PREP_PROGRESS,
+        handle_order_status_event,
+    )
+
     total, prepared = count_basic_processed_units(order)
     _, served = count_basic_delivered_units(order)
     if total <= 0:
         return []
 
-    update_fields: list[str] = []
+    update_fields = handle_order_status_event(
+        order,
+        EVENT_PREP_PROGRESS,
+        source='order_desk_helpers.sync_order_desk_progress',
+    )
 
-    if prepared > 0 and order.order_status == 'awaiting_prep':
-        order.order_status = 'preparing'
-        update_fields.append('order_status')
-        if not order.preparing_at:
-            order.preparing_at = timezone.now()
-            update_fields.append('preparing_at')
+    if served >= total:
+        update_fields.extend(
+            handle_order_status_event(
+                order,
+                EVENT_GOODS_FULLY_DELIVERED,
+                source='order_desk_helpers.sync_order_desk_progress',
+            ),
+        )
 
-    if prepared >= total and order.order_status in ('awaiting_prep', 'preparing'):
-        order.order_status = 'ready_pickup'
-        order.ready_at = timezone.now()
-        update_fields.extend(['order_status', 'ready_at'])
-
-    if prepared < total and order.order_status == 'ready_pickup':
-        order.order_status = 'preparing'
-        update_fields.append('order_status')
-
-    if served >= total and order.payment_status == 'paid':
-        order.order_status = 'completed'
-        update_fields.append('order_status')
-
-    if update_fields:
-        update_fields.append('updated_at')
     return list(dict.fromkeys(update_fields))
 
 
@@ -402,7 +403,9 @@ def start_basic_order(order: BuyOrder, *, actor) -> tuple[bool, str]:
     if not basic_order_can_start(order):
         return False, '当前订单不能开始处理'
     now = timezone.now()
-    order.order_status = 'preparing'
+    transition_order_status(
+        order, 'preparing', source='order_desk_helpers.start_basic_order',
+    )
     order.preparing_at = now
     order.save(update_fields=['order_status', 'preparing_at', 'updated_at'])
     from .audit_helpers import audit_order_status
@@ -419,7 +422,9 @@ def mark_basic_order_ready(order: BuyOrder, *, actor) -> tuple[bool, str]:
     """处理中 → 可交付。"""
     if not basic_order_can_mark_ready(order):
         return False, '当前订单不能标记为可交付'
-    order.order_status = 'ready_pickup'
+    transition_order_status(
+        order, 'ready_pickup', source='order_desk_helpers.mark_basic_order_ready',
+    )
     order.ready_at = timezone.now()
     order.save(update_fields=['order_status', 'ready_at', 'updated_at'])
     from .audit_helpers import audit_order_status
@@ -443,8 +448,16 @@ def complete_basic_order(order: BuyOrder, *, actor) -> tuple[bool, str]:
         ):
             return False, '请先确认已收到现金，再完成订单'
         return False, '当前订单不能确认完成'
-    order.order_status = 'completed'
-    order.save(update_fields=['order_status', 'updated_at'])
+    from .order_status_event_helpers import EVENT_MANUAL_COMPLETE, handle_order_status_event
+
+    fields = handle_order_status_event(
+        order,
+        EVENT_MANUAL_COMPLETE,
+        source='order_desk_helpers.complete_basic_order',
+    )
+    if order.order_status != 'completed':
+        return False, '当前订单不能确认完成'
+    order.save(update_fields=list(dict.fromkeys(fields)) or ['order_status', 'updated_at'])
     from .audit_helpers import audit_order_status
 
     audit_order_status(

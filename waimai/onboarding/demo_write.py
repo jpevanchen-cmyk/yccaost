@@ -97,6 +97,7 @@ def handle_experience_menu_post(request, seller_id: str):
     allowed = {
         'create_menu_profile',
         'toggle_menu_item_listed',
+        'toggle_menu_item_general',
         'toggle_menu_item_member',
         'toggle_menu_item_special',
         'activate_menu_profile',
@@ -142,6 +143,22 @@ def handle_experience_menu_post(request, seller_id: str):
         item.save(update_fields=['is_listed'])
         state = '上架' if item.is_listed else '下架'
         messages.success(request, f'「{item.dish.name}」在本清单已{state}')
+        return _finish_menu_post(request, seller_id, profile_q=_menus_query(profile_id))
+
+    if 'toggle_menu_item_general' in request.POST:
+        profile_id = request.POST.get('profile_id')
+        item = _get_menu_item(seller_id, profile_id, request.POST.get('item_id'))
+        item.general_price_listed = not item.general_price_listed
+        item.save(update_fields=['general_price_listed'])
+        state = '展示' if item.general_price_listed else '不展示'
+        settings = get_operating_settings(seller_id)
+        if _is_active_menu_profile(settings, profile_id):
+            messages.success(request, f'「{item.dish.name}」通用价已{state}，店铺页已同步')
+        else:
+            messages.success(
+                request,
+                f'「{item.dish.name}」通用价已{state}；须将本清单「切换使用」后客人才看得到',
+            )
         return _finish_menu_post(request, seller_id, profile_q=_menus_query(profile_id))
 
     if 'toggle_menu_item_member' in request.POST:

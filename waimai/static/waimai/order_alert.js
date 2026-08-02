@@ -5,12 +5,13 @@
  * 因浏览器规则，声音必须由用户先点一次页面才能播放；开启状态本身用 sessionStorage 记住，
  * 整页刷新（如点一份备好/上桌）后仍保持开启，无需重新点击。
  * 用法：页面里设置 window.YC_ORDER_ALERT = { pollUrl: '...', storagePrefix: '...' }，再引入本脚本。
+ * 同一页可同时设置 window.YC_REMITTANCE_ALERT 做第二路提醒。
  */
 (function () {
-  var cfg = window.YC_ORDER_ALERT;
+  function initPollAlert(cfg) {
   if (!cfg || !cfg.pollUrl) return;
 
-  var POLL_MS = 15000; // 每 15 秒查一次新单
+  var POLL_MS = 15000; // 每 15 秒查一次
 
   var audioCtx = null; // 合成提示音用
   var customAudio = null; // 店铺自定义音频（如有）
@@ -117,15 +118,17 @@
   var banner, bannerText, enableBtn, statusText;
 
   // 开关按钮颜色：关=灰，开=绿（公共样式，工作台与订单管理共用）
+  var BTN_ON = cfg.enableBtnOn || '🔕 新单提醒：开（点此关闭）';
+  var BTN_OFF = cfg.enableBtnOff || '🔔 新单提醒：关（点此开启）';
   function setButtonState() {
     if (!enableBtn) return;
     if (enabled) {
-      enableBtn.textContent = '🔕 新单提醒：开（点此关闭）';
+      enableBtn.textContent = BTN_ON;
       enableBtn.classList.add('is-on');
       enableBtn.classList.remove('is-off');
       enableBtn.setAttribute('aria-pressed', 'true');
     } else {
-      enableBtn.textContent = '🔔 新单提醒：关（点此开启）';
+      enableBtn.textContent = BTN_OFF;
       enableBtn.classList.add('is-off');
       enableBtn.classList.remove('is-on');
       enableBtn.setAttribute('aria-pressed', 'false');
@@ -279,6 +282,8 @@
 
   // 提醒文案：不同角色可自定义（骑手是「外卖单」，其它是「新订单待备货」）
   var ITEM_LABEL = (cfg.itemLabel || '个新订单待备货，请及时处理！');
+  var NOTIFY_TITLE = (cfg.notificationTitle || '野草 · 有新订单');
+  var NOTIFY_TAG = (cfg.notificationTag || 'yc-new-order');
 
   function showBanner(count) {
     bannerText.textContent = '有 ' + count + ' ' + ITEM_LABEL;
@@ -292,9 +297,9 @@
   function showSystemNotification(count) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     try {
-      var n = new Notification('野草 · 有新订单', {
+      var n = new Notification(NOTIFY_TITLE, {
         body: '有 ' + count + ' ' + ITEM_LABEL,
-        tag: 'yc-new-order',
+        tag: NOTIFY_TAG,
         renotify: true,
       });
       n.onclick = function () {
@@ -377,4 +382,8 @@
   } else {
     document.addEventListener('DOMContentLoaded', buildUI);
   }
+  }
+
+  if (window.YC_ORDER_ALERT) initPollAlert(window.YC_ORDER_ALERT);
+  if (window.YC_REMITTANCE_ALERT) initPollAlert(window.YC_REMITTANCE_ALERT);
 })();

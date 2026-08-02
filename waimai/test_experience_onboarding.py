@@ -20,7 +20,7 @@ from waimai.onboarding.boot import build_experience_boot_payload
 
 from waimai.onboarding.demo_cleanup import DEMO_DISH_NAME, DEMO_MENU_PROFILE_NAME, cleanup_experience_demo_data
 
-from waimai.onboarding_helpers import OFFICIAL_SHOP_NAME
+from waimai.onboarding.official_shop import OFFICIAL_SHOP_NAME
 
 
 

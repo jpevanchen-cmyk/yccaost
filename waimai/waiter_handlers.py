@@ -116,7 +116,7 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
         order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
         from .waiter_helpers import sync_waiter_service_status, waiter_can_complete_in_store
 
-        # 先同步按份进度：已付且已全部交付时可自动完结，避免卡在「备货中」
+        # 先同步按份进度；打包自取已付且货齐时可自动完结，堂食须点「用餐完成」
         fields = sync_waiter_service_status(order)
         if fields:
             order.save(update_fields=list(dict.fromkeys(fields)))
@@ -153,8 +153,21 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
         elif not waiter_can_complete_in_store(order):
             messages.error(request, '当前订单状态不能完成')
         else:
-            order.order_status = 'completed'
-            order.save(update_fields=['order_status', 'updated_at'])
+            from .order_status_event_helpers import (
+                EVENT_MANUAL_COMPLETE,
+                handle_order_status_event,
+            )
+
+            fields = handle_order_status_event(
+                order,
+                EVENT_MANUAL_COMPLETE,
+                source='waiter_handlers.complete_order',
+            )
+            if fields:
+                order.save(update_fields=list(dict.fromkeys(fields)))
+            if order.order_status != 'completed':
+                messages.error(request, '当前订单状态不能完成')
+                return redirect(target)
             from .audit_helpers import audit_order_status
             audit_order_status(
                 order=order,

@@ -4,14 +4,15 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import BuyOrder, OrderMessage
+from .order_status_transition_helpers import (
+    BUYER_SELF_CANCELABLE_STATUSES,
+    buyer_can_self_cancel_order,
+    transition_order_status,
+)
 from .shop_work_helpers import current_seller_id_for_user
 
-# 客人仍可自主取消的状态（尚未开始备货）
-BUYER_CANCELABLE_STATUSES = (
-    'awaiting_payment',
-    'awaiting_shop_confirm',
-    'awaiting_prep',
-)
+# 客人仍可自主取消的状态（§5.6.8 已迁至 order_status_transition_helpers.BUYER_SELF_CANCELABLE_STATUSES）
+BUYER_CANCELABLE_STATUSES = ()  # 兼容旧引用，勿再使用
 
 # 店家仍可兜底取消的状态（已完成 / 已取消除外）
 SHOP_CANCELABLE_STATUSES = (
@@ -42,9 +43,7 @@ def user_has_cancel_order_perm(user) -> bool:
 
 
 def buyer_can_self_cancel(order: BuyOrder) -> bool:
-    if order.order_status == 'cancelled':
-        return False
-    return order.order_status in BUYER_CANCELABLE_STATUSES
+    return buyer_can_self_cancel_order(order)
 
 
 def buyer_cancel_blocked_hint(order: BuyOrder) -> str:
@@ -52,7 +51,7 @@ def buyer_cancel_blocked_hint(order: BuyOrder) -> str:
         return '订单已取消'
     if order.order_status in ('completed',):
         return BUYER_BLOCKED_HINT
-    if order.order_status not in BUYER_CANCELABLE_STATUSES:
+    if order.order_status not in BUYER_SELF_CANCELABLE_STATUSES:
         return BUYER_BLOCKED_HINT
     return ''
 
@@ -96,7 +95,9 @@ def _cancel_delivery_if_any(order: BuyOrder) -> None:
 
 def _apply_cancel_fields(order: BuyOrder, *, side: str, note: str) -> list[str]:
     now = timezone.now()
-    order.order_status = 'cancelled'
+    transition_order_status(
+        order, 'cancelled', source='order_cancel_helpers._apply_cancel_fields',
+    )
     order.cancelled_at = now
     order.cancel_side = side
     order.cancel_note = (note or '').strip()[:500]
@@ -117,7 +118,16 @@ def cancel_order_by_buyer(order: BuyOrder, user) -> tuple[bool, str]:
 
     fields = _apply_cancel_fields(order, side='buyer', note='买家自主取消')
     order.save(update_fields=fields)
+    from .menu_helpers import release_catalog_sales_for_order
+
+    release_catalog_sales_for_order(order)
     _cancel_delivery_if_any(order)
+    from .order_timeline_helpers import record_timeline_event, TL_ORDER_CANCELLED
+
+    side = '（买家）'
+    record_timeline_event(
+        order, TL_ORDER_CANCELLED, f'订单已取消{side}', occurred_at=order.cancelled_at,
+    )
 
     from .audit_helpers import write_audit_log
 
@@ -156,7 +166,17 @@ def cancel_order_by_shop(order: BuyOrder, user, note: str = '') -> tuple[bool, s
     reason = text or '店家取消（沟通区已有记录）'
     fields = _apply_cancel_fields(order, side='shop', note=reason)
     order.save(update_fields=fields)
+    from .menu_helpers import release_catalog_sales_for_order
+
+    release_catalog_sales_for_order(order)
     _cancel_delivery_if_any(order)
+
+    from .order_timeline_helpers import record_timeline_event, TL_ORDER_CANCELLED
+
+    side = '（店家）'
+    record_timeline_event(
+        order, TL_ORDER_CANCELLED, f'订单已取消{side}', occurred_at=order.cancelled_at,
+    )
 
     from .audit_helpers import write_audit_log
 

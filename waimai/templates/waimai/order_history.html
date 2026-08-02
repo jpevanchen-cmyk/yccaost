@@ -32,6 +32,9 @@
             {% else %}
                 <span class="badge badge-default">{{ order.get_payment_status_display }}</span>
             {% endif %}
+            {% if order.payment_method %}
+            <span class="badge badge-default" style="margin-left:6px;">{{ order.get_payment_method_display }}</span>
+            {% endif %}
             <span class="badge badge-order-prep" style="margin-left:6px;">{{ order.get_order_status_display }}</span>
             {% if order.cash_shortfall_status == 'buyer_pending' %}
             <span class="badge badge-pay-uncollected" style="margin-left:6px;">请当面确认实付金额</span>
@@ -52,8 +55,6 @@
             <span class="badge badge-pay-pending">到店付现金</span>
             {% elif order.cash_shortfall_status == 'buyer_pending' %}
             <a class="btn btn-orange btn-sm" href="{% url 'order_detail' order.order_id %}">确认实付金额</a>
-            {% elif order.is_cash_awaiting_confirm %}
-            <span class="badge badge-pay-pending">待确认现金</span>
             {% endif %}
             {% if order.estimated_ready_at and order.order_status != 'completed' %}
             <span class="badge badge-order-prep" style="margin-left:6px;">{{ order.get_estimated_ready_label }}</span>

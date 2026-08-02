@@ -810,11 +810,13 @@ class BuyOrder(models.Model):
         ('cancelled', '已取消'),
     ]
     ORDER_STATUS_CHOICES = [
+        ('created', '订单已生成'),
         ('awaiting_payment', '待支付'),
         ('awaiting_shop_confirm', '待店家备货'),
         ('awaiting_prep', '待备货'),
         ('preparing', '商家备货中'),
         ('ready_pickup', '待取货'),
+        ('awaiting_delivery', '待配送'),
         ('delivering', '配送中'),
         ('completed', '已完成'),
         ('cancelled', '已取消'),
@@ -866,9 +868,17 @@ class BuyOrder(models.Model):
         verbose_name='支付渠道'
     )
     payment_time = models.DateTimeField(blank=True, null=True, verbose_name='支付时间')
+    catalog_sales_applied = models.BooleanField(
+        default=False, verbose_name='清单可售名额已占用',
+    )
+    catalog_sales_detail = models.JSONField(
+        default=dict, blank=True, verbose_name='清单已占用明细（按菜品件数）',
+    )
     preparing_at = models.DateTimeField(blank=True, null=True, verbose_name='开始备货时间')
     estimated_ready_at = models.DateTimeField(blank=True, null=True, verbose_name='预计出餐/取餐时间')
     ready_at = models.DateTimeField(blank=True, null=True, verbose_name='出餐可配送时间')
+    goods_delivered_at = models.DateTimeField(blank=True, null=True, verbose_name='商品全部交付时间')
+    completed_at = models.DateTimeField(blank=True, null=True, verbose_name='订单完成时间')
     buyer_note = models.TextField(blank=True, verbose_name='买家备注')
     cash_uncollected_reason = models.TextField(blank=True, verbose_name='未收款结案原因')
     cancelled_at = models.DateTimeField(blank=True, null=True, verbose_name='取消时间')
@@ -1285,6 +1295,7 @@ class DeliveryOrder(models.Model):
     delivery_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='waiting', db_index=True, verbose_name='配送状态')
     accepted_at = models.DateTimeField(blank=True, null=True, verbose_name='接单时间')
     picked_up_at = models.DateTimeField(blank=True, null=True, verbose_name='取餐时间')
+    in_transit_at = models.DateTimeField(blank=True, null=True, verbose_name='开始送餐时间')
     completed_at = models.DateTimeField(blank=True, null=True, verbose_name='送达时间')
     estimated_delivery_time = models.DateTimeField(blank=True, null=True, verbose_name='预计送达时间')
     is_on_time = models.BooleanField(default=None, blank=True, null=True, verbose_name='是否准时送达')
@@ -1304,6 +1315,30 @@ class DeliveryOrder(models.Model):
 
     def trigger_payout(self):
         pass
+
+
+class OrderTimelineEvent(models.Model):
+    """订单历程：主状态机 / 事件发生时写入，供各端时间线只读展示。"""
+
+    order = models.ForeignKey(
+        BuyOrder,
+        on_delete=models.CASCADE,
+        related_name='timeline_events',
+        verbose_name='订单',
+    )
+    event_code = models.CharField(max_length=48, db_index=True, verbose_name='事件代码')
+    label = models.CharField(max_length=64, verbose_name='展示文案')
+    occurred_at = models.DateTimeField(db_index=True, verbose_name='发生时间')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='写入时间')
+
+    class Meta:
+        db_table = 'order_timeline_event'
+        ordering = ['occurred_at', 'pk']
+        verbose_name = '订单历程'
+        verbose_name_plural = '订单历程'
+
+    def __str__(self):
+        return f'{self.label} @ {self.occurred_at}'
 
 
 class CashRemittanceRequest(models.Model):

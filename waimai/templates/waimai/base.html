@@ -107,7 +107,6 @@
 
     {% block pre_mobile_js %}{% endblock %}
     {% include 'waimai/_flash_modal.html' %}
-    {% include 'waimai/onboarding/_graduate_modal.html' %}
     <script src="{% static 'waimai/mobile.js' %}?v=11"></script>
     {% if session_guard_enabled %}
     <script>
@@ -124,10 +123,6 @@
     <script src="{% static 'waimai/session_guard.js' %}?v=5"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
-    {% if onboarding_boot_json %}
-    <script type="application/json" id="yc-onboarding-boot">{{ onboarding_boot_json|safe }}</script>
-    <script src="{% static 'waimai/onboarding.js' %}?v=9"></script>
-    {% endif %}
     {% if experience_boot_json %}
     <link rel="stylesheet" href="{% static 'waimai/onboarding/experience.css' %}?v=5">
     {% include 'waimai/onboarding/experience/_modals.html' %}

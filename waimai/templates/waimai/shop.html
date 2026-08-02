@@ -71,7 +71,7 @@
 <div class="shop-layout">
     <div class="dish-list" data-yc-tour="shop-dish-area">
         {% for row in dish_rows %}
-        {% include 'waimai/_shop_dish_product_group.html' with row=row only %}
+        {% include 'waimai/_shop_dish_product_group.html' with row=row %}
         {% empty %}
         <p class="card-meta">{{ product_shell.empty_shop_text }}</p>
         {% endfor %}

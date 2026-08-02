@@ -37,6 +37,8 @@ from .preview_helpers import (
     build_experience_products_context,
     build_experience_table_stickers_context,
     build_experience_workbench_context,
+    build_experience_work_hub_context,
+    build_experience_work_login_context,
     experience_menu_panel_json,
 )
 from .tour_session import touch_experience_tour_session
@@ -312,6 +314,35 @@ def experience_preview_homepage_showcase(request):
     ctx['experience_boot_json'] = build_experience_boot_json()
     ctx['onboarding_boot_json'] = ''
     return render(request, 'waimai/onboarding/experience/homepage_showcase_demo.html', ctx)
+
+
+def experience_preview_work_login(request):
+    """演示工作台登录页（只观摩）"""
+    redir = _shop_or_redirect()
+    if redir:
+        return redir
+    ctx = build_experience_work_login_context(request)
+    touch_experience_tour_session(request)
+    ctx['experience_boot_json'] = build_experience_boot_json()
+    ctx['onboarding_boot_json'] = ''
+    return render(request, 'waimai/shop_work_login.html', ctx)
+
+
+def experience_preview_work_hub(request, view: str = 'orders'):
+    """演示店铺工作台（只观摩）"""
+    redir = _shop_or_redirect()
+    if redir:
+        return redir
+    valid = {'orders', 'waiter', 'kitchen', 'rider'}
+    if view not in valid:
+        view = 'orders'
+    ctx = build_experience_work_hub_context(request, view)
+    if not ctx:
+        return redirect('experience_home')
+    touch_experience_tour_session(request)
+    ctx['experience_boot_json'] = build_experience_boot_json()
+    ctx['onboarding_boot_json'] = ''
+    return render(request, 'waimai/shop_work_hub.html', ctx)
 
 
 @require_POST

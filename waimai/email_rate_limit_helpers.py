@@ -15,6 +15,7 @@ BEIJING = ZoneInfo('Asia/Shanghai')
 
 # 通知类型（写入发信记录，便于统计）
 KIND_NEW_ORDER = 'new_order'
+KIND_REMITTANCE_REQUEST = 'remittance_request'
 KIND_BUYER_ORDER_MSG = 'buyer_order_msg'
 KIND_BUYER_CASH_SHORTFALL = 'buyer_cash_shortfall'
 KIND_GUESTBOOK_REPLY = 'guestbook_reply'

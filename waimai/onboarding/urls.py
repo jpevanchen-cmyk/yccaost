@@ -1,4 +1,4 @@
-# 新版新手体验：URL（前缀 /experience/，与旧 /onboarding/ 并行）
+# 新版新手体验：URL（前缀 /experience/）
 
 from django.urls import path
 
@@ -25,6 +25,16 @@ urlpatterns = [
         'preview/seller/workbench/',
         views.experience_preview_workbench,
         name='experience_preview_workbench',
+    ),
+    path(
+        'preview/work/login/',
+        views.experience_preview_work_login,
+        name='experience_work_login',
+    ),
+    path(
+        'preview/work/<str:view>/',
+        views.experience_preview_work_hub,
+        name='experience_work_hub',
     ),
     path(
         'preview/seller/dine/',

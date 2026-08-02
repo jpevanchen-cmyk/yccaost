@@ -1,4 +1,4 @@
-# 新版新手体验：启动数据（与旧 onboarding_helpers.build_onboarding_boot_payload 分离）
+# 新版新手体验：启动数据
 
 from __future__ import annotations
 

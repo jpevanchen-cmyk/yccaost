@@ -158,20 +158,20 @@ def latest_kitchen_new_order_ts(orders: list[BuyOrder]) -> int:
 
 
 def sync_kitchen_progress(order: BuyOrder) -> list[str]:
-    """按备好份数刷新整单状态"""
+    """按备好份数刷新整单状态；完成只经主状态机事件汇合。"""
+    from .order_status_event_helpers import (
+        EVENT_PREP_PROGRESS,
+        handle_order_status_event,
+    )
+
     total, prepared = count_kitchen_units(order)
     if total <= 0:
         return []
-    if prepared < total:
-        if order.order_status in ('awaiting_prep', 'ready_pickup'):
-            order.order_status = 'preparing'
-            return ['order_status', 'updated_at']
-        return []
-    if order.order_status in ('awaiting_prep', 'preparing'):
-        order.order_status = 'ready_pickup'
-        order.ready_at = timezone.now()
-        return ['order_status', 'ready_at', 'updated_at']
-    return []
+    return handle_order_status_event(
+        order,
+        EVENT_PREP_PROGRESS,
+        source='kitchen_helpers.sync_kitchen_progress',
+    )
 
 
 def mark_kitchen_dish_unit_prepared(order: BuyOrder, dish_id: str, *, operator_username: str) -> tuple[bool, str]:

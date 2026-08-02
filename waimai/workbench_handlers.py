@@ -3,7 +3,7 @@
 from django.contrib import messages
 from django.shortcuts import redirect
 
-from .forms import ShopWorkbenchSettingsForm, ShopDutyOrderNotifyForm
+from .forms import ShopWorkbenchSettingsForm, ShopDutyOrderNotifyForm, ShopDutyRemittanceNotifyForm
 from .operating_helpers import get_operating_settings
 
 
@@ -88,6 +88,20 @@ def handle_shop_work_post(request, seller_id: str, shop_code: str, current_view:
         if form.is_valid():
             form.save()
             messages.success(request, '值班防漏单邮件已保存')
+        else:
+            messages.error(request, '设置无效，请检查邮箱格式')
+        return redirect(build_shop_work_redirect(shop_code, current_view))
+
+    # 值班入金申请邮件：仅店主可改
+    if 'save_duty_remittance_notify' in request.POST:
+        if operator.role != 'seller':
+            messages.error(request, '只有店主可以修改值班入金申请邮件设置')
+            return redirect(build_shop_work_redirect(shop_code, current_view))
+        operating = get_operating_settings(seller_id)
+        form = ShopDutyRemittanceNotifyForm(request.POST, instance=operating)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '值班入金申请邮件已保存')
         else:
             messages.error(request, '设置无效，请检查邮箱格式')
         return redirect(build_shop_work_redirect(shop_code, current_view))
@@ -223,7 +237,6 @@ def handle_my_deliveries_post(request, *, seller_id: str, shop_code: str, user, 
 
     from .models import DeliveryOrder
     from .shop_work_helpers import build_shop_work_redirect
-    from .waiter_helpers import delivery_handoff_ready
 
     rider_id = user.username
     seller_mode = user.role == 'seller'
@@ -281,26 +294,40 @@ def handle_my_deliveries_post(request, *, seller_id: str, shop_code: str, user, 
                 delivery_id=delivery_id, rider_id=rider_id,
             )
         if action == 'pickup' and order.delivery_status == 'accepted':
-            if not delivery_handoff_ready(order.buy_order):
-                short_id = str(delivery_id).replace('-', '')[:8] if delivery_id else ''
-                if short_id:
-                    return redirect(f'{fallback}#delivery-{short_id}')
-                return redirect(fallback)
-            order.delivery_status = 'picked_up'
-            order.picked_up_at = timezone.now()
-            order.save()
-            order.buy_order.order_status = 'delivering'
-            order.buy_order.save(update_fields=['order_status', 'updated_at'])
-            from .audit_helpers import audit_order_status
-            audit_order_status(
-                order=order.buy_order,
-                actor=user,
-                summary=f'骑手取餐 {order.buy_order.get_display_order_no()}',
-                request=request,
-            )
+            from waimai.plugins.fulfillment.delivery_workflow_helpers import apply_rider_pickup
+
+            ok, msg = apply_rider_pickup(order)
+            if ok:
+                from .audit_helpers import audit_order_status
+                audit_order_status(
+                    order=order.buy_order,
+                    actor=user,
+                    summary=f'骑手取餐 {order.buy_order.get_display_order_no()}',
+                    request=request,
+                )
+                messages.success(request, msg)
+            else:
+                messages.error(request, msg)
+        elif action == 'start_delivery' and order.delivery_status == 'picked_up':
+            from waimai.plugins.fulfillment.delivery_workflow_helpers import apply_rider_start_delivery
+
+            ok, msg = apply_rider_start_delivery(order)
+            if ok:
+                from .audit_helpers import audit_order_status
+                audit_order_status(
+                    order=order.buy_order,
+                    actor=user,
+                    summary=f'骑手开始送餐 {order.buy_order.get_display_order_no()}',
+                    request=request,
+                )
+                messages.success(request, msg)
+            else:
+                messages.error(request, msg)
         elif action == 'collect_cash':
             # 外卖货到付款：骑手送达时收现金，记录实收金额
-            if order.delivery_status != 'picked_up':
+            from waimai.plugins.fulfillment.delivery_workflow_helpers import RIDER_POST_PICKUP_STATUSES
+
+            if order.delivery_status not in RIDER_POST_PICKUP_STATUSES:
                 messages.error(request, '请先完成取餐，面对买家时再登记实收金额')
             else:
                 from .payments import rider_collect_cash
@@ -323,7 +350,9 @@ def handle_my_deliveries_post(request, *, seller_id: str, shop_code: str, user, 
                 else:
                     messages.error(request, msg)
         elif action == 'mark_cash_exception':
-            if order.delivery_status != 'picked_up':
+            from waimai.plugins.fulfillment.delivery_workflow_helpers import RIDER_POST_PICKUP_STATUSES
+
+            if order.delivery_status not in RIDER_POST_PICKUP_STATUSES:
                 messages.error(request, '尚未取餐，当前不能标记当面收款异常')
             else:
                 from .payments import mark_cash_exception
@@ -343,35 +372,30 @@ def handle_my_deliveries_post(request, *, seller_id: str, shop_code: str, user, 
                     )
                 else:
                     messages.error(request, msg)
-        elif action == 'complete' and order.delivery_status == 'picked_up':
-            # 货到付款单：未收款不许结单（须先收现金或顾客已扫码付）
-            if order.buy_order.is_cod_awaiting_collection():
-                messages.error(request, '这是货到付款单，请先确认收到现金（或顾客已扫码付款）再点已送达')
-                short_id = str(delivery_id).replace('-', '')[:8] if delivery_id else ''
-                if short_id:
-                    return redirect(f'{fallback}#delivery-{short_id}')
-                return redirect(fallback)
-            order.delivery_status = 'completed'
-            order.completed_at = timezone.now()
-            order.save()
-            order.buy_order.order_status = 'completed'
-            order.buy_order.save(update_fields=['order_status', 'updated_at'])
-            from .audit_helpers import audit_order_status
-            audit_order_status(
-                order=order.buy_order,
-                actor=user,
-                summary=f'骑手送达完成 {order.buy_order.get_display_order_no()}',
-                request=request,
-            )
-            if not seller_mode:
-                from .dispatch_helpers import maybe_refill_dispatch_after_rider_available
+        elif action == 'complete' and order.delivery_status in ('in_transit', 'overtime'):
+            from waimai.plugins.fulfillment.delivery_workflow_helpers import apply_rider_complete_delivery
 
-                next_delivery, _ = maybe_refill_dispatch_after_rider_available(user)
-                if next_delivery:
-                    messages.success(
-                        request,
-                        f'已自动补派下一单：{next_delivery.buy_order.get_display_order_no()}',
-                    )
+            ok, msg = apply_rider_complete_delivery(order)
+            if ok:
+                from .audit_helpers import audit_order_status
+                audit_order_status(
+                    order=order.buy_order,
+                    actor=user,
+                    summary=f'骑手送达完成 {order.buy_order.get_display_order_no()}',
+                    request=request,
+                )
+                messages.success(request, msg)
+                if not seller_mode:
+                    from .dispatch_helpers import maybe_refill_dispatch_after_rider_available
+
+                    next_delivery, _ = maybe_refill_dispatch_after_rider_available(user)
+                    if next_delivery:
+                        messages.success(
+                            request,
+                            f'已自动补派下一单：{next_delivery.buy_order.get_display_order_no()}',
+                        )
+            else:
+                messages.error(request, msg)
     except DeliveryOrder.DoesNotExist:
         pass
 

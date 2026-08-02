@@ -55,6 +55,11 @@ _qr_fixed.pdf
 _恢复旧聊天窗口.bat
 _restore_cursor_chats.py
 _cursor_chat_recovery_backup_*/
+# scripts/：智能体专用工具与反馈弹窗（不进 Git、不推送）
+scripts/
+# Cline 专用规则与纠错清单（给另一个智能体用，不进 Git）
+AGENTS.md
+智能体纠错清单.md
 # 完整手册/方案仅存拥有者私有目录；禁止把完整版副本推进公开仓
 **/野草系统-核心规则速查手册-完整版.md
 **/开发方案-完整版.md

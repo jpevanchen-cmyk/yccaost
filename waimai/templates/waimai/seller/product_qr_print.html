@@ -16,7 +16,7 @@
         </p>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
             <button type="button" class="btn btn-green" onclick="window.print()" data-yc-tour="print-qr-btn">打印本页</button>
-            <a href="{% if experience_products_url %}{{ experience_products_url }}{% elif onboarding_preview %}{% url 'onboarding_seller_products' %}{% else %}{% url 'seller_panel_section' 'products' %}{% endif %}" class="btn btn-outline" data-unsaved-skip>返回商品管理</a>
+            <a href="{% if experience_products_url %}{{ experience_products_url }}{% else %}{% url 'seller_panel_section' 'products' %}{% endif %}" class="btn btn-outline" data-unsaved-skip>返回商品管理</a>
         </div>
         {% if not print_cards %}
         <p class="msg-warn">当前使用中清单里没有可打印的商品（须有展示编号且至少一个档位可售）。</p>

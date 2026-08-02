@@ -51,6 +51,7 @@
 {% endif %}
 
 {% include 'waimai/_duty_order_notify.html' %}
+{% include 'waimai/_duty_remittance_notify.html' %}
 
 <div class="rider-quick-links" style="margin-bottom:12px;" data-yc-tour="work-view-tabs">
     {% if 'orders' in enabled_work_views %}
@@ -80,6 +81,9 @@
     {# 新单提醒按钮的放置点：这一排最右端 #}
     {% if can_use_order_alert %}
     <div id="order-alert-mount" style="margin-left:auto;"></div>
+    {% endif %}
+    {% if can_use_remittance_alert %}
+    <div id="remittance-alert-mount"></div>
     {% endif %}
 </div>
 
@@ -218,6 +222,22 @@ window.YC_ORDER_ALERT = {
     itemLabel: "{{ workbench_shell.rider_alert_item }}"{% endif %}
 };
 </script>
-<script src="{% static 'waimai/order_alert.js' %}?v=8"></script>
+{% endif %}
+{% if can_use_remittance_alert %}
+<script>
+window.YC_REMITTANCE_ALERT = {
+    pollUrl: "{% url 'shop_work_pending_remittances_json' shop_code=shop_work_code %}",
+    storagePrefix: "yc_work_remittance_alert",
+    mountSelector: "#remittance-alert-mount",
+    itemLabel: "笔入金申请待核对，请及时处理！",
+    notificationTitle: "野草 · 有新入金申请",
+    enableBtnOn: "🔕 入金提醒：开（点此关闭）",
+    enableBtnOff: "🔔 入金提醒：关（点此开启）",
+    notificationTag: "yc-remittance-request"
+};
+</script>
+{% endif %}
+{% if can_use_order_alert or can_use_remittance_alert %}
+<script src="{% static 'waimai/order_alert.js' %}?v=9"></script>
 {% endif %}
 {% endblock %}

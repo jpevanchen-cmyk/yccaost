@@ -28,3 +28,21 @@ def experience_boot(request):
         'experience_enabled': True,
         'official_shop_name': boot['officialShopName'],
     }
+
+
+def enrich_server_home_onboarding(context: dict) -> dict:
+    """服务器主页追加新版体验引导上下文"""
+    if not official_shop_ready():
+        context['experience_enabled'] = False
+        context['experience_boot_json'] = ''
+        context['official_shop_name'] = ''
+        context['onboarding_enabled'] = False
+        context['onboarding_boot_json'] = ''
+        return context
+    boot = build_experience_boot_payload()
+    context['experience_enabled'] = True
+    context['experience_boot_json'] = json.dumps(boot, ensure_ascii=False)
+    context['official_shop_name'] = boot['officialShopName']
+    context['onboarding_enabled'] = False
+    context['onboarding_boot_json'] = ''
+    return context

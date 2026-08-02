@@ -141,6 +141,7 @@ TEMPLATES = [
                 'django.template.context_processors.csrf',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'waimai.context_processors.yc_page_notices',
                 'waimai.context_processors.nav_shop_work',
                 'waimai.context_processors.experience_site',
                 'waimai.context_processors.site_compliance',
