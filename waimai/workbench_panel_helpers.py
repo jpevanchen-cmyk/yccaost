@@ -13,6 +13,8 @@ PANEL_IDS = {
     'kitchen': 'work-kitchen-panel-body',
     'waiter': 'work-waiter-panel-body',
     'orders': 'work-orders-panel-body',
+    'cashier': 'work-cashier-panel-body',
+    'rider': 'work-rider-panel-body',
 }
 
 
@@ -28,6 +30,9 @@ def attach_shop_work_panel_ctx(
     redirect_to: str,
     can_operate_kitchen: bool = False,
     can_operate_waiter: bool = False,
+    can_operate_cashier: bool = False,
+    can_operate_rider: bool = False,
+    show_rider_extras: bool = False,
 ) -> None:
     """POST 分发前挂上 Panel 重渲染所需上下文"""
     request.shop_work_panel_ctx = {
@@ -41,6 +46,9 @@ def attach_shop_work_panel_ctx(
         'panel_id': PANEL_IDS.get(view, ''),
         'can_operate_kitchen': can_operate_kitchen,
         'can_operate_waiter': can_operate_waiter,
+        'can_operate_cashier': can_operate_cashier,
+        'can_operate_rider': can_operate_rider,
+        'show_rider_extras': show_rider_extras,
     }
 
 
@@ -96,6 +104,25 @@ def render_workbench_panel_html(request: HttpRequest, panel_ctx: dict) -> str:
         ctx.update(base)
         return render_to_string('waimai/_shop_work_orders_panel.html', ctx, request=request)
 
+    if view == 'cashier':
+        from .cashier_helpers import build_cashier_context
+        from .shop_work_helpers import build_shop_work_path
+
+        ctx = build_cashier_context(seller_id, work_user=work_user, request=request)
+        ctx.update(base)
+        ctx['can_operate'] = bool(panel_ctx.get('can_operate_cashier'))
+        ctx['tab_cashier_url'] = build_shop_work_path(panel_ctx['shop_code'], view='cashier')
+        return render_to_string('waimai/_shop_work_cashier_panel.html', ctx, request=request)
+
+    if view == 'rider':
+        from .shop_work_helpers import build_rider_board_context
+
+        ctx = build_rider_board_context(work_user, seller_id, sort_mode=sort_mode)
+        ctx.update(base)
+        ctx['can_operate'] = bool(panel_ctx.get('can_operate_rider'))
+        ctx['show_rider_extras'] = bool(panel_ctx.get('show_rider_extras'))
+        return render_to_string('waimai/_shop_work_rider_panel.html', ctx, request=request)
+
     return ''
 
 
@@ -105,6 +132,7 @@ def respond_workbench_action(
     *,
     ok: bool,
     message: str,
+    extra: dict | None = None,
 ) -> HttpResponse:
     """工作台操作：Panel 请求走 JSON；否则 messages + redirect"""
     panel_ctx = getattr(request, 'shop_work_panel_ctx', None)
@@ -116,6 +144,7 @@ def respond_workbench_action(
             html=html,
             message=message,
             panel_id=panel_ctx.get('panel_id') or '',
+            extra=extra,
         )
     if ok:
         messages.success(request, message)

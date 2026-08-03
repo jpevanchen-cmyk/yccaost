@@ -114,7 +114,9 @@
     </div>
     {% elif current_view == 'cashier' %}
     <h2 style="margin:0 0 10px;font-size:18px;">💵 {{ workbench_shell.view_cashier_title }}</h2>
+    <div id="work-cashier-panel-body" data-yc-panel-id="work-cashier-panel-body">
     {% include 'waimai/_shop_work_cashier_panel.html' with can_operate=can_operate_cashier form_action=form_action %}
+    </div>
     {% elif current_view == 'cash_manage' %}
     <h2 style="margin:0 0 10px;font-size:18px;">💵 {{ workbench_shell.view_cash_manage_title }}</h2>
     {% include 'waimai/_shop_work_cash_manage_panel.html' with form_action=form_action %}
@@ -130,7 +132,9 @@
     </div>
     {% elif current_view == 'rider' %}
     <h2 style="margin:0 0 10px;font-size:18px;">🛵 {{ workbench_shell.view_rider_title }}</h2>
+    <div id="work-rider-panel-body" data-yc-panel-id="work-rider-panel-body">
     {% include 'waimai/_shop_work_rider_panel.html' with can_operate=can_operate_rider form_action=form_action show_rider_extras=show_rider_extras %}
+    </div>
     {% else %}
     <h2 style="margin:0 0 10px;font-size:18px;">工作台基础</h2>
     <p class="card-meta">当前没有可打开的业务面板。请店主在「员工工作台管理」为您勾选订单处理或业态权限。</p>
@@ -195,7 +199,7 @@ window.YC_REMITTANCE_ALERT = {
 {% if can_use_order_alert or can_use_remittance_alert %}
 <script src="{% static 'waimai/order_alert.js' %}?v=10"></script>
 {% endif %}
-{% if current_view == 'kitchen' or current_view == 'waiter' or current_view == 'orders' or current_view == 'cash_manage' %}
-<script src="{% static 'waimai/panel_refresh.js' %}?v=6"></script>
+{% if current_view == 'kitchen' or current_view == 'waiter' or current_view == 'orders' or current_view == 'cash_manage' or current_view == 'cashier' or current_view == 'rider' %}
+<script src="{% static 'waimai/panel_refresh.js' %}?v=7"></script>
 {% endif %}
 {% endblock %}

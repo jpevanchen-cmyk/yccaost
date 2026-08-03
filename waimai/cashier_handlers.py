@@ -1,6 +1,5 @@
 # 实体收银台 Tab：POST 处理
 
-from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 
 from .cashier_helpers import (
@@ -9,6 +8,12 @@ from .cashier_helpers import (
     cashier_confirm_simulate_payment,
 )
 from .models import BuyOrder
+from .workbench_panel_helpers import respond_workbench_action
+
+
+def _finish_cashier(request, redirect_to, *, ok: bool, message: str):
+    """收银台操作：Panel 静默刷新或整页 redirect"""
+    return respond_workbench_action(request, redirect_to, ok=ok, message=message)
 
 
 def handle_cashier_post(
@@ -26,8 +31,9 @@ def handle_cashier_post(
     )
 
     if not staff_has_permission(work_user, PERM_ORDERS_CASHIER):
-        messages.error(request, '您没有收银台操作权限')
-        return redirect(redirect_to)
+        return _finish_cashier(
+            request, redirect_to, ok=False, message='您没有收银台操作权限',
+        )
 
     order = get_object_or_404(
         BuyOrder,
@@ -40,8 +46,8 @@ def handle_cashier_post(
 
         ok, msg = cashier_can_start_wechat(order, seller_id)
         if not ok:
-            messages.error(request, msg)
-            return redirect(redirect_to)
+            return _finish_cashier(request, redirect_to, ok=False, message=msg)
+        # 微信扫码页是独立子页，须整页跳转，不走 Panel
         return redirect(
             reverse(
                 'shop_work_cashier_wechat',
@@ -51,15 +57,10 @@ def handle_cashier_post(
 
     if action == 'simulate_pay':
         ok, msg = cashier_confirm_simulate_payment(order, actor=work_user)
-        if ok:
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(redirect_to)
+        return _finish_cashier(request, redirect_to, ok=ok, message=msg)
 
     if action != 'collect':
-        messages.error(request, '未知操作')
-        return redirect(redirect_to)
+        return _finish_cashier(request, redirect_to, ok=False, message='未知操作')
 
     channel = (request.POST.get('cashier_channel') or '').strip()
     custom = (request.POST.get('cashier_channel_custom') or '').strip()
@@ -75,8 +76,4 @@ def handle_cashier_post(
         shortfall_reason=request.POST.get('shortfall_reason', ''),
         can_manage_shortfall=staff_has_permission(work_user, PERM_FULFILLMENT_CASH_MANAGE),
     )
-    if ok:
-        messages.success(request, msg)
-    else:
-        messages.error(request, msg)
-    return redirect(redirect_to)
+    return _finish_cashier(request, redirect_to, ok=ok, message=msg)

@@ -57,6 +57,7 @@
 
     {% if cashier_can_collect %}
     <form method="post" action="{{ form_action }}" style="margin-top:8px;"
+          data-yc-panel="work-cashier-panel-body"
           onsubmit="return confirm('确认按填写金额收款？');">
         {% csrf_token %}
         <input type="hidden" name="cashier_action" value="collect">
@@ -119,6 +120,7 @@
     {% endif %}
     {% if cashier_enable_simulate %}
     <form method="post" action="{{ form_action }}" style="margin-top:8px;"
+          data-yc-panel="work-cashier-panel-body"
           onsubmit="return confirm('演示支付不扣真钱，确认模拟本单已付？');">
         {% csrf_token %}
         <input type="hidden" name="cashier_action" value="simulate_pay">

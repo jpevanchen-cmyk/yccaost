@@ -20,7 +20,7 @@
         <strong>¥{{ rider_cash_remittance.available_total }}</strong>。金额由系统按每单实收自动合计。
     </p>
     {% if rider_cash_remittance.available_count %}
-    <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %}>
+    <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
         {% csrf_token %}
         <input type="hidden" name="action" value="request_remittance">
         <label class="card-meta">交款备注（可选）
@@ -61,7 +61,7 @@
             <div class="card-meta">{{ order.delivery_address }}</div>
         </div>
         {% if can_operate and rider_can_claim %}
-        <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %}>
+        <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
             {% csrf_token %}
             <input type="hidden" name="action" value="claim_pending">
             <input type="hidden" name="order_id" value="{{ order.order_id }}">
@@ -115,7 +115,7 @@
             <p class="card-meta">{{ workbench_shell.handoff_wait_text }}</p>
             {% endif %}
             {% if can_operate %}
-            <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
                 {% csrf_token %}
                 <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
                 <input type="hidden" name="action" value="pickup">
@@ -124,7 +124,7 @@
                     {{ workbench_shell.pickup_button }}
                 </button>
             </form>
-            <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
                 {% csrf_token %}
                 <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
                 <input type="hidden" name="action" value="start_delivery">
@@ -140,7 +140,7 @@
                 {% endif %}
             </form>
             {% if order.buy_order.is_cod_awaiting_collection %}
-            <form method="POST" class="delivery-cash-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="delivery-cash-form"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
                 {% csrf_token %}
                 <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
                 <input type="hidden" name="action" value="collect_cash">
@@ -159,7 +159,7 @@
                 </button>
             </form>
             {% if order.buy_order.cash_shortfall_status == 'buyer_pending' or order.buy_order.cash_shortfall_status == 'buyer_rejected' or order.buy_order.cash_shortfall_status == 'exception' %}
-            <form method="POST" class="delivery-cash-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="delivery-cash-form"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
                 {% csrf_token %}
                 <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
                 <input type="hidden" name="action" value="mark_cash_exception">
@@ -171,7 +171,7 @@
             </form>
             {% endif %}
             {% endif %}
-            <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
                 {% csrf_token %}
                 <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
                 <input type="hidden" name="action" value="complete">

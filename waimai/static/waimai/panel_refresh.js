@@ -153,6 +153,17 @@
                 if (data.message) {
                     showMessage('ok', data.message);
                 }
+                if (data.extra && data.extra.scroll_to) {
+                    var anchor = document.getElementById(data.extra.scroll_to);
+                    if (anchor) {
+                        anchor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    }
+                } else if (data.scroll_to) {
+                    var anchor2 = document.getElementById(data.scroll_to);
+                    if (anchor2) {
+                        anchor2.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    }
+                }
                 if (submitBtn) submitBtn.disabled = false;
             })
             .catch(function (err) {
