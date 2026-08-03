@@ -51,7 +51,7 @@
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
                     {% if dish.served_qty < dish.total_qty %}
                         {% if dish.served_qty < dish.prepared_qty %}
-                    <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                    <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                         {% csrf_token %}
                         <input type="hidden" name="mark_dish_unit" value="1">
                         <input type="hidden" name="order_id" value="{{ order.order_id }}">
@@ -63,7 +63,7 @@
                         {% endif %}
                     {% endif %}
                     {% if dish.served_qty > 0 %}
-                    <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                    <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                         {% csrf_token %}
                         <input type="hidden" name="undo_dish_unit" value="1">
                         <input type="hidden" name="order_id" value="{{ order.order_id }}">
@@ -80,14 +80,15 @@
         {% if can_operate %}
         <div class="delivery-action-stack" style="margin-top:12px;">
             {% if row.can_mark_all_served %}
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
-                <button type="submit" name="mark_all_served" value="1" class="btn btn-orange btn-block">一键全部{{ row.serve_label }}</button>
+                <input type="hidden" name="mark_all_served" value="1">
+                <button type="submit" class="btn btn-orange btn-block">一键全部{{ row.serve_label }}</button>
             </form>
             {% endif %}
             {% if row.can_adjust_wait_time %}
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="adjust_wait_time" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
@@ -100,7 +101,7 @@
             </form>
             {% endif %}
             {% if row.can_dispatch %}
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="dispatch_order" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
@@ -114,7 +115,7 @@
             </form>
             {% elif row.can_reassign %}
             <p class="card-meta">当前{{ workbench_shell.rider_role_word }}：{{ row.rider_id }}</p>
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="reassign_rider" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
@@ -150,7 +151,7 @@
             </form>
             {% endif %}
             {% if row.can_complete_in_store %}
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="complete_pickup" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
@@ -163,9 +164,9 @@
         {% endif %}
 
         {% if row.log_lines %}
-        <details class="detail-collapse" style="margin-top:10px;">
+        <details class="seller-panel-fold" style="margin-top:10px;">
             <summary>📝 服务记录</summary>
-            <div class="detail-collapse-body">
+            <div class="seller-panel-fold-body">
                 {% for line in row.log_lines %}
                 <div class="card-meta" style="margin-bottom:6px;">{{ line }}</div>
                 {% endfor %}

@@ -11,6 +11,11 @@ from .waiter_helpers import (
     mark_dish_unit_served,
     undo_dish_unit_served,
 )
+from .workbench_panel_helpers import respond_workbench_action
+
+
+def _finish_waiter(request, target, *, ok: bool, message: str):
+    return respond_workbench_action(request, target, ok=ok, message=message)
 
 
 def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
@@ -22,8 +27,9 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
     from .staff_account_helpers import PERM_DINING_WAITER, staff_has_permission
 
     if not staff_has_permission(operator, PERM_DINING_WAITER):
-        messages.error(request, '您没有服务员工作台操作权限')
-        return redirect(target)
+        return _finish_waiter(
+            request, target, ok=False, message='您没有服务员工作台操作权限',
+        )
     if 'adjust_wait_time' in request.POST:
         order_id = request.POST.get('order_id', '').strip()
         order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
@@ -38,11 +44,7 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
         ok, msg = mark_dish_unit_served(
             order, dish_id, operator_username=operator.username,
         )
-        if ok:
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return _finish_waiter(request, target, ok=ok, message=msg)
 
     if 'undo_dish_unit' in request.POST:
         order_id = request.POST.get('order_id', '').strip()
@@ -51,34 +53,31 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
         ok, msg = undo_dish_unit_served(
             order, dish_id, operator_username=operator.username,
         )
-        if ok:
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return _finish_waiter(request, target, ok=ok, message=msg)
 
     if 'mark_all_served' in request.POST:
         order_id = request.POST.get('order_id', '').strip()
         order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
         ok, msg = mark_all_dish_served(order, operator_username=operator.username)
-        if ok:
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return _finish_waiter(request, target, ok=ok, message=msg)
 
     if 'confirm_cash' in request.POST:
         order_id = request.POST.get('order_id', '').strip()
         order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
-        # 防篡改：外卖货到付款不在服务员台确认现金，钱由配送员送达时收
         from .waiter_helpers import waiter_can_confirm_cash
+
         if not waiter_can_confirm_cash(order):
-            messages.error(request, '这笔订单无需在此确认现金（外卖现金由配送员送达时收取）')
-            return redirect(target)
+            return _finish_waiter(
+                request,
+                target,
+                ok=False,
+                message='这笔订单无需在此确认现金（外卖现金由配送员送达时收取）',
+            )
         ok, msg = confirm_cash_payment(order)
         if ok:
             from .audit_helpers import audit_order_status
             from .waiter_helpers import sync_waiter_service_status
+
             fields = sync_waiter_service_status(order)
             if fields:
                 order.save(update_fields=fields)
@@ -88,10 +87,7 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
                 summary=f'确认现金收款 {order.get_display_order_no()}',
                 request=request,
             )
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return _finish_waiter(request, target, ok=ok, message=msg)
 
     if 'close_uncollected' in request.POST:
         order_id = request.POST.get('order_id', '').strip()
@@ -100,23 +96,20 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
         ok, msg = close_uncollected_cash_order(order, reason)
         if ok:
             from .audit_helpers import audit_order_status
+
             audit_order_status(
                 order=order,
                 actor=operator,
                 summary=f'未收款结案 {order.get_display_order_no()}：{reason or "无备注"}',
                 request=request,
             )
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return _finish_waiter(request, target, ok=ok, message=msg)
 
     if 'complete_pickup' in request.POST:
         order_id = request.POST.get('order_id', '').strip()
         order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
         from .waiter_helpers import sync_waiter_service_status, waiter_can_complete_in_store
 
-        # 先同步按份进度；打包自取已付且货齐时可自动完结，堂食须点「用餐完成」
         fields = sync_waiter_service_status(order)
         if fields:
             order.save(update_fields=list(dict.fromkeys(fields)))
@@ -124,62 +117,69 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
 
         if order.order_status == 'completed':
             if order.is_basic_order():
-                messages.success(request, '订单已完成')
+                msg = '订单已完成'
             elif order.is_dine_in():
-                messages.success(request, '堂食订单已完成')
+                msg = '堂食订单已完成'
             else:
-                messages.success(request, '打包自取订单已完成')
-        elif order.is_basic_order():
+                msg = '打包自取订单已完成'
+            return _finish_waiter(request, target, ok=True, message=msg)
+
+        if order.is_basic_order():
             from .order_desk_helpers import complete_basic_order
 
             if order.is_cash_receipt_pending():
-                messages.error(request, '尚未收款，请先确认已收款或无法收款结单')
-            elif order.payment_status != 'paid':
-                messages.error(request, '请先处理收款状态再结束订单')
-            elif not waiter_can_complete_in_store(order):
-                messages.error(request, '当前订单状态不能完成')
-            else:
-                ok, msg = complete_basic_order(order, actor=operator)
-                if ok:
-                    messages.success(request, msg)
-                else:
-                    messages.error(request, msg)
-        elif not order.is_in_store():
-            messages.error(request, '当前订单状态不能完成')
-        elif order.is_cash_receipt_pending():
-            messages.error(request, '尚未收款，请先确认已收款或无法收款结单')
-        elif order.payment_status != 'paid':
-            messages.error(request, '请先处理收款状态再结束订单')
-        elif not waiter_can_complete_in_store(order):
-            messages.error(request, '当前订单状态不能完成')
-        else:
-            from .order_status_event_helpers import (
-                EVENT_MANUAL_COMPLETE,
-                handle_order_status_event,
-            )
+                return _finish_waiter(
+                    request, target, ok=False, message='尚未收款，请先确认已收款或无法收款结单',
+                )
+            if order.payment_status != 'paid':
+                return _finish_waiter(
+                    request, target, ok=False, message='请先处理收款状态再结束订单',
+                )
+            if not waiter_can_complete_in_store(order):
+                return _finish_waiter(request, target, ok=False, message='当前订单状态不能完成')
+            ok, msg = complete_basic_order(order, actor=operator)
+            return _finish_waiter(request, target, ok=ok, message=msg)
 
-            fields = handle_order_status_event(
-                order,
-                EVENT_MANUAL_COMPLETE,
-                source='waiter_handlers.complete_order',
+        if not order.is_in_store():
+            return _finish_waiter(request, target, ok=False, message='当前订单状态不能完成')
+        if order.is_cash_receipt_pending():
+            return _finish_waiter(
+                request, target, ok=False, message='尚未收款，请先确认已收款或无法收款结单',
             )
-            if fields:
-                order.save(update_fields=list(dict.fromkeys(fields)))
-            if order.order_status != 'completed':
-                messages.error(request, '当前订单状态不能完成')
-                return redirect(target)
-            from .audit_helpers import audit_order_status
-            audit_order_status(
-                order=order,
-                actor=operator,
-                summary=f'完成订单 {order.get_display_order_no()}（{order.get_order_status_display()}）',
-                request=request,
+        if order.payment_status != 'paid':
+            return _finish_waiter(
+                request, target, ok=False, message='请先处理收款状态再结束订单',
             )
-            if order.is_dine_in():
-                messages.success(request, '堂食订单已完成')
-            else:
-                messages.success(request, '打包自取订单已完成')
-        return redirect(target)
+        if not waiter_can_complete_in_store(order):
+            return _finish_waiter(request, target, ok=False, message='当前订单状态不能完成')
+
+        from .order_status_event_helpers import (
+            EVENT_MANUAL_COMPLETE,
+            handle_order_status_event,
+        )
+
+        fields = handle_order_status_event(
+            order,
+            EVENT_MANUAL_COMPLETE,
+            source='waiter_handlers.complete_order',
+        )
+        if fields:
+            order.save(update_fields=list(dict.fromkeys(fields)))
+        if order.order_status != 'completed':
+            return _finish_waiter(request, target, ok=False, message='当前订单状态不能完成')
+        from .audit_helpers import audit_order_status
+
+        audit_order_status(
+            order=order,
+            actor=operator,
+            summary=f'完成订单 {order.get_display_order_no()}（{order.get_order_status_display()}）',
+            request=request,
+        )
+        if order.is_dine_in():
+            msg = '堂食订单已完成'
+        else:
+            msg = '打包自取订单已完成'
+        return _finish_waiter(request, target, ok=True, message=msg)
 
     if 'dispatch_order' in request.POST:
         order_id = request.POST.get('order_id', '').strip()
@@ -187,26 +187,23 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
         order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
         delivery, err = manual_dispatch_order(operator, 'waiter', order, rider_id)
         if delivery:
-            messages.success(request, f'已派单给配送员 {delivery.rider_id}')
-        else:
-            messages.error(request, err or '派单失败')
-        return redirect(target)
+            return _finish_waiter(
+                request, target, ok=True, message=f'已派单给配送员 {delivery.rider_id}',
+            )
+        return _finish_waiter(request, target, ok=False, message=err or '派单失败')
 
     if 'reassign_rider' in request.POST:
         from .dispatch_helpers import operator_can_manual_dispatch
 
         if not operator_can_manual_dispatch(operator, seller_id, 'waiter'):
-            messages.error(request, '当前店铺设置下，您没有手动派单权限')
-            return redirect(target)
+            return _finish_waiter(
+                request, target, ok=False, message='当前店铺设置下，您没有手动派单权限',
+            )
         order_id = request.POST.get('order_id', '').strip()
         rider_id = request.POST.get('rider_id', '').strip()
         order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
         ok, msg = reassign_delivery_rider(order, rider_id)
-        if ok:
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return _finish_waiter(request, target, ok=ok, message=msg)
 
     return None
 

@@ -57,9 +57,9 @@
 {% include 'waimai/_order_cashier_qr_block.html' %}
 
 {% if order.is_delivery_cod and order.cash_collected_amount %}
-<details class="detail-collapse" open>
+<details class="seller-panel-fold">
     <summary>货到付款实收核对</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <div class="detail-row"><span>订单应收</span><span>¥{{ order.total_amount }}</span></div>
         <div class="detail-row"><span>配送员登记实付</span><span>¥{{ order.cash_collected_amount }}</span></div>
         {% if order.cash_shortfall_amount %}
@@ -97,9 +97,9 @@
 {% endif %}
 
 {% if show_contact_guest %}
-<details class="detail-collapse" open data-yc-tour="order-detail-contact">
+<details class="seller-panel-fold" data-yc-tour="order-detail-contact">
     <summary>📞 联系客人</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <p class="card-meta" style="margin:0 0 10px;">有问题请先电话/微信联系客人协商，不要直接拒单。谈妥后可在「订单沟通」写一句确认留痕。</p>
         <div class="detail-row"><span>称呼 / 买家</span><span id="guest-contact-id">{{ order.get_buyer_display_name }}{% if order.is_guest_order %}（游客）{% elif order.buyer_id %} · {{ order.buyer_id }}{% endif %}</span></div>
         {% if order.buyer_id %}
@@ -113,17 +113,17 @@
 {% endif %}
 
 {% if viewer_role == 'buyer' %}
-<details class="detail-collapse" open>
+<details class="seller-panel-fold">
     <summary>🏪 店铺信息</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <div class="detail-row"><span>店铺名称</span><span>{% if shop_profile %}{{ shop_profile.shop_name }}{% else %}—{% endif %}</span></div>
         <div class="detail-row"><span>店铺地址</span><span>{% if shop_profile %}{{ shop_profile.address }}{% else %}—{% endif %}</span></div>
         <div class="detail-row"><span>进店</span><span><a href="/shop/?seller_id={{ order.seller_id }}">打开店铺</a></span></div>
     </div>
 </details>
-<details class="detail-collapse" open>
+<details class="seller-panel-fold">
     <summary>{{ order_shell.location_section_title }}</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <div class="detail-row"><span>履约方式</span><span>{{ order_shell.fulfillment_label }}</span></div>
         <div class="detail-row"><span>{{ order_shell.place_label }}</span><span style="text-align:right;max-width:60%;">{{ order.delivery_address }}</span></div>
         {% if order_shell.location_kind == 'in_store' or order_shell.location_kind == 'basic' %}
@@ -137,9 +137,9 @@
     </div>
 </details>
 {% elif viewer_role == 'seller' %}
-<details class="detail-collapse" open data-yc-tour="order-detail-buyer">
+<details class="seller-panel-fold" data-yc-tour="order-detail-buyer">
     <summary>👤 买家信息</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <div class="detail-row"><span>买家账号</span><span>{{ order.buyer_id }}</span></div>
         <div class="detail-row"><span>履约方式</span><span>{{ order_shell.fulfillment_label }}</span></div>
         <div class="detail-row"><span>{{ order_shell.place_label }}</span><span style="text-align:right;max-width:60%;">{{ order.delivery_address }}</span></div>
@@ -152,9 +152,9 @@
     </div>
 </details>
 {% else %}
-<details class="detail-collapse" open>
+<details class="seller-panel-fold">
     <summary>👤 买家 / 履约信息</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <div class="detail-row"><span>买家账号</span><span>{{ order.buyer_id }}</span></div>
         <div class="detail-row"><span>履约方式</span><span>{{ order_shell.fulfillment_label }}</span></div>
         <div class="detail-row"><span>{{ order_shell.place_label }}</span><span style="text-align:right;max-width:60%;">{{ order.delivery_address }}</span></div>
@@ -163,9 +163,9 @@
 </details>
 {% endif %}
 
-<details class="detail-collapse" open data-yc-tour="order-detail-chat">
+<details class="seller-panel-fold" data-yc-tour="order-detail-chat">
     <summary>💬 订单沟通</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <p class="card-meta" style="margin:0 0 10px;">重要事情请先电话/微信商量；这里用来双方留痕确认。打开本页即视为已看过新留言。</p>
         {% if order_messages %}
             {% for m in order_messages %}
@@ -194,9 +194,9 @@
 </details>
 
 {% if can_shop_cancel %}
-<details class="detail-collapse" open>
+<details class="seller-panel-fold">
     <summary>⚠️ 店家取消订单（兜底）</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <p class="card-meta" style="margin:0 0 10px;">
             仅在无法继续履约时使用（例如食材失误）。须先与客人协商：
             {% if shop_has_chat_history %}
@@ -219,9 +219,9 @@
 {% endif %}
 
 {% if can_buyer_cancel %}
-<details class="detail-collapse" open>
+<details class="seller-panel-fold">
     <summary>取消订单</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <p class="card-meta" style="margin:0 0 10px;">若暂时不需要这份订单，可在此取消。已沟通好的情况也可先在「订单沟通」留一句说明。</p>
         <form method="post" onsubmit="return confirm('确定取消这份订单吗？');">
             {% csrf_token %}
@@ -231,17 +231,17 @@
     </div>
 </details>
 {% elif show_buyer_cancel_blocked %}
-<details class="detail-collapse" open>
+<details class="seller-panel-fold">
     <summary>取消订单</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <p class="msg-err" style="margin:0;">{{ buyer_cancel_blocked_hint }}</p>
     </div>
 </details>
 {% endif %}
 
-<details class="detail-collapse" open data-yc-tour="order-detail-items">
+<details class="seller-panel-fold" data-yc-tour="order-detail-items">
     <summary>🍱 订单内容</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         {% for item in dish_lines %}
         <div class="line-item">
             <span>{{ item.name }} × {{ item.quantity }}</span>
@@ -252,9 +252,9 @@
 </details>
 
 {% if order_shell.show_distance %}
-<details class="detail-collapse">
+<details class="seller-panel-fold">
     <summary>🚚 配送费明细</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         {% if delivery_fee_detail.lines %}
             {% for line in delivery_fee_detail.lines %}
             <div class="fee-line">{{ line }}</div>
@@ -269,9 +269,9 @@
 </details>
 {% endif %}
 
-<details class="detail-collapse" open data-yc-tour="order-detail-fee-total">
+<details class="seller-panel-fold" data-yc-tour="order-detail-fee-total">
     <summary>💰 费用合计</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <div class="detail-row"><span>商品小计</span><span>¥{{ subtotal }}</span></div>
         {% if order_shell.show_distance %}
         <div class="detail-row"><span>配送费</span><span>¥{{ delivery_fee }}</span></div>
@@ -282,9 +282,9 @@
     </div>
 </details>
 
-<details class="detail-collapse" open data-yc-tour="order-detail-payment">
+<details class="seller-panel-fold" data-yc-tour="order-detail-payment">
     <summary>💳 支付情况</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <div class="detail-row"><span>支付状态</span><span>{{ order.get_payment_status_display }}</span></div>
         {% if order.payment_status == 'uncollected' and order.cash_uncollected_reason %}
         <div class="detail-row" style="align-items:flex-start;">
@@ -303,9 +303,9 @@
     </div>
 </details>
 
-<details class="detail-collapse" open data-yc-tour="order-detail-timeline">
+<details class="seller-panel-fold" data-yc-tour="order-detail-timeline">
     <summary>📦 订单进度</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <div class="detail-row"><span>当前状态</span><span>{{ order.get_order_status_display }}</span></div>
         {% if order.delivery_order %}
         <div class="detail-row"><span>配送骑手</span><span>{{ order.delivery_order.rider_id }}</span></div>

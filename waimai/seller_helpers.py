@@ -65,32 +65,38 @@ def handle_seller_post(request, seller_id, section):
         return _seller_panel_redirect('payment', 'payment-settings-form')
 
     if 'confirm_rider_remit' in request.POST and section == 'payment':
-        if not fulfillment_plugin_enabled(seller_id):
-            messages.error(request, '履约配送插件未启用，无法确认配送员入金')
-            return _seller_panel_redirect('payment', request=request)
-        # 配送员先发起正式交款申请；店主在这里核对后确认。
-        from .rider_cash_helpers import review_cash_remittance_request
+        messages.info(request, '配送员入金确认已移至「现金管理」分区，请在那里操作。')
+        return _seller_panel_redirect('cash_manage', 'cash-manage-card', request=request)
 
-        ok, msg = review_cash_remittance_request(
-            seller_id,
-            request.POST.get('request_id'),
-            request.user.username,
-            approve=True,
-            note=request.POST.get('review_note', ''),
-        )
-        from .audit_helpers import write_audit_log
-        write_audit_log(
-            action_code='rider_cash_remit',
-            summary=f'店主处理配送员交款申请：{msg}',
-            seller_id=seller_id,
-            actor=request.user,
-            request=request,
-        )
-        if ok:
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return _seller_panel_redirect('payment', 'rider-cash-card')
+    if section == 'cash_manage':
+        if 'save_boss_remittance_notify' in request.POST:
+            from .forms import ShopBossRemittanceNotifyForm
+            from .operating_helpers import get_operating_settings
+
+            operating = get_operating_settings(seller_id)
+            form = ShopBossRemittanceNotifyForm(request.POST, instance=operating)
+            if form.is_valid():
+                form.save()
+                messages.success(request, '老板入金申请邮件已保存')
+            else:
+                messages.error(request, '老板入金申请邮件无效，请检查邮箱格式')
+            return _seller_panel_redirect('cash_manage', 'boss-remittance-notify', request=request)
+
+        if 'cash_manage_action' in request.POST:
+            from .plugins.fulfillment.ownership import fulfillment_plugin_enabled
+            from .workbench_handlers import handle_cash_management_post
+
+            if not fulfillment_plugin_enabled(seller_id):
+                messages.error(request, '履约配送插件未启用，无法处理现金管理')
+                return _seller_panel_redirect('cash_manage', request=request)
+            redirect_to = reverse('seller_panel_section', kwargs={'section': 'cash_manage'})
+            return handle_cash_management_post(
+                request, seller_id, operator=request.user, redirect_to=redirect_to,
+            )
+
+    if 'save_boss_remittance_notify' in request.POST and section == 'payment':
+        messages.info(request, '入金申请邮件设置已移至「现金管理」分区。')
+        return _seller_panel_redirect('cash_manage', 'boss-remittance-notify', request=request)
 
     if 'save_boss_order_notify' in request.POST and section == 'orders':
         from .forms import ShopBossOrderNotifyForm
@@ -104,19 +110,6 @@ def handle_seller_post(request, seller_id, section):
         else:
             messages.error(request, '老板邮件通知无效，请检查邮箱格式')
         return _seller_panel_redirect('orders', 'boss-order-notify', request=request)
-
-    if 'save_boss_remittance_notify' in request.POST and section == 'payment':
-        from .forms import ShopBossRemittanceNotifyForm
-        from .operating_helpers import get_operating_settings
-
-        operating = get_operating_settings(seller_id)
-        form = ShopBossRemittanceNotifyForm(request.POST, instance=operating)
-        if form.is_valid():
-            form.save()
-            messages.success(request, '老板入金申请邮件已保存')
-        else:
-            messages.error(request, '老板入金申请邮件无效，请检查邮箱格式')
-        return _seller_panel_redirect('payment', 'boss-remittance-notify', request=request)
 
     if section == 'orders' and request.method == 'POST':
         messages.error(request, '订单管理仅用于查询历史，请到店铺工作台处理现场操作')

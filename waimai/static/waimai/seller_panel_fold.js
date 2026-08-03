@@ -1,6 +1,6 @@
 /**
- * 卖家后台折叠模块：
- * 1）根据网址锚点自动展开对应区块（须在 mobile.js 恢复滚动前执行）
+ * 全站折叠卡片（§5.13）：卖家后台、工作台、订单详情等
+ * 1）根据网址锚点自动展开对应区块
  * 2）同一页同一时间只开一块：点开一个就关掉其它已开的
  */
 (function () {
@@ -40,8 +40,11 @@
         }
     }
 
-    function bindAccordion() {
-        allFolds().forEach(function (fold) {
+    function bindAccordionInScope(root) {
+        var scope = root || document;
+        scope.querySelectorAll('details.seller-panel-fold').forEach(function (fold) {
+            if (fold.dataset.ycFoldAccordionBound === '1') return;
+            fold.dataset.ycFoldAccordionBound = '1';
             fold.addEventListener('toggle', function () {
                 if (!fold.open) return;
                 closeOtherFolds(fold);
@@ -49,7 +52,12 @@
         });
     }
 
+    function bindAccordion() {
+        bindAccordionInScope(document);
+    }
+
     window.ycOpenSellerFoldForHash = openSellerFoldForHash;
+    window.ycRebindSellerPanelFold = bindAccordionInScope;
     bindAccordion();
     openSellerFoldForHash();
 })();

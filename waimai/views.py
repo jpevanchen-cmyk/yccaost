@@ -336,6 +336,7 @@ def shop_work(request, shop_code):
 
         from .staff_account_helpers import (
             PERM_DINING_RIDER,
+            PERM_FULFILLMENT_CASH_MANAGE,
             PERM_ORDERS_CASHIER,
             is_shop_staff_account,
             staff_has_any_order_desk_permission,
@@ -362,6 +363,13 @@ def shop_work(request, shop_code):
             and not staff_has_permission(work_user, PERM_ORDERS_CASHIER)
         ):
             enabled_views = [view for view in enabled_views if view != 'cashier']
+
+        if (
+            'cash_manage' in enabled_views
+            and work_user.role != 'seller'
+            and not staff_has_permission(work_user, PERM_FULFILLMENT_CASH_MANAGE)
+        ):
+            enabled_views = [view for view in enabled_views if view != 'cash_manage']
 
         current_view = (request.GET.get('view') or default_work_view(work_user)).strip()
         if current_view not in enabled_views:
@@ -411,6 +419,28 @@ def shop_work(request, shop_code):
 
         form_action = _work_url(current_view)
 
+        # 进度 80：现金管理 · 汇总月份下拉 Panel 静默刷新（不整页 reload）
+        if (
+            request.method == 'GET'
+            and current_view == 'cash_manage'
+            and request.GET.get('cash_month') is not None
+        ):
+            from .cash_manage_panel_helpers import render_workbench_cash_manage_panel_html
+            from .panel_refresh_helpers import is_panel_refresh, panel_refresh_ok
+
+            if is_panel_refresh(request):
+                html = render_workbench_cash_manage_panel_html(
+                    request,
+                    seller_id,
+                    work_user=work_user,
+                    form_action=form_action,
+                )
+                return panel_refresh_ok(
+                    html=html,
+                    panel_id='work-cash-manage-panel-body',
+                    message='',
+                )
+
         context = {
             'shop_profile': shop_profile,
             'current_view': current_view,
@@ -418,6 +448,7 @@ def shop_work(request, shop_code):
             'form_action': form_action,
             'tab_orders_url': _work_url('orders'),
             'tab_cashier_url': _work_url('cashier'),
+            'tab_cash_manage_url': _work_url('cash_manage'),
             'tab_waiter_url': _work_url('waiter'),
             'tab_kitchen_url': _work_url('kitchen'),
             'tab_rider_url': _work_url('rider'),
@@ -426,6 +457,7 @@ def shop_work(request, shop_code):
             'sort_oldest_url': _work_url(current_view, 'oldest'),
             'can_operate_orders': perms.get('orders', False),
             'can_operate_cashier': perms.get('cashier', False),
+            'can_operate_cash_manage': perms.get('cash_manage', False),
             'can_open_orders': can_open_orders,
             'can_operate_waiter': perms['waiter'],
             'can_operate_kitchen': perms['kitchen'],
@@ -445,7 +477,9 @@ def shop_work(request, shop_code):
             'work_user': work_user,
             'workbench_shell': workbench_shell,
         }
-        context.update(build_shop_work_daily_history(seller_id, work_user))
+        context.update(build_shop_work_daily_history(
+            seller_id, work_user, request=request, list_base_url=form_action,
+        ))
         if work_user.role == 'seller':
             from .forms import ShopDutyOrderNotifyForm, ShopDutyRemittanceNotifyForm
             from .operating_helpers import get_operating_settings
@@ -507,6 +541,12 @@ def shop_work(request, shop_code):
             from .cashier_helpers import build_cashier_context
 
             context.update(build_cashier_context(
+                seller_id, work_user=work_user, request=request,
+            ))
+        elif current_view == 'cash_manage':
+            from .cash_manage_helpers import build_workbench_cash_manage_context
+
+            context.update(build_workbench_cash_manage_context(
                 seller_id, work_user=work_user, request=request,
             ))
         return render(request, 'waimai/shop_work_hub.html', context)
@@ -1741,7 +1781,7 @@ def seller_panel_section(request, section):
 
     valid = (
         'orders', 'products', 'operating', 'dine', 'workbench', 'delivery',
-        'payment', 'audit', 'homepage', 'plugins',
+        'payment', 'cash_manage', 'audit', 'homepage', 'plugins',
     )
     if section not in valid:
         return redirect('seller_panel_section', section='orders')
@@ -1781,6 +1821,19 @@ def seller_panel_section(request, section):
                 profile_pick=profile_pick or None,
             )
             return panel_refresh_ok(html=html, panel_id='menu-panel-body', message='')
+
+    # 进度 80：现金管理 · 汇总月份下拉 Panel 静默刷新（不整页 reload）
+    if (
+        request.method == 'GET'
+        and section == 'cash_manage'
+        and request.GET.get('cash_month') is not None
+    ):
+        from .cash_manage_panel_helpers import render_seller_cash_manage_panel_html
+        from .panel_refresh_helpers import is_panel_refresh, panel_refresh_ok
+
+        if is_panel_refresh(request):
+            html = render_seller_cash_manage_panel_html(request, seller_id)
+            return panel_refresh_ok(html=html, panel_id='cash-manage-panel-body', message='')
 
     if request.method == 'POST':
         response = None
@@ -2042,7 +2095,6 @@ def seller_panel_section(request, section):
         from .experience_helpers import experience_site_enabled, seller_blocked_from_real_wechat
         from .payments import get_payment_settings
         from .plugin_runtime.registry import is_plugin_enabled
-        from .rider_cash_helpers import rider_cash_summary
 
         fulfillment_on = is_plugin_enabled('fulfillment', seller_id)
         payment_form = ShopPaymentSettingsForm(
@@ -2054,18 +2106,14 @@ def seller_panel_section(request, section):
         context['payment_form'] = payment_form
         context['experience_block_wechat'] = seller_blocked_from_real_wechat(seller_id)
         context['experience_site'] = experience_site_enabled()
-        context['show_rider_cash'] = fulfillment_on
-        context['rider_cash'] = rider_cash_summary(seller_id) if fulfillment_on else None
-        context['can_use_remittance_alert'] = fulfillment_on
-        if fulfillment_on:
-            from .forms import ShopBossRemittanceNotifyForm
-            from .order_notify_ui_helpers import smtp_not_ready_message
+    elif section == 'cash_manage':
+        from .cash_manage_helpers import build_seller_cash_manage_context
 
-            operating = get_operating_settings(seller_id)
-            context['boss_remittance_notify_form'] = ShopBossRemittanceNotifyForm(instance=operating)
-            context['boss_remittance_notify_smtp_warn'] = smtp_not_ready_message(
-                operating.boss_remittance_notify_enabled,
-            )
+        context.update(build_seller_cash_manage_context(seller_id, request=request))
+        context['cash_manage_form_action'] = reverse(
+            'seller_panel_section', kwargs={'section': 'cash_manage'},
+        )
+        return render(request, 'waimai/seller/cash_manage.html', context)
     elif section == 'audit':
         from .audit_helpers import (
             can_view_tech_logs,

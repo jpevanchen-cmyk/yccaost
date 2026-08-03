@@ -1,0 +1,32 @@
+{# 现金管理 · 折叠卡片（卖家 + 工作台共用 · §5.13） #}
+{% if not cash_manage_allowed and cash_manage_readonly_hint %}
+<p class="card-meta" style="margin:0 0 12px;">{{ cash_manage_readonly_hint|safe }}</p>
+{% elif cash_manage_allowed or fulfillment_enabled %}
+{% if cash_manage_intro %}
+<p class="card-meta" style="margin:0 0 12px;" data-yc-tour="work-cash-intro">{{ cash_manage_intro }}</p>
+{% endif %}
+
+{% if cash_daily_table %}
+{% include 'waimai/_yc_panel_fold.html' with fold_id='cash-manage-daily' fold_title='📊 现金日汇总' fold_open=cash_fold_daily_open fold_head_tour='cash-daily-fold' %}
+{% include 'waimai/_cash_manage_daily_table.html' with cash_month_form_action=cash_month_form_action cash_month_preserve_view=cash_month_preserve_view cash_month_preserve_section=cash_month_preserve_section cash_panel_id=cash_panel_id %}
+{% include 'waimai/seller/_panel_fold_end.html' %}
+{% endif %}
+
+{% if cash_exception_orders %}
+{% include 'waimai/_yc_panel_fold.html' with fold_id='cash-manage-exception' fold_title='⚠ 货到付款异常' fold_open=cash_fold_exception_open %}
+{% include 'waimai/_cash_manage_exception_block.html' with cash_manage_link_mode=cash_manage_link_mode|default:'seller' %}
+{% include 'waimai/seller/_panel_fold_end.html' %}
+{% endif %}
+
+{% if pending_cash_remittances %}
+{% include 'waimai/_yc_panel_fold.html' with fold_id='cash-manage-remittance' fold_title='💵 待确认现金交款' fold_open=cash_fold_remittance_open %}
+{% include 'waimai/_cash_manage_remittance_block.html' %}
+{% include 'waimai/seller/_panel_fold_end.html' %}
+{% endif %}
+
+{% if cash_manage_no_pending_actions and not cash_daily_table.rows %}
+<p class="card-meta">当前没有现金记录，也没有待处理的交款或异常。</p>
+{% elif cash_manage_no_pending_actions %}
+<p class="card-meta">当前没有待确认交款申请或货到付款异常。</p>
+{% endif %}
+{% endif %}

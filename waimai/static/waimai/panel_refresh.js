@@ -2,6 +2,7 @@
  * 野草 Panel 静默刷新（进度 80 · 全站共用核心）
  * - 标记 data-yc-panel="容器 id" 的表单走 Ajax，不整页刷新
  * - 清单下拉 data-yc-panel-picker 换清单（方案甲：replaceState，不 reload）
+ * - 现金月份 data-yc-cash-month-picker 换汇总（同样不 reload）
  * - 无脚本时原 form POST / GET 仍可用
  */
 (function () {
@@ -33,6 +34,7 @@
     function afterPanelReplace(panelEl) {
         bindPanelForms(panelEl);
         bindProfilePickers(panelEl);
+        bindCashMonthPickers(panelEl);
         if (window.ycSellerUnsavedGuard && window.ycSellerUnsavedGuard.registerForm) {
             panelEl.querySelectorAll('form[data-unsaved-guard]').forEach(function (form) {
                 window.ycSellerUnsavedGuard.registerForm(form);
@@ -72,11 +74,47 @@
         });
     }
 
+    // 被点击的提交按钮名不会自动进 FormData，需手动补上（兜底；模板优先用 hidden 字段）
+    var lastSubmitterByForm = new WeakMap();
+
+    function appendFormSubmitter(fd, submitter) {
+        if (!submitter || !submitter.name || submitter.disabled) return;
+        if (submitter.type === 'submit' || submitter.type === 'image' ||
+            (submitter.tagName === 'BUTTON' && !submitter.type)) {
+            fd.set(submitter.name, submitter.value || '1');
+        }
+    }
+
+    function resolveSubmitter(form, explicit) {
+        if (explicit && explicit.name) return explicit;
+        var clicked = lastSubmitterByForm.get(form);
+        if (clicked && clicked.name) return clicked;
+        var named = form.querySelectorAll(
+            'button[type="submit"][name], input[type="submit"][name], button[name]:not([type])'
+        );
+        if (named.length === 1) return named[0];
+        return explicit || null;
+    }
+
+    function trackPanelFormClicks(form) {
+        form.addEventListener('click', function (ev) {
+            var btn = ev.target && ev.target.closest
+                ? ev.target.closest('button, input[type="submit"], input[type="image"]')
+                : null;
+            if (!btn || !form.contains(btn)) return;
+            if (btn.type === 'submit' || btn.type === 'image' ||
+                (btn.tagName === 'BUTTON' && (!btn.type || btn.type === 'submit'))) {
+                lastSubmitterByForm.set(form, btn);
+            }
+        }, true);
+    }
+
     function bindPanelForms(root) {
         var scope = root || document;
         scope.querySelectorAll('form[data-yc-panel]').forEach(function (form) {
             if (form.dataset.ycPanelBound === '1') return;
             form.dataset.ycPanelBound = '1';
+            trackPanelFormClicks(form);
             form.addEventListener('submit', onFormSubmit);
         });
     }
@@ -89,7 +127,9 @@
         if (!panelEl) return;
 
         e.preventDefault();
-        var submitBtn = form.querySelector('button[type="submit"]');
+        var submitter = resolveSubmitter(form, e.submitter || null);
+        lastSubmitterByForm.delete(form);
+        var submitBtn = submitter || form.querySelector('button[type="submit"], input[type="submit"]');
         if (submitBtn && submitBtn.disabled) return;
         if (submitBtn) submitBtn.disabled = true;
 
@@ -98,9 +138,12 @@
         var token = csrfToken(form);
         if (token) headers['X-CSRFToken'] = token;
 
+        var fd = new FormData(form);
+        appendFormSubmitter(fd, submitter);
+
         fetch(postUrl, {
             method: 'POST',
-            body: new FormData(form),
+            body: fd,
             credentials: 'same-origin',
             headers: headers,
         })
@@ -130,9 +173,9 @@
             });
     }
 
-    /** 清单下拉换 Panel（方案甲：只换 HTML + replaceState） */
-    function switchProfile(profileId, targetUrl) {
-        var panelId = 'menu-panel-body';
+    /** GET 换 Panel（清单下拉、现金月份等：只换 HTML + replaceState） */
+    function switchPanelGet(panelId, targetUrl, options) {
+        options = options || {};
         var panelEl = resolvePanelEl(panelId);
         if (!panelEl) return false;
         var urlObj = new URL(targetUrl, window.location.href);
@@ -147,13 +190,39 @@
                 applyPanelHtml(panelEl, data.html);
                 var historyUrl = urlObj.pathname + urlObj.search + urlObj.hash;
                 window.history.replaceState(null, '', historyUrl);
-                var fold = document.getElementById('menu-panel');
-                if (fold && typeof fold.open === 'boolean') fold.open = true;
+                if (options.openFoldId) {
+                    var fold = document.getElementById(options.openFoldId);
+                    if (fold && typeof fold.open === 'boolean') fold.open = true;
+                }
+                if (window.ycRebindSellerPanelFold) {
+                    window.ycRebindSellerPanelFold(panelEl);
+                }
             })
             .catch(function (err) {
-                showMessage('error', err.message || '切换清单未成功，请稍后再试');
+                showMessage('error', err.message || '切换未成功，请稍后再试');
             });
         return true;
+    }
+
+    /** 清单下拉换 Panel（方案甲：只换 HTML + replaceState） */
+    function switchProfile(profileId, targetUrl) {
+        return switchPanelGet('menu-panel-body', targetUrl, { openFoldId: 'menu-panel' });
+    }
+
+    /** 现金管理 · 汇总月份下拉（不整页 reload） */
+    function bindCashMonthPickers(root) {
+        var scope = root || document;
+        scope.querySelectorAll('[data-yc-cash-month-picker]').forEach(function (sel) {
+            if (sel.dataset.ycCashMonthPickerBound === '1') return;
+            sel.dataset.ycCashMonthPickerBound = '1';
+            sel.addEventListener('change', function () {
+                var panelId = sel.getAttribute('data-yc-cash-month-picker');
+                if (!panelId) return;
+                var u = new URL(window.location.href);
+                u.searchParams.set('cash_month', sel.value);
+                switchPanelGet(panelId, u.toString(), { openFoldId: 'cash-manage-daily' });
+            });
+        });
     }
 
     function bindProfilePickers(root) {
@@ -180,12 +249,14 @@
     function init() {
         bindPanelForms(document);
         bindProfilePickers(document);
+        bindCashMonthPickers(document);
     }
 
     window.YcaoPanel = {
         bind: bindPanelForms,
         refreshHeader: HEADER,
         switchProfile: switchProfile,
+        switchPanelGet: switchPanelGet,
         tryNavigateProfileSwitch: tryNavigateProfileSwitch,
     };
 

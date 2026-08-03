@@ -12,6 +12,7 @@
     {% endif %}
     <p class="card-meta" style="margin-bottom:16px;" data-yc-tour="payment-intro">
         各支付方式可单独开关。演示店可同时开启「模拟」与「真微信」；正式营业请关闭模拟支付。
+        骑手交款与货到付款现金核对请至「现金管理」。
     </p>
 
     <form method="POST" id="payment-settings-form-el" data-unsaved-guard>
@@ -39,89 +40,4 @@
         <button type="submit" name="save_payment_settings" value="1" class="btn btn-primary btn-block" data-yc-tour="payment-save">保存支付设置</button>
     </form>
 </div>
-
-{# 外卖货到付款：配送员现金入金（归属履约插件） #}
-{% if show_rider_cash and rider_cash %}
-{% include 'waimai/seller/_boss_remittance_notify.html' %}
-<div class="seller-panel-box" id="rider-cash-card" data-yc-tour="rider-cash-box">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
-        <div style="flex:1;min-width:220px;">
-            <h2 style="margin:0;">💵 配送员现金入金</h2>
-        </div>
-        {% if can_use_remittance_alert %}
-        <div id="remittance-alert-mount"></div>
-        {% endif %}
-    </div>
-    <p class="card-meta" style="margin-bottom:12px;">
-        配送员先在工作台发起交款申请；店主在这里核对现金后确认。
-        没有申请的“已收未交”现金不能直接入金。
-    </p>
-
-    <div class="rider-cash-stats">
-        <div class="rider-cash-stat">
-            <div class="rider-cash-stat-num">{{ rider_cash.pending_count }}</div>
-            <div class="rider-cash-stat-label">待入金单数</div>
-        </div>
-        <div class="rider-cash-stat">
-            <div class="rider-cash-stat-num">¥{{ rider_cash.pending_total }}</div>
-            <div class="rider-cash-stat-label">待入金金额</div>
-        </div>
-        <div class="rider-cash-stat">
-            <div class="rider-cash-stat-num">¥{{ rider_cash.remitted_total }}</div>
-            <div class="rider-cash-stat-label">已入金累计</div>
-        </div>
-    </div>
-
-    {% if rider_cash.pending_requests %}
-    <table class="seller-table" style="margin-top:12px;">
-        <thead>
-            <tr><th>配送员</th><th>申请订单</th><th>金额</th><th>操作</th></tr>
-        </thead>
-        <tbody>
-            {% for remit in rider_cash.pending_requests %}
-            <tr>
-                <td>{{ remit.rider_id }}</td>
-                <td>{{ remit.order_count }} 单</td>
-                <td>¥{{ remit.total_amount }}</td>
-                <td>
-                    <form method="POST" style="margin:0;">
-                        {% csrf_token %}
-                        <input type="hidden" name="request_id" value="{{ remit.request_id }}">
-                        <button type="submit" name="confirm_rider_remit" value="1"
-                            class="btn btn-sm btn-primary"
-                            onclick="return confirm('确认配送员 {{ remit.rider_id }} 已交回 ¥{{ remit.total_amount }} 现金？');">
-                            确认入金
-                        </button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p class="card-meta">当前没有配送员发起的待确认交款申请。</p>
-    {% endif %}
-    {% if rider_cash.pending_count %}
-    <p class="card-meta" style="margin-top:10px;">
-        配送员已收、尚未确认入金：{{ rider_cash.pending_count }} 单，共 ¥{{ rider_cash.pending_total }}。
-        其中可能包含尚未发起交款申请的现金。
-    </p>
-    {% endif %}
-</div>
-{% if can_use_remittance_alert %}
-<script>
-window.YC_REMITTANCE_ALERT = {
-    pollUrl: "{% url 'seller_pending_remittances_json' %}",
-    storagePrefix: "yc_seller_remittance_alert",
-    mountSelector: "#remittance-alert-mount",
-    itemLabel: "笔入金申请待核对，请及时处理！",
-    notificationTitle: "野草 · 有新入金申请",
-    enableBtnOn: "🔕 入金提醒：开（点此关闭）",
-    enableBtnOff: "🔔 入金提醒：关（点此开启）",
-    notificationTag: "yc-remittance-request"
-};
-</script>
-<script src="{% static 'waimai/order_alert.js' %}?v=9"></script>
-{% endif %}
-{% endif %}
 {% endblock %}

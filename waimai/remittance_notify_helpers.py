@@ -31,7 +31,7 @@ def _build_remittance_email(remit) -> tuple[str, str]:
     if note:
         lines.append(f'说明：{note}')
     lines.append('')
-    lines.append('请到店铺工作台「订单」或卖家后台「支付设置」核对并确认入金。')
+    lines.append('请到店铺工作台「现金管理」或卖家后台「现金管理」核对并确认入金。')
     return subject, '\n'.join(lines)
 
 

@@ -2812,8 +2812,21 @@ body.dish-lightbox-open {
     background: #fffdf5;
 }
 /* 放到指定位置（标题右侧 / 工作台按钮排）时去掉上下外边距，方便对齐 */
-#order-alert-mount .order-alert-bar {
+#order-alert-mount .order-alert-bar,
+#remittance-alert-mount .order-alert-bar,
+.work-alert-mount-row .order-alert-bar {
     margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+/* 工作台 Tab 栏：新单 + 入金提醒并排靠右 */
+.work-alert-mount-row {
+    margin-left: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
 }
 .order-alert-enable {
     flex-shrink: 0;

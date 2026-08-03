@@ -509,7 +509,6 @@ def format_order_dish_summary(dish_items, max_len: int = 120) -> str:
 def build_order_desk_context(seller_id: str, *, work_user, sort_mode: str = 'newest') -> dict:
     """组装通用订单台页面数据。"""
     from .staff_account_helpers import (
-        PERM_FULFILLMENT_CASH_MANAGE,
         PERM_ORDERS_CONFIRM_PAYMENT,
         PERM_ORDERS_CONTACT,
         PERM_ORDERS_UPDATE_STATUS,
@@ -521,7 +520,6 @@ def build_order_desk_context(seller_id: str, *, work_user, sort_mode: str = 'new
     can_update = staff_has_permission(work_user, PERM_ORDERS_UPDATE_STATUS)
     can_confirm = staff_has_permission(work_user, PERM_ORDERS_CONFIRM_PAYMENT)
     can_contact = staff_has_permission(work_user, PERM_ORDERS_CONTACT)
-    can_cash_manage = staff_has_permission(work_user, PERM_FULFILLMENT_CASH_MANAGE)
 
     from .workbench_sort_helpers import order_queryset_by_created
 
@@ -557,21 +555,6 @@ def build_order_desk_context(seller_id: str, *, work_user, sort_mode: str = 'new
             'delivered_summary': f'{served}/{total}' if total > 0 else '',
         })
 
-    cash_exceptions = []
-    pending_remittances = []
-    if can_cash_manage:
-        cash_exceptions = list(
-            BuyOrder.objects.filter(
-                seller_id=seller_id,
-                cash_shortfall_status__in=(
-                    'buyer_pending', 'buyer_rejected', 'exception',
-                ),
-            ).select_related('delivery_order').order_by('updated_at')[:30]
-        )
-        from .rider_cash_helpers import pending_remittance_requests
-
-        pending_remittances = list(pending_remittance_requests(seller_id)[:30])
-
     return {
         'order_desk_rows': rows,
         'order_desk_can_view': can_view,
@@ -579,7 +562,4 @@ def build_order_desk_context(seller_id: str, *, work_user, sort_mode: str = 'new
         'order_desk_can_confirm': can_confirm,
         'order_desk_can_contact': can_contact,
         'order_desk_empty': not rows,
-        'cash_manage_allowed': can_cash_manage,
-        'cash_exception_orders': cash_exceptions,
-        'pending_cash_remittances': pending_remittances,
     }

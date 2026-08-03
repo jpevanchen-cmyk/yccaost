@@ -62,19 +62,21 @@
                 {% if can_operate %}
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
                     {% if dish.prepared_qty < dish.quantity %}
-                    <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                    <form method="POST" class="seller-inline-form" data-yc-panel="work-kitchen-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                         {% csrf_token %}
                         <input type="hidden" name="order_id" value="{{ order.order_id }}">
                         <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
-                        <button type="submit" name="mark_prepared_unit" value="1" class="btn btn-sm btn-orange">+1 {{ workbench_shell.unit_label }}备好</button>
+                        <input type="hidden" name="mark_prepared_unit" value="1">
+                        <button type="submit" class="btn btn-sm btn-orange">+1 {{ workbench_shell.unit_label }}备好</button>
                     </form>
                     {% endif %}
                     {% if dish.prepared_qty > 0 %}
-                    <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                    <form method="POST" class="seller-inline-form" data-yc-panel="work-kitchen-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                         {% csrf_token %}
                         <input type="hidden" name="order_id" value="{{ order.order_id }}">
                         <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
-                        <button type="submit" name="undo_prepared_unit" value="1" class="btn btn-sm btn-outline">撤回 1 {{ workbench_shell.unit_label }}</button>
+                        <input type="hidden" name="undo_prepared_unit" value="1">
+                        <button type="submit" class="btn btn-sm btn-outline">撤回 1 {{ workbench_shell.unit_label }}</button>
                     </form>
                     {% endif %}
                 </div>
@@ -86,14 +88,15 @@
         {% if can_operate %}
         <div class="delivery-action-stack" style="margin-top:12px;">
             {% if row.can_mark_all_prepared %}
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="seller-inline-form" data-yc-panel="work-kitchen-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
-                <button type="submit" name="mark_all_prepared" value="1" class="btn btn-orange btn-block">一键全部备好</button>
+                <input type="hidden" name="mark_all_prepared" value="1">
+                <button type="submit" class="btn btn-orange btn-block">一键全部备好</button>
             </form>
             {% endif %}
             {% if row.can_adjust_wait_time %}
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="seller-inline-form" data-yc-panel="work-kitchen-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="adjust_wait_time" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
@@ -106,14 +109,15 @@
             </form>
             {% endif %}
             {% if row.can_start_preparing %}
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="seller-inline-form" data-yc-panel="work-kitchen-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
-                <button type="submit" name="start_preparing" value="1" class="btn btn-orange btn-block">开始备货</button>
+                <input type="hidden" name="start_preparing" value="1">
+                <button type="submit" class="btn btn-orange btn-block">开始备货</button>
             </form>
             {% endif %}
             {% if row.can_dispatch %}
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="seller-inline-form" data-yc-panel="work-kitchen-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="dispatch_order" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
@@ -127,7 +131,7 @@
             </form>
             {% elif row.can_reassign %}
             <p class="card-meta">当前{{ workbench_shell.rider_role_word }}：{{ row.rider_id }}</p>
-            <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            <form method="POST" class="seller-inline-form" data-yc-panel="work-kitchen-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="reassign_rider" value="1">
                 <input type="hidden" name="order_id" value="{{ order.order_id }}">
@@ -143,9 +147,9 @@
         {% endif %}
 
         {% if row.log_lines %}
-        <details class="detail-collapse" style="margin-top:10px;">
-            <summary>📝 {{ workbench_shell.kitchen_log_title }}</summary>
-            <div class="detail-collapse-body">
+        <details class="seller-panel-fold" style="margin-top:10px;">
+            <summary>{{ workbench_shell.kitchen_log_title }}</summary>
+            <div class="seller-panel-fold-body">
                 {% for line in row.log_lines %}
                 <div class="card-meta" style="margin-bottom:6px;">{{ line }}</div>
                 {% endfor %}

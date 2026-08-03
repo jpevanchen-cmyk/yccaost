@@ -105,7 +105,9 @@
     </footer>
     {% endif %}
 
-    {% block pre_mobile_js %}{% endblock %}
+    {% block pre_mobile_js %}
+    <script src="{% static 'waimai/seller_panel_fold.js' %}?v=5"></script>
+    {% endblock %}
     {% include 'waimai/_flash_modal.html' %}
     <script src="{% static 'waimai/mobile.js' %}?v=11"></script>
     {% if session_guard_enabled %}

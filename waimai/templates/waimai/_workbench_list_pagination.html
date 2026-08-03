@@ -1,0 +1,17 @@
+{# 工作台 · 列表分页 #}
+{% if list_page.paginator.count %}
+<div class="work-list-pagination" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;">
+    <span class="card-meta">共 {{ list_page.paginator.count }} 条 · 第 {{ list_page.number }}/{{ list_page.paginator.num_pages }} 页</span>
+    <span class="card-meta">每页</span>
+    {% for item in list_per_page_links %}
+    <a href="{{ item.url }}"
+       class="btn btn-sm {% if list_per_page == item.size %}btn-green{% else %}btn-outline{% endif %}">{{ item.size }}</a>
+    {% endfor %}
+    {% if list_prev_url %}
+    <a href="{{ list_prev_url }}" class="btn btn-sm btn-outline">上一页</a>
+    {% endif %}
+    {% if list_next_url %}
+    <a href="{{ list_next_url }}" class="btn btn-sm btn-outline">下一页</a>
+    {% endif %}
+</div>
+{% endif %}

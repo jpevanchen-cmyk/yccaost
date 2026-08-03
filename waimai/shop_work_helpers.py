@@ -11,7 +11,7 @@ from .staff_account_helpers import ALL_STAFF_ROLES
 # 兼容旧引用；员工角色只以 staff_account_helpers 的定义为准。
 SHOP_STAFF_ROLES = ALL_STAFF_ROLES
 # orders = 主体通用订单台；cashier = 实体收银台；其余为业态插件 Tab
-WORK_VIEWS = ('orders', 'cashier', 'waiter', 'kitchen', 'rider')
+WORK_VIEWS = ('orders', 'cashier', 'cash_manage', 'waiter', 'kitchen', 'rider')
 SESSION_SHOP_WORK_CODE = 'shop_work_code'
 
 
@@ -56,6 +56,7 @@ def work_permissions(user) -> dict[str, bool]:
         PERM_DINING_KITCHEN,
         PERM_DINING_RIDER,
         PERM_DINING_WAITER,
+        PERM_FULFILLMENT_CASH_MANAGE,
         PERM_ORDERS_CASHIER,
         PERM_ORDERS_CONFIRM_PAYMENT,
         PERM_ORDERS_UPDATE_STATUS,
@@ -64,7 +65,14 @@ def work_permissions(user) -> dict[str, bool]:
     )
 
     if user.role == 'seller':
-        return {'orders': True, 'cashier': True, 'waiter': True, 'kitchen': True, 'rider': True}
+        return {
+            'orders': True,
+            'cashier': True,
+            'cash_manage': True,
+            'waiter': True,
+            'kitchen': True,
+            'rider': True,
+        }
     can_orders_write = (
         staff_has_permission(user, PERM_ORDERS_UPDATE_STATUS)
         or staff_has_permission(user, PERM_ORDERS_CONFIRM_PAYMENT)
@@ -73,6 +81,7 @@ def work_permissions(user) -> dict[str, bool]:
         # 能打开订单台：任一细权限；写入由面板内按钮再判
         'orders': staff_has_any_order_desk_permission(user) and can_orders_write,
         'cashier': staff_has_permission(user, PERM_ORDERS_CASHIER),
+        'cash_manage': staff_has_permission(user, PERM_FULFILLMENT_CASH_MANAGE),
         'waiter': staff_has_permission(user, PERM_DINING_WAITER),
         'kitchen': staff_has_permission(user, PERM_DINING_KITCHEN),
         'rider': staff_has_permission(user, PERM_DINING_RIDER),
@@ -143,12 +152,23 @@ def _today_range():
     return start, start + timedelta(days=1)
 
 
-def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
+def build_shop_work_daily_history(
+    seller_id: str,
+    user=None,
+    *,
+    request=None,
+    list_base_url: str = '',
+) -> dict:
     """
-    店铺工作台底部：今日订单历史 + 今日动作记录。
-    老板看全店动作；员工只看自己账号相关的动作，方便核对「我刚才做过什么」。
+    店铺工作台底部：今日订单历史 + 今日动作记录（分卡 + 分页）。
+    老板看全店动作；员工只看自己账号相关的动作。
     """
     from .models import BuyOrder, DeliveryOrder, OrderKitchenDishPrepLog, OrderWaiterDishServeLog, OrderWaiterStatusLog
+    from .workbench_pagination_helpers import (
+        paginate_sequence,
+        resolve_work_list_page_size,
+        work_list_pagination_context,
+    )
 
     start, end = _today_range()
     is_owner = bool(user and getattr(user, 'role', '') == 'seller')
@@ -167,7 +187,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
             created_at__lt=end,
         )
         .select_related('delivery_order')
-        .order_by('-created_at')[:30]
+        .order_by('-created_at')
     )
     order_rows = []
     for order in today_orders:
@@ -183,7 +203,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
     show_kitchen = staff_has_permission(user, PERM_DINING_KITCHEN)
     show_waiter = staff_has_permission(user, PERM_DINING_WAITER)
     show_rider = staff_has_permission(user, PERM_DINING_RIDER)
-    show_shop_events = is_owner  # 收款/备齐等无操作人字段的事件，仅老板看全店汇总
+    show_shop_events = is_owner
 
     if show_kitchen:
         kitchen_qs = OrderKitchenDishPrepLog.objects.filter(
@@ -193,7 +213,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
         ).select_related('order')
         if not is_owner and username:
             kitchen_qs = kitchen_qs.filter(changed_by=username)
-        for log in kitchen_qs[:80]:
+        for log in kitchen_qs.order_by('-changed_at'):
             action_label = '备好' if log.action == OrderKitchenDishPrepLog.ACTION_MARK else '撤回备好'
             who = log.changed_by if is_owner else '我'
             activity_items.append({
@@ -211,7 +231,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
         ).select_related('order')
         if not is_owner and username:
             serve_qs = serve_qs.filter(changed_by=username)
-        for log in serve_qs[:80]:
+        for log in serve_qs.order_by('-changed_at'):
             action_label = '交付' if log.action == OrderWaiterDishServeLog.ACTION_MARK else '撤回交付'
             who = log.changed_by if is_owner else '我'
             activity_items.append({
@@ -233,7 +253,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
         ).select_related('order')
         if not is_owner and username:
             status_qs = status_qs.filter(changed_by=username)
-        for log in status_qs[:50]:
+        for log in status_qs.order_by('-changed_at'):
             old_label = labels.get(log.from_status, '—') if log.from_status else '—'
             new_label = labels.get(log.to_status, log.to_status)
             who = log.changed_by if is_owner else '我'
@@ -249,7 +269,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
             seller_id=seller_id,
             payment_time__gte=start,
             payment_time__lt=end,
-        ).order_by('-payment_time')[:50]:
+        ).order_by('-payment_time'):
             activity_items.append({
                 'at': order.payment_time,
                 'kind': '订单',
@@ -261,7 +281,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
             seller_id=seller_id,
             preparing_at__gte=start,
             preparing_at__lt=end,
-        ).order_by('-preparing_at')[:50]:
+        ).order_by('-preparing_at'):
             activity_items.append({
                 'at': order.preparing_at,
                 'kind': '后厨',
@@ -273,7 +293,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
             seller_id=seller_id,
             ready_at__gte=start,
             ready_at__lt=end,
-        ).order_by('-ready_at')[:50]:
+        ).order_by('-ready_at'):
             ready_text = '餐品已全部备齐'
             if order.is_dine_in():
                 ready_text = '餐品已全部备齐，等待上桌'
@@ -295,7 +315,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
         if not is_owner and username:
             delivery_orders = delivery_orders.filter(rider_id=username)
 
-        for delivery in delivery_orders.filter(accepted_at__gte=start, accepted_at__lt=end).order_by('-accepted_at')[:50]:
+        for delivery in delivery_orders.filter(accepted_at__gte=start, accepted_at__lt=end).order_by('-accepted_at'):
             if is_owner:
                 text = f'已派给骑手 {delivery.rider_id}'
             else:
@@ -306,7 +326,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
                 'text': text,
                 'order': delivery.buy_order,
             })
-        for delivery in delivery_orders.filter(picked_up_at__gte=start, picked_up_at__lt=end).order_by('-picked_up_at')[:50]:
+        for delivery in delivery_orders.filter(picked_up_at__gte=start, picked_up_at__lt=end).order_by('-picked_up_at'):
             if is_owner:
                 text = f'骑手 {delivery.rider_id} 已取餐'
             else:
@@ -317,7 +337,7 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
                 'text': text,
                 'order': delivery.buy_order,
             })
-        for delivery in delivery_orders.filter(completed_at__gte=start, completed_at__lt=end).order_by('-completed_at')[:50]:
+        for delivery in delivery_orders.filter(completed_at__gte=start, completed_at__lt=end).order_by('-completed_at'):
             if is_owner:
                 text = f'骑手 {delivery.rider_id} 已送达'
             else:
@@ -330,11 +350,60 @@ def build_shop_work_daily_history(seller_id: str, user=None) -> dict:
             })
 
     activity_items.sort(key=lambda item: item['at'] or start, reverse=True)
-    return {
-        'today_order_rows': order_rows,
-        'today_activity_rows': activity_items[:40],
+
+    hist_per_page = resolve_work_list_page_size(
+        request.GET.get('hist_per_page') if request else None,
+    )
+    act_per_page = resolve_work_list_page_size(
+        request.GET.get('act_per_page') if request else None,
+    )
+    hist_page_obj = paginate_sequence(
+        order_rows,
+        request.GET.get('hist_page') if request else 1,
+        hist_per_page,
+    )
+    act_page_obj = paginate_sequence(
+        activity_items,
+        request.GET.get('act_page') if request else 1,
+        act_per_page,
+    )
+
+    ctx = {
+        'today_order_page': hist_page_obj,
+        'today_activity_page': act_page_obj,
         'today_activity_is_owner_view': is_owner,
+        'work_hist_fold_open': hist_page_obj.paginator.count > 0 or act_page_obj.paginator.count == 0,
+        'work_act_fold_open': act_page_obj.paginator.count > 0 and hist_page_obj.paginator.count == 0,
+        'work_act_fold_title': '📝 全店今日动作记录' if is_owner else '📝 我的今日动作记录',
+        'work_act_fold_hint': (
+            '老板可查看今天所有岗位、所有账号的操作。'
+            if is_owner else
+            '只显示当前账号自己做过的事，方便快速核对前面做过什么。'
+        ),
+        'work_act_empty_hint': (
+            '今天暂时还没有动作记录。'
+            if is_owner else
+            '今天您还没有可核对的个人动作记录。'
+        ),
     }
+    if request and list_base_url:
+        ctx['hist_pagination'] = work_list_pagination_context(
+            list_base_url,
+            request,
+            page_param='hist_page',
+            per_page_param='hist_per_page',
+            per_page=hist_per_page,
+            page_obj=hist_page_obj,
+        )
+        ctx['act_pagination'] = work_list_pagination_context(
+            list_base_url,
+            request,
+            page_param='act_page',
+            per_page_param='act_per_page',
+            per_page=act_per_page,
+            page_obj=act_page_obj,
+        )
+    return ctx
 
 
 def build_waiter_board_context(

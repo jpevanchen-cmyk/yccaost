@@ -69,7 +69,7 @@ def handle_seller_workbench_post(request, seller_id: str):
 def handle_shop_work_post(request, seller_id: str, shop_code: str, current_view: str, perms: dict, *, work_user=None):
     """店铺工作台内表单提交（按当前 Tab 与权限分发）"""
     from .kitchen_handlers import handle_kitchen_board_post
-    from .shop_work_helpers import build_shop_work_redirect
+    from .shop_work_helpers import build_shop_work_path, build_shop_work_redirect
     from .staff_account_helpers import handle_staff_work_status_post
     from .waiter_handlers import handle_waiter_post
 
@@ -107,6 +107,26 @@ def handle_shop_work_post(request, seller_id: str, shop_code: str, current_view:
         return redirect(build_shop_work_redirect(shop_code, current_view))
 
     redirect_to = build_shop_work_redirect(shop_code, current_view)
+    from .workbench_sort_helpers import resolve_workbench_sort
+
+    sort_mode = resolve_workbench_sort(request)
+    form_action = build_shop_work_path(shop_code, view=current_view)
+    form_action = f'{form_action}&sort={sort_mode}'
+    from .workbench_panel_helpers import attach_shop_work_panel_ctx
+
+    attach_shop_work_panel_ctx(
+        request,
+        seller_id=seller_id,
+        shop_code=shop_code,
+        view=current_view,
+        work_user=operator,
+        sort_mode=sort_mode,
+        form_action=form_action,
+        redirect_to=redirect_to,
+        can_operate_kitchen=bool(perms.get('kitchen')),
+        can_operate_waiter=bool(perms.get('waiter')),
+    )
+
     response = handle_staff_work_status_post(request, operator, redirect_to=redirect_to)
     if response:
         return response
@@ -115,15 +135,17 @@ def handle_shop_work_post(request, seller_id: str, shop_code: str, current_view:
     request.shop_work_user = operator
 
     if current_view == 'orders':
-        response = handle_cash_management_post(
-            request, seller_id, operator, redirect_to=redirect_to,
-        )
-        if response:
-            return response
         from .order_desk_handlers import handle_order_desk_post
 
         response = handle_order_desk_post(
             request, seller_id, redirect_to=redirect_to, work_user=operator,
+        )
+        if response:
+            return response
+
+    if current_view == 'cash_manage' and perms.get('cash_manage'):
+        response = handle_cash_management_post(
+            request, seller_id, operator, redirect_to=redirect_to,
         )
         if response:
             return response

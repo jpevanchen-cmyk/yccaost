@@ -115,11 +115,11 @@
   }
 
   // ---- 界面元素 ----
-  var banner, bannerText, enableBtn, statusText;
+  var banner, bannerText, enableBtn;
 
   // 开关按钮颜色：关=灰，开=绿（公共样式，工作台与订单管理共用）
-  var BTN_ON = cfg.enableBtnOn || '🔕 新单提醒：开（点此关闭）';
-  var BTN_OFF = cfg.enableBtnOff || '🔔 新单提醒：关（点此开启）';
+  var BTN_ON = cfg.enableBtnOn || '🔕 新单提醒：开';
+  var BTN_OFF = cfg.enableBtnOff || '🔔 新单提醒：关';
   function setButtonState() {
     if (!enableBtn) return;
     if (enabled) {
@@ -135,6 +135,13 @@
     }
   }
 
+  // 详细说明放鼠标悬停提示，不占页面宽度
+  function setStatusHint(text) {
+    if (!enableBtn) return;
+    var hint = String(text || '').replace(/^[（(]/, '').replace(/[）)]$/, '');
+    enableBtn.title = hint;
+  }
+
   function buildUI() {
     var bar = document.createElement('div');
     bar.className = 'order-alert-bar';
@@ -142,10 +149,7 @@
     enableBtn.type = 'button';
     enableBtn.className = 'btn order-alert-enable is-off';
     enableBtn.setAttribute('aria-pressed', 'false');
-    statusText = document.createElement('span');
-    statusText.className = 'order-alert-status';
     bar.appendChild(enableBtn);
-    bar.appendChild(statusText);
     // 若页面提供了挂载点（cfg.mountSelector），就把按钮条放到指定位置；否则退回页面底部
     var mount = cfg.mountSelector ? document.querySelector(cfg.mountSelector) : null;
     if (mount) {
@@ -181,7 +185,7 @@
       muted = true;
       stopSound();
       persistState();
-      statusText.textContent = '（响铃已暂停；单子处理完后，再来新单会自动恢复）';
+      setStatusHint('响铃已暂停；单子处理完后，再来新单会自动恢复');
     });
     // 确认（我知道了）：最快收起红条；之后再来更多新单会自动重新提醒
     ackBtn.addEventListener('click', function () {
@@ -191,7 +195,7 @@
       stopSound();
       hideBanner();
       persistState();
-      statusText.textContent = '（已确认当前新单；再来新单会自动重新提醒）';
+      setStatusHint('已确认当前新单；再来新单会自动重新提醒');
     });
 
     // 刷新后自动恢复：上次开着就继续开着，无需重新点击
@@ -202,7 +206,7 @@
       resumeEnabled();
     } else {
       setButtonState();
-      statusText.textContent = '（提醒未开启：开启后本页开着时会持续检查新单并响铃）';
+      setStatusHint('提醒未开启：开启后本页开着时会持续检查新单并响铃');
     }
   }
 
@@ -235,7 +239,7 @@
     ackLatestTs = 0;
     persistState();
     setButtonState();
-    statusText.textContent = '（提醒运行中：本页开着时每约 15 秒检查一次新单）';
+    setStatusHint('提醒运行中：本页开着时每约 15 秒检查一次新单');
     playSynthBeep(); // 让用户确认能听到
     startPolling();
   }
@@ -248,14 +252,14 @@
     hideBanner();
     persistState();
     setButtonState();
-    statusText.textContent = '（提醒已关闭；点上面按钮可重新开启）';
+    setStatusHint('提醒已关闭；点按钮可重新开启');
   }
 
   // 刷新后自动恢复开启：不重新申请手势，声音等下一次页面点击再解锁
   function resumeEnabled() {
     enabled = true;
     setButtonState();
-    statusText.textContent = '（提醒运行中：刷新后已自动保持开启）';
+    setStatusHint('提醒运行中：刷新后已自动保持开启');
     // 任意一次页面点击（如点「开始备货」）就顺便解锁声音
     var onceUnlock = function () {
       unlockAudio();

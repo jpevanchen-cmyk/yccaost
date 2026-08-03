@@ -30,9 +30,9 @@
 {% include 'waimai/_order_cashier_qr_block.html' %}
 
 {% if show_contact_guest %}
-<details class="detail-collapse" open>
+<details class="seller-panel-fold" open>
     <summary>📞 联系客人</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <p class="card-meta" style="margin:0 0 10px;">有问题请先电话/微信联系客人协商，不要直接拒单。谈妥后可在「订单沟通」写一句确认留痕。</p>
         <div class="detail-row"><span>称呼 / 买家</span><span id="guest-contact-id">{{ order.get_buyer_display_name }}{% if order.is_guest_order %}（游客）{% elif order.buyer_id %} · {{ order.buyer_id }}{% endif %}</span></div>
         {% if order.buyer_id %}
@@ -47,9 +47,9 @@
 </details>
 {% endif %}
 
-<details class="detail-collapse" open>
+<details class="seller-panel-fold">
     <summary>💬 订单沟通</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <p class="card-meta" style="margin:0 0 10px;">重要事情请先电话/微信商量；这里用来双方留痕确认。打开本页即视为已看过新留言。</p>
         {% if order_messages %}
             {% for m in order_messages %}
@@ -77,9 +77,9 @@
     </div>
 </details>
 
-<details class="detail-collapse" open>
+<details class="seller-panel-fold">
     <summary>📦 订单进度</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <div class="detail-row"><span>当前状态</span><span>{{ order.get_order_status_display }}</span></div>
         {% if order.delivery_order %}
         <div class="detail-row"><span>配送单状态</span><span>{{ order.delivery_order.get_delivery_status_display }}</span></div>
@@ -97,9 +97,9 @@
 </details>
 
 {% if can_shop_cancel %}
-<details class="detail-collapse" open>
+<details class="seller-panel-fold">
     <summary>⚠️ 店家取消订单（兜底）</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         <p class="card-meta" style="margin:0 0 10px;">
             仅在无法继续履约时使用（例如食材失误）。须先与客人协商：
             {% if shop_has_chat_history %}
@@ -121,9 +121,9 @@
 </details>
 {% endif %}
 
-<details class="detail-collapse">
+<details class="seller-panel-fold">
     <summary>🍱 本单{{ workbench_shell.item_label }}</summary>
-    <div class="detail-collapse-body">
+    <div class="seller-panel-fold-body">
         {% for item in dish_lines %}
         <div class="line-item">
             <span>{{ item.name }} × {{ item.quantity }}</span>

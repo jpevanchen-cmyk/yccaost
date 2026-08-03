@@ -16,6 +16,11 @@ from .kitchen_helpers import (
     mark_kitchen_dish_unit_prepared,
     undo_kitchen_dish_unit_prepared,
 )
+from .workbench_panel_helpers import respond_workbench_action
+
+
+def _finish_kitchen(request, target, *, ok: bool, message: str):
+    return respond_workbench_action(request, target, ok=ok, message=message)
 
 
 def handle_seller_kitchen_post(request, seller_id: str, *, section='kitchen'):
@@ -46,8 +51,9 @@ def handle_kitchen_board_post(request, seller_id: str, *, redirect_to=None):
     from .staff_account_helpers import PERM_DINING_KITCHEN, staff_has_permission
 
     if not staff_has_permission(operator, PERM_DINING_KITCHEN):
-        messages.error(request, '您没有后厨工作台操作权限')
-        return redirect(target)
+        return _finish_kitchen(
+            request, target, ok=False, message='您没有后厨工作台操作权限',
+        )
     order_id = request.POST.get('order_id', '').strip()
     if not order_id:
         return None
@@ -61,80 +67,70 @@ def handle_kitchen_board_post(request, seller_id: str, *, redirect_to=None):
     if 'mark_prepared_unit' in request.POST:
         dish_id = request.POST.get('dish_id', '').strip()
         ok, msg = mark_kitchen_dish_unit_prepared(order, dish_id, operator_username=operator.username)
-        if ok:
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return _finish_kitchen(request, target, ok=ok, message=msg)
 
     if 'undo_prepared_unit' in request.POST:
         dish_id = request.POST.get('dish_id', '').strip()
         ok, msg = undo_kitchen_dish_unit_prepared(order, dish_id, operator_username=operator.username)
-        if ok:
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return _finish_kitchen(request, target, ok=ok, message=msg)
 
     if 'mark_all_prepared' in request.POST:
         ok, msg = mark_all_kitchen_prepared(order, operator_username=operator.username)
-        if ok:
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return _finish_kitchen(request, target, ok=ok, message=msg)
 
     if 'start_preparing' in request.POST:
-        if kitchen_order_can_start(order):
-            from .order_status_transition_helpers import transition_order_status
+        if not kitchen_order_can_start(order):
+            return _finish_kitchen(request, target, ok=False, message='当前订单不能开始备货')
+        from .order_status_transition_helpers import transition_order_status
 
-            transition_order_status(
-                order, 'preparing', source='kitchen_handlers.start_preparing',
-            )
-            order.preparing_at = timezone.now()
-            update_fields = ['order_status', 'preparing_at', 'updated_at']
-            if not order.estimated_ready_at:
-                from .wait_time_helpers import assign_default_wait_time
+        transition_order_status(
+            order, 'preparing', source='kitchen_handlers.start_preparing',
+        )
+        order.preparing_at = timezone.now()
+        update_fields = ['order_status', 'preparing_at', 'updated_at']
+        if not order.estimated_ready_at:
+            from .wait_time_helpers import assign_default_wait_time
 
-                assign_default_wait_time(order, at=order.preparing_at, save=False)
-                update_fields.append('estimated_ready_at')
-            order.save(update_fields=update_fields)
-            from .audit_helpers import audit_order_status
-            audit_order_status(
-                order=order,
-                actor=operator,
-                summary=f'开始备货 {order.get_display_order_no()}',
-                request=request,
-            )
-            messages.success(request, '后厨已开始备货')
-            delivery, err = maybe_auto_dispatch_order(order)
-            if delivery:
-                messages.success(request, f'已自动派单给骑手 {delivery.rider_id}')
-            elif err:
-                messages.error(request, err)
-        else:
-            messages.error(request, '当前订单不能开始备货')
-        return redirect(target)
+            assign_default_wait_time(order, at=order.preparing_at, save=False)
+            update_fields.append('estimated_ready_at')
+        order.save(update_fields=update_fields)
+        from .audit_helpers import audit_order_status
+
+        audit_order_status(
+            order=order,
+            actor=operator,
+            summary=f'开始备货 {order.get_display_order_no()}',
+            request=request,
+        )
+        msg = '后厨已开始备货'
+        delivery, err = maybe_auto_dispatch_order(order)
+        if delivery:
+            msg += f'；已自动派单给骑手 {delivery.rider_id}'
+        elif err:
+            msg += f'；自动派单未成功：{err}'
+        return _finish_kitchen(request, target, ok=True, message=msg)
 
     if 'dispatch_order' in request.POST:
         rider_id = request.POST.get('rider_id', '').strip() or None
         delivery, err = manual_dispatch_order(operator, 'kitchen', order, rider_id)
         if delivery:
-            messages.success(request, f'已派单给配送员 {delivery.rider_id}')
-        else:
-            messages.error(request, err or '派单失败')
-        return redirect(target)
+            return _finish_kitchen(
+                request, target, ok=True, message=f'已派单给配送员 {delivery.rider_id}',
+            )
+        return _finish_kitchen(request, target, ok=False, message=err or '派单失败')
 
     if 'reassign_rider' in request.POST:
         if not operator_can_manual_dispatch(operator, seller_id, 'kitchen'):
-            messages.error(request, '当前店铺设置下，您没有手动派单权限')
-            return redirect(target)
+            return _finish_kitchen(
+                request, target, ok=False, message='当前店铺设置下，您没有手动派单权限',
+            )
         rider_id = request.POST.get('rider_id', '').strip()
         ok, msg = reassign_delivery_rider(order, rider_id)
-        if ok:
-            messages.success(request, msg)
-        else:
-            messages.error(request, msg)
-        return redirect(target)
+        return _finish_kitchen(request, target, ok=ok, message=msg)
+
+    from .panel_refresh_helpers import is_panel_refresh, panel_refresh_fail
+
+    if is_panel_refresh(request):
+        return panel_refresh_fail('未能识别后厨操作，请刷新页面后重试')
 
     return None

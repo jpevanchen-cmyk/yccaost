@@ -1,0 +1,28 @@
+{# 现金管理 · 货到付款异常块 #}
+<p class="card-meta">电话沟通后，由管理人员决定继续收足、兜底结单或进入订单详情终止配送。</p>
+{% for order in cash_exception_orders %}
+<div class="line-item" style="display:block;border-bottom:1px solid #eee;padding:10px 0;">
+    <strong>{{ order.get_display_order_no }}</strong>
+    · 应收 ¥{{ order.total_amount }}
+    · 实付 ¥{{ order.cash_collected_amount }}
+    · 少付 ¥{{ order.cash_shortfall_amount }}
+    <p class="card-meta" style="margin:4px 0;">
+        状态：{{ order.get_cash_shortfall_status_display }} · 原因：{{ order.cash_shortfall_reason }}
+        {% if order.cash_exception_note %}<br>电话备注：{{ order.cash_exception_note }}{% endif %}
+    </p>
+    <form method="post" action="{{ form_action }}" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;"
+          onsubmit="return confirm('确认由管理人员同意少收并直接兜底结单？');">
+        {% csrf_token %}
+        <input type="hidden" name="cash_manage_action" value="approve_exception">
+        <input type="hidden" name="order_id" value="{{ order.order_id }}">
+        <input type="text" name="decision_note" maxlength="500" required
+               placeholder="写明电话指示和同意少收的原因" style="flex:1;min-width:180px;">
+        <button type="submit" class="btn btn-sm btn-green">同意少收并兜底结单</button>
+        {% if cash_manage_link_mode == 'workbench' %}
+        <a class="btn btn-sm btn-outline" href="{% url 'shop_work_order' shop_work_code order.order_id %}">查看/终止配送</a>
+        {% else %}
+        <a class="btn btn-sm btn-outline" href="{% url 'order_detail' order.order_id %}">查看订单</a>
+        {% endif %}
+    </form>
+</div>
+{% endfor %}

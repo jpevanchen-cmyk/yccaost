@@ -52,7 +52,7 @@
     </p>
     {% if staff_account_rows %}
         {% for row in staff_account_rows %}
-        <details class="detail-collapse" style="margin-top:10px;" {% if forloop.first %}open data-yc-tour="staff-account-expand"{% endif %}>
+        <details class="seller-panel-fold" style="margin-top:10px;" {% if forloop.first %}open data-yc-tour="staff-account-expand"{% endif %}>
             <summary data-yc-tour="{% if forloop.first %}staff-account-row{% endif %}">
                 {{ row.account_type_label }} · <strong>{{ row.job_title }}</strong>
                 · {{ row.user.username|staff_display }}
@@ -62,7 +62,7 @@
                 <span class="badge badge-default">已停用</span>
                 {% endif %}
             </summary>
-            <div class="detail-collapse-body">
+            <div class="seller-panel-fold-body">
                 <form method="POST" class="seller-panel-form auth-form" data-unsaved-guard>
                     {% csrf_token %}
                     <input type="hidden" name="edit_staff_account" value="1">

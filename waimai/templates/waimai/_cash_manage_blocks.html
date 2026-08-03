@@ -1,0 +1,55 @@
+{# 现金管理共用块：货到付款异常 + 待确认交款（84 框架） #}
+{% if cash_exception_orders %}
+<div class="card" style="margin-bottom:14px;" data-yc-tour="cash-exception-box">
+    <h3 style="margin-top:0;">货到付款异常</h3>
+    <p class="card-meta">电话沟通后，由管理人员决定继续收足、兜底结单或进入订单详情终止配送。</p>
+    {% for order in cash_exception_orders %}
+    <div class="line-item" style="display:block;border-bottom:1px solid #eee;padding:10px 0;">
+        <strong>{{ order.get_display_order_no }}</strong>
+        · 应收 ¥{{ order.total_amount }}
+        · 实付 ¥{{ order.cash_collected_amount }}
+        · 少付 ¥{{ order.cash_shortfall_amount }}
+        <p class="card-meta" style="margin:4px 0;">
+            状态：{{ order.get_cash_shortfall_status_display }} · 原因：{{ order.cash_shortfall_reason }}
+            {% if order.cash_exception_note %}<br>电话备注：{{ order.cash_exception_note }}{% endif %}
+        </p>
+        <form method="post" action="{{ form_action }}" style="margin-top:6px;"
+              onsubmit="return confirm('确认由管理人员同意少收并直接兜底结单？');">
+            {% csrf_token %}
+            <input type="hidden" name="cash_manage_action" value="approve_exception">
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <input type="text" name="decision_note" maxlength="500" required
+                   placeholder="写明电话指示和同意少收的原因">
+            <button type="submit" class="btn btn-sm btn-green">同意少收并兜底结单</button>
+            {% if cash_manage_link_mode == 'workbench' %}
+            <a class="btn btn-sm btn-outline" href="{% url 'shop_work_order' shop_work_code order.order_id %}">查看/终止配送</a>
+            {% else %}
+            <a class="btn btn-sm btn-outline" href="{% url 'order_detail' order.order_id %}">查看订单</a>
+            {% endif %}
+        </form>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if pending_cash_remittances %}
+<div class="card" style="margin-bottom:14px;" data-yc-tour="cash-remittance-box">
+    <h3 style="margin-top:0;">待确认现金交款</h3>
+    <p class="card-meta">配送员须先在工作台发起交款申请；核对现金后确认或退回。</p>
+    {% for remit in pending_cash_remittances %}
+    <div class="line-item" style="display:block;border-bottom:1px solid #eee;padding:10px 0;">
+        <strong>{{ remit.rider_id }}</strong> · {{ remit.order_count }} 单 ·
+        <strong>¥{{ remit.total_amount }}</strong>
+        {% if remit.note %}<p class="card-meta" style="margin:4px 0;">配送员备注：{{ remit.note }}</p>{% endif %}
+        <form method="post" action="{{ form_action }}" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
+            {% csrf_token %}
+            <input type="hidden" name="request_id" value="{{ remit.request_id }}">
+            <input type="text" name="review_note" maxlength="500" placeholder="退回时必须填写原因">
+            <button type="submit" class="btn btn-sm btn-green" name="cash_manage_action" value="confirm_remittance"
+                    onclick="return confirm('确认已收到 ¥{{ remit.total_amount }} 现金？');">确认入金</button>
+            <button type="submit" class="btn btn-sm btn-outline" name="cash_manage_action" value="reject_remittance">退回申请</button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

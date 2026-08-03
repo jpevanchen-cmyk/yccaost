@@ -1,0 +1,54 @@
+{# 工作台底部 · 今日订单 + 动作记录（§5.13 分卡 + 分页） #}
+{% load yc_time %}
+
+{% include 'waimai/_yc_panel_fold.html' with fold_id='work-hist-orders' fold_title='📋 今日工作历史' fold_open=work_hist_fold_open %}
+<p class="card-meta" style="margin-top:0;">今天本店下的订单，可翻页查看。</p>
+{% if today_order_page.object_list %}
+    {% for row in today_order_page %}
+    {% with order=row.order %}
+    <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
+        <div style="flex:1;min-width:180px;">
+            <strong>订单 {{ order.get_display_order_no }}</strong>
+            <div class="card-meta" style="margin-top:4px;">
+                {{ order.created_at|beijing:"m-d H:i" }} · {{ order.get_fulfillment_display_short }} · ¥{{ order.total_amount }}
+            </div>
+            <div class="card-meta" style="margin-top:4px;">
+                订单状态：{{ row.status_label }}
+                {% if row.delivery_label %} · 配送：{{ row.delivery_label }}{% endif %}
+                · 支付：{{ order.get_payment_status_display }}
+            </div>
+        </div>
+        <a class="btn btn-outline btn-sm" href="{% url 'shop_work_order' shop_work_code order.order_id %}">联系 / 沟通</a>
+    </div>
+    {% endwith %}
+    {% endfor %}
+{% else %}
+<p class="card-meta">今天还没有订单记录。</p>
+{% endif %}
+{% if hist_pagination %}
+{% include 'waimai/_workbench_list_pagination.html' with list_page=hist_pagination.list_page list_per_page=hist_pagination.list_per_page list_per_page_links=hist_pagination.list_per_page_links list_prev_url=hist_pagination.list_prev_url list_next_url=hist_pagination.list_next_url %}
+{% endif %}
+{% include 'waimai/seller/_panel_fold_end.html' %}
+
+{% include 'waimai/_yc_panel_fold.html' with fold_id='work-hist-actions' fold_title=work_act_fold_title fold_open=work_act_fold_open %}
+<p class="card-meta" style="margin-top:0;">{{ work_act_fold_hint }}</p>
+{% if today_activity_page.object_list %}
+    {% for row in today_activity_page %}
+    <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
+        <div style="min-width:74px;">
+            <span class="badge badge-default">{{ row.kind }}</span>
+        </div>
+        <div style="flex:1;min-width:180px;">
+            <strong>{{ row.at|beijing:"H:i" }}</strong>
+            · 订单 {{ row.order.get_display_order_no }}
+            <div class="card-meta" style="margin-top:4px;">{{ row.text }}</div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+<p class="card-meta">{{ work_act_empty_hint }}</p>
+{% endif %}
+{% if act_pagination %}
+{% include 'waimai/_workbench_list_pagination.html' with list_page=act_pagination.list_page list_per_page=act_pagination.list_per_page list_per_page_links=act_pagination.list_per_page_links list_prev_url=act_pagination.list_prev_url list_next_url=act_pagination.list_next_url %}
+{% endif %}
+{% include 'waimai/seller/_panel_fold_end.html' %}

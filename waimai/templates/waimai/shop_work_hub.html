@@ -60,6 +60,9 @@
     {% if 'cashier' in enabled_work_views %}
     <a class="btn {% if current_view == 'cashier' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_cashier_url }}">{{ workbench_shell.tab_cashier }}</a>
     {% endif %}
+    {% if 'cash_manage' in enabled_work_views %}
+    <a class="btn {% if current_view == 'cash_manage' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_cash_manage_url }}">{{ workbench_shell.tab_cash_manage }}</a>
+    {% endif %}
     {% if 'waiter' in enabled_work_views %}
     <a class="btn {% if current_view == 'waiter' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_waiter_url }}">{{ workbench_shell.tab_waiter }}</a>
     {% endif %}
@@ -78,17 +81,21 @@
         {% csrf_token %}
         <button type="submit" class="btn btn-outline btn-sm">退出工作台</button>
     </form>
-    {# 新单提醒按钮的放置点：这一排最右端 #}
-    {% if can_use_order_alert %}
-    <div id="order-alert-mount" style="margin-left:auto;"></div>
-    {% endif %}
-    {% if can_use_remittance_alert %}
-    <div id="remittance-alert-mount"></div>
+    {# 新单 / 入金提醒按钮：同一排靠右 #}
+    {% if can_use_order_alert or can_use_remittance_alert %}
+    <div class="work-alert-mount-row">
+        {% if can_use_order_alert %}
+        <div id="order-alert-mount"></div>
+        {% endif %}
+        {% if can_use_remittance_alert %}
+        <div id="remittance-alert-mount"></div>
+        {% endif %}
+    </div>
     {% endif %}
 </div>
 
 {% if current_view %}
-{% if current_view != 'cashier' %}
+{% if current_view != 'cashier' and current_view != 'cash_manage' %}
 <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-bottom:10px;">
     <span class="card-meta">订单顺序：</span>
     <a class="btn btn-sm {% if work_order_sort == 'newest' %}btn-orange{% else %}btn-outline{% endif %}"
@@ -102,16 +109,25 @@
 <div class="card" style="padding:14px;" data-yc-tour="work-panel-body">
     {% if current_view == 'orders' %}
     <h2 style="margin:0 0 10px;font-size:18px;">📋 {{ workbench_shell.view_orders_title }}</h2>
+    <div id="work-orders-panel-body" data-yc-panel-id="work-orders-panel-body">
     {% include 'waimai/_shop_work_orders_panel.html' %}
+    </div>
     {% elif current_view == 'cashier' %}
     <h2 style="margin:0 0 10px;font-size:18px;">💵 {{ workbench_shell.view_cashier_title }}</h2>
     {% include 'waimai/_shop_work_cashier_panel.html' with can_operate=can_operate_cashier form_action=form_action %}
+    {% elif current_view == 'cash_manage' %}
+    <h2 style="margin:0 0 10px;font-size:18px;">💵 {{ workbench_shell.view_cash_manage_title }}</h2>
+    {% include 'waimai/_shop_work_cash_manage_panel.html' with form_action=form_action %}
     {% elif current_view == 'waiter' %}
     <h2 style="margin:0 0 10px;font-size:18px;">🍽 {{ workbench_shell.view_waiter_title }}</h2>
+    <div id="work-waiter-panel-body" data-yc-panel-id="work-waiter-panel-body">
     {% include 'waimai/_shop_work_waiter_panel.html' with can_operate=can_operate_waiter form_action=form_action %}
+    </div>
     {% elif current_view == 'kitchen' %}
     <h2 style="margin:0 0 10px;font-size:18px;">👨‍🍳 {{ workbench_shell.view_kitchen_title }}</h2>
+    <div id="work-kitchen-panel-body" data-yc-panel-id="work-kitchen-panel-body">
     {% include 'waimai/_shop_work_kitchen_panel.html' with can_operate=can_operate_kitchen form_action=form_action %}
+    </div>
     {% elif current_view == 'rider' %}
     <h2 style="margin:0 0 10px;font-size:18px;">🛵 {{ workbench_shell.view_rider_title }}</h2>
     {% include 'waimai/_shop_work_rider_panel.html' with can_operate=can_operate_rider form_action=form_action show_rider_extras=show_rider_extras %}
@@ -121,69 +137,8 @@
     {% endif %}
 </div>
 
-<div class="card" style="padding:14px;margin-top:12px;">
-    <h2 style="margin:0 0 10px;font-size:18px;">🕘 今日工作历史</h2>
-
-    <div style="margin-bottom:14px;">
-        <h3 style="margin:0 0 8px;font-size:16px;">今日订单</h3>
-        {% if today_order_rows %}
-            {% for row in today_order_rows %}
-            {% with order=row.order %}
-            <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
-                <div style="flex:1;min-width:220px;">
-                    <strong>订单 {{ order.get_display_order_no }}</strong>
-                    <div class="card-meta" style="margin-top:4px;">
-                        {{ order.created_at|beijing:"m-d H:i" }} · {{ order.get_fulfillment_display_short }} · ¥{{ order.total_amount }}
-                    </div>
-                    <div class="card-meta" style="margin-top:4px;">
-                        订单状态：{{ row.status_label }}
-                        {% if row.delivery_label %} · 配送状态：{{ row.delivery_label }}{% endif %}
-                        · 支付：{{ order.get_payment_status_display }}
-                    </div>
-                </div>
-                <a class="btn btn-outline btn-sm" href="{% url 'shop_work_order' shop_work_code order.order_id %}">联系 / 沟通</a>
-            </div>
-            {% endwith %}
-            {% endfor %}
-        {% else %}
-        <p class="card-meta">今天还没有订单记录。</p>
-        {% endif %}
-    </div>
-
-    <div>
-        <h3 style="margin:0 0 8px;font-size:16px;">
-            {% if today_activity_is_owner_view %}全店今日动作记录{% else %}我的今日动作记录{% endif %}
-        </h3>
-        <p class="card-meta" style="margin:0 0 8px;">
-            {% if today_activity_is_owner_view %}
-            老板可查看今天所有岗位、所有账号的操作。
-            {% else %}
-            只显示当前账号自己做过的事，方便快速核对前面做过什么。
-            {% endif %}
-        </p>
-        {% if today_activity_rows %}
-            {% for row in today_activity_rows %}
-            <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
-                <div style="min-width:74px;">
-                    <span class="badge badge-default">{{ row.kind }}</span>
-                </div>
-                <div style="flex:1;min-width:220px;">
-                    <strong>{{ row.at|beijing:"H:i" }}</strong>
-                    · 订单 {{ row.order.get_display_order_no }}
-                    <div class="card-meta" style="margin-top:4px;">{{ row.text }}</div>
-                </div>
-            </div>
-            {% endfor %}
-        {% else %}
-        <p class="card-meta">
-            {% if today_activity_is_owner_view %}
-            今天暂时还没有动作记录。
-            {% else %}
-            今天您还没有可核对的个人动作记录。
-            {% endif %}
-        </p>
-        {% endif %}
-    </div>
+<div class="card" style="padding:14px;margin-top:12px;" data-yc-tour="work-daily-history">
+{% include 'waimai/_shop_work_daily_history_panels.html' %}
 </div>
 
 {% if show_my_audit %}
@@ -231,13 +186,16 @@ window.YC_REMITTANCE_ALERT = {
     mountSelector: "#remittance-alert-mount",
     itemLabel: "笔入金申请待核对，请及时处理！",
     notificationTitle: "野草 · 有新入金申请",
-    enableBtnOn: "🔕 入金提醒：开（点此关闭）",
-    enableBtnOff: "🔔 入金提醒：关（点此开启）",
+    enableBtnOn: "🔕 入金提醒：开",
+    enableBtnOff: "🔔 入金提醒：关",
     notificationTag: "yc-remittance-request"
 };
 </script>
 {% endif %}
 {% if can_use_order_alert or can_use_remittance_alert %}
-<script src="{% static 'waimai/order_alert.js' %}?v=9"></script>
+<script src="{% static 'waimai/order_alert.js' %}?v=10"></script>
+{% endif %}
+{% if current_view == 'kitchen' or current_view == 'waiter' or current_view == 'orders' or current_view == 'cash_manage' %}
+<script src="{% static 'waimai/panel_refresh.js' %}?v=6"></script>
 {% endif %}
 {% endblock %}
