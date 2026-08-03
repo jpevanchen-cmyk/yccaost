@@ -1604,9 +1604,11 @@ body.seller-page .content {
     inset: 0;
     z-index: 9999;
     display: flex;
-    align-items: center;
+    /* 靠顶部显示，避免挡住屏幕中间的操作区（成功提示数秒后会自动关闭） */
+    align-items: flex-start;
     justify-content: center;
     padding: 20px;
+    padding-top: max(16px, calc(env(safe-area-inset-top, 0px) + 12px));
 }
 
 .seller-flash-modal[hidden],
@@ -1661,6 +1663,45 @@ body.seller-page .content {
 
 .yc-notice-box.is-ok .yc-notice-text {
     color: inherit;
+}
+
+/* 成功类：顶部小条，无灰罩，不挡下方点击（数秒后自动消失） */
+.yc-notice-modal--toast {
+    inset: auto 0 auto 0;
+    top: 0;
+    bottom: auto;
+    height: auto;
+    pointer-events: none;
+    padding: max(12px, calc(env(safe-area-inset-top, 0px) + 8px)) 16px 0;
+}
+
+.yc-notice-modal--toast .yc-notice-backdrop {
+    display: none;
+}
+
+.yc-notice-modal--toast .yc-notice-box {
+    pointer-events: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    max-width: min(520px, calc(100vw - 32px));
+    padding: 10px 14px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.14);
+}
+
+.yc-notice-modal--toast .yc-notice-icon {
+    font-size: 20px;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.yc-notice-modal--toast .yc-notice-text {
+    flex: 1 1 120px;
+    text-align: left;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.45;
 }
 
 .seller-inline-form {
@@ -2102,6 +2143,15 @@ body.seller-page .content {
 }
 
 .dish-product-group.is-expanded {
+    z-index: 100;
+}
+
+/* 有展开项时：列表内所有商品行都压在灰罩上，便于直接点另一件切换 */
+.dish-list--has-expanded .dish-product-group {
+    z-index: 95;
+}
+
+.dish-list--has-expanded .dish-product-group.is-expanded {
     z-index: 100;
 }
 

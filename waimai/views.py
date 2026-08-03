@@ -1764,6 +1764,24 @@ def seller_panel_section(request, section):
         )
         return redirect('seller_panel_section', section='plugins')
 
+    # 进度 80-2a：清单下拉换 Panel（GET + YecaoPanel 头，不整页 reload）
+    if (
+        request.method == 'GET'
+        and section == 'products'
+        and request.GET.get('profile') is not None
+    ):
+        from .menu_catalog_panel_helpers import render_menu_catalog_panel_html
+        from .panel_refresh_helpers import is_panel_refresh, panel_refresh_ok
+
+        if is_panel_refresh(request):
+            profile_pick = request.GET.get('profile', '').strip()
+            html = render_menu_catalog_panel_html(
+                request,
+                seller_id,
+                profile_pick=profile_pick or None,
+            )
+            return panel_refresh_ok(html=html, panel_id='menu-panel-body', message='')
+
     if request.method == 'POST':
         response = None
         if section == 'operating':

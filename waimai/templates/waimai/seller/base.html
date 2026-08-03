@@ -66,9 +66,10 @@
 {% endblock %}
 
 {% block pre_mobile_js %}
+<script src="{% static 'waimai/panel_refresh.js' %}?v=3"></script>
 <script src="{% static 'waimai/seller_panel_fold.js' %}?v=3"></script>
 {% if not onboarding_readonly %}
-<script src="{% static 'waimai/seller_unsaved_guard.js' %}?v=2"></script>
+<script src="{% static 'waimai/seller_unsaved_guard.js' %}?v=4"></script>
 {% endif %}
 <script src="{% static 'waimai/home_block_editor.js' %}?v=2"></script>
 {% if section == 'products' %}

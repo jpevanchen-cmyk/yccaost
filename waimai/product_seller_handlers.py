@@ -77,6 +77,41 @@ def _get_menu_item(seller_id, profile_id, item_id):
     )
 
 
+def _respond_menu_panel(
+    request,
+    seller_id,
+    profile_id,
+    *,
+    ok: bool,
+    message: str,
+    redirect_query=None,
+):
+    """清单区 Panel：成功刷新局部 HTML；失败或普通 POST 仍 messages + redirect"""
+    from .menu_catalog_panel_helpers import render_menu_catalog_panel_html
+    from .panel_refresh_helpers import is_panel_refresh, panel_refresh_fail, panel_refresh_ok
+
+    if is_panel_refresh(request):
+        if not ok:
+            return panel_refresh_fail(message)
+        html = render_menu_catalog_panel_html(
+            request,
+            seller_id,
+            profile_pick=str(profile_id) if profile_id else None,
+        )
+        return panel_refresh_ok(html=html, message=message, panel_id='menu-panel-body')
+    if ok:
+        messages.success(request, message)
+    else:
+        messages.error(request, message)
+    q = redirect_query if redirect_query is not None else _menus_query(profile_id)
+    return _products_redirect('menu-panel', q or None)
+
+
+def _respond_menu_toggle(request, seller_id, profile_id, *, ok: bool, message: str):
+    """清单行内开关（兼容旧名，走统一 Panel 响应）"""
+    return _respond_menu_panel(request, seller_id, profile_id, ok=ok, message=message)
+
+
 def _fill_dish_descriptions(dish, post):
     """读取普通/会员/特价三档描述"""
     dish.description = (post.get('description') or '').strip()
@@ -260,8 +295,13 @@ def handle_products_post(request, seller_id):
         item.is_listed = not item.is_listed
         item.save(update_fields=['is_listed'])
         state = '上架' if item.is_listed else '下架'
-        messages.success(request, f'「{item.dish.name}」在本清单已{state}')
-        return _products_redirect('menu-panel', _menus_query(profile_id))
+        return _respond_menu_toggle(
+            request,
+            seller_id,
+            profile_id,
+            ok=True,
+            message=f'「{item.dish.name}」在本清单已{state}',
+        )
 
     if 'toggle_menu_item_general' in request.POST:
         profile_id = request.POST.get('profile_id')
@@ -271,51 +311,52 @@ def handle_products_post(request, seller_id):
         state = '展示' if item.general_price_listed else '不展示'
         settings = get_operating_settings(seller_id)
         if _is_active_menu_profile(settings, profile_id):
-            messages.success(request, f'「{item.dish.name}」通用价已{state}，店铺页已同步')
+            msg = f'「{item.dish.name}」通用价已{state}，店铺页已同步'
         else:
-            messages.success(
-                request,
-                f'「{item.dish.name}」通用价已{state}；须将本清单「切换使用」后客人才看得到',
-            )
-        return _products_redirect('menu-panel', _menus_query(profile_id))
+            msg = f'「{item.dish.name}」通用价已{state}；须将本清单「切换使用」后客人才看得到'
+        return _respond_menu_toggle(request, seller_id, profile_id, ok=True, message=msg)
 
     if 'toggle_menu_item_member' in request.POST:
         profile_id = request.POST.get('profile_id')
         item = _get_menu_item(seller_id, profile_id, request.POST.get('item_id'))
         if not item.dish.member_price_enabled:
-            messages.error(request, f'「{item.dish.name}」尚未在商品管理中配置会员价')
+            return _respond_menu_toggle(
+                request,
+                seller_id,
+                profile_id,
+                ok=False,
+                message=f'「{item.dish.name}」尚未在商品管理中配置会员价',
+            )
+        item.member_price_listed = not item.member_price_listed
+        item.save(update_fields=['member_price_listed'])
+        state = '展示' if item.member_price_listed else '不展示'
+        settings = get_operating_settings(seller_id)
+        if _is_active_menu_profile(settings, profile_id):
+            msg = f'「{item.dish.name}」会员价已{state}，店铺页已同步'
         else:
-            item.member_price_listed = not item.member_price_listed
-            item.save(update_fields=['member_price_listed'])
-            state = '展示' if item.member_price_listed else '不展示'
-            settings = get_operating_settings(seller_id)
-            if _is_active_menu_profile(settings, profile_id):
-                messages.success(request, f'「{item.dish.name}」会员价已{state}，店铺页已同步')
-            else:
-                messages.success(
-                    request,
-                    f'「{item.dish.name}」会员价已{state}；须将本清单「切换使用」后客人才看得到',
-                )
-        return _products_redirect('menu-panel', _menus_query(profile_id))
+            msg = f'「{item.dish.name}」会员价已{state}；须将本清单「切换使用」后客人才看得到'
+        return _respond_menu_toggle(request, seller_id, profile_id, ok=True, message=msg)
 
     if 'toggle_menu_item_special' in request.POST:
         profile_id = request.POST.get('profile_id')
         item = _get_menu_item(seller_id, profile_id, request.POST.get('item_id'))
         if not item.dish.special_price_enabled:
-            messages.error(request, f'「{item.dish.name}」尚未在商品管理中配置特价')
+            return _respond_menu_toggle(
+                request,
+                seller_id,
+                profile_id,
+                ok=False,
+                message=f'「{item.dish.name}」尚未在商品管理中配置特价',
+            )
+        item.special_price_listed = not item.special_price_listed
+        item.save(update_fields=['special_price_listed'])
+        state = '展示' if item.special_price_listed else '不展示'
+        settings = get_operating_settings(seller_id)
+        if _is_active_menu_profile(settings, profile_id):
+            msg = f'「{item.dish.name}」特价已{state}，店铺页已同步'
         else:
-            item.special_price_listed = not item.special_price_listed
-            item.save(update_fields=['special_price_listed'])
-            state = '展示' if item.special_price_listed else '不展示'
-            settings = get_operating_settings(seller_id)
-            if _is_active_menu_profile(settings, profile_id):
-                messages.success(request, f'「{item.dish.name}」特价已{state}，店铺页已同步')
-            else:
-                messages.success(
-                    request,
-                    f'「{item.dish.name}」特价已{state}；须将本清单「切换使用」后客人才看得到',
-                )
-        return _products_redirect('menu-panel', _menus_query(profile_id))
+            msg = f'「{item.dish.name}」特价已{state}；须将本清单「切换使用」后客人才看得到'
+        return _respond_menu_toggle(request, seller_id, profile_id, ok=True, message=msg)
 
     if 'save_menu_item_cap' in request.POST:
         profile_id = request.POST.get('profile_id')
@@ -323,8 +364,14 @@ def handle_products_post(request, seller_id):
         cap = request.POST.get('sales_cap', '').strip()
         item.sales_cap = int(cap) if cap.isdigit() else None
         item.save(update_fields=['sales_cap'])
-        messages.success(request, f'已更新「{item.dish.name}」可售上限')
-        return _products_redirect('menu-panel', _menus_query(profile_id))
+        cap_text = cap if cap else '不限'
+        return _respond_menu_panel(
+            request,
+            seller_id,
+            profile_id,
+            ok=True,
+            message=f'已更新「{item.dish.name}」可售上限为 {cap_text}',
+        )
 
     if 'add_dish_to_profile' in request.POST:
         profile_id = request.POST.get('profile_id')
@@ -353,8 +400,13 @@ def handle_products_post(request, seller_id):
     if 'activate_menu_profile' in request.POST:
         profile_id = request.POST.get('profile_id')
         if has_open_orders(seller_id):
-            messages.error(request, f'尚有未结束订单，不能切换{catalog_word}')
-            return _products_redirect('menu-panel', _menus_query(profile_id))
+            return _respond_menu_panel(
+                request,
+                seller_id,
+                profile_id,
+                ok=False,
+                message=f'尚有未结束订单，不能切换{catalog_word}',
+            )
         profile = get_object_or_404(MenuProfile, profile_id=profile_id, seller_id=seller_id)
         settings = get_operating_settings(seller_id)
         settings.active_menu_profile = profile
@@ -370,23 +422,36 @@ def handle_products_post(request, seller_id):
             target_id=str(profile.profile_id),
             request=request,
         )
-        messages.success(
+        return _respond_menu_panel(
             request,
-            f'已切换为{catalog_word}「{profile.name}」，店铺页面已同步更新',
+            seller_id,
+            profile_id,
+            ok=True,
+            message=f'已切换为{catalog_word}「{profile.name}」，店铺页面已同步更新',
         )
-        return _products_redirect('menu-panel', _menus_query(profile_id))
 
     if 'delete_menu_profile' in request.POST:
         profile_id = request.POST.get('profile_id')
         profile = get_object_or_404(MenuProfile, profile_id=profile_id, seller_id=seller_id)
         settings = get_operating_settings(seller_id)
         if settings.active_menu_profile_id == profile.profile_id:
-            messages.error(request, f'「{profile.name}」正在使用中，请先切换到其他清单再删除')
-            return _products_redirect('menu-panel', _menus_query(profile_id))
+            return _respond_menu_panel(
+                request,
+                seller_id,
+                profile_id,
+                ok=False,
+                message=f'「{profile.name}」正在使用中，请先切换到其他清单再删除',
+            )
         name = profile.name
         profile.delete()
-        messages.success(request, f'已删除{catalog_word}「{name}」')
-        return _products_redirect('menu-panel')
+        return _respond_menu_panel(
+            request,
+            seller_id,
+            None,
+            ok=True,
+            message=f'已删除{catalog_word}「{name}」',
+            redirect_query='',
+        )
 
     if 'copy_menu_profile' in request.POST:
         profile_id = request.POST.get('profile_id')

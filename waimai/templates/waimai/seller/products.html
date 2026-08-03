@@ -37,7 +37,7 @@
 {% if product_shell.show_menu_catalog %}
 <details class="seller-panel-fold" id="menu-panel" data-yc-tour="fold-menu-panel">
     <summary class="seller-panel-fold-head" data-yc-tour="menu-panel-head"><span class="seller-panel-fold-title">📋 {{ product_shell.catalog_panel_title }}</span></summary>
-    <div class="seller-panel-fold-body" id="menu-panel-body">
+    <div class="seller-panel-fold-body" id="menu-panel-body" data-yc-panel-id="menu-panel-body">
         {% include 'waimai/seller/_menu_catalog_panel.html' %}
     </div>
 </details>
@@ -170,24 +170,24 @@
     }
 })();
 (function () {
-    /* 删除菜单清单：两次确认 */
-    document.querySelectorAll('.menu-profile-delete-form').forEach(function (form) {
-        form.addEventListener('submit', function (e) {
-            var btn = form.querySelector('[data-profile-name]');
-            if (btn && btn.disabled) {
-                e.preventDefault();
-                return;
-            }
-            var name = btn ? btn.getAttribute('data-profile-name') : '该清单';
-            if (!window.confirm('确定要删除菜单清单「' + name + '」吗？')) {
-                e.preventDefault();
-                return;
-            }
-            if (!window.confirm('删除后不可恢复，请再次确认删除。')) {
-                e.preventDefault();
-            }
-        });
-    });
+    /* 删除菜单清单：两次确认（事件委托，Panel 刷新后仍生效） */
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form || !form.classList || !form.classList.contains('menu-profile-delete-form')) return;
+        var btn = form.querySelector('[data-profile-name]');
+        if (btn && btn.disabled) {
+            e.preventDefault();
+            return;
+        }
+        var name = btn ? btn.getAttribute('data-profile-name') : '该清单';
+        if (!window.confirm('确定要删除菜单清单「' + name + '」吗？')) {
+            e.preventDefault();
+            return;
+        }
+        if (!window.confirm('删除后不可恢复，请再次确认删除。')) {
+            e.preventDefault();
+        }
+    }, true);
 })();
 (function () {
     /* 删除商品：两次确认，与堂食批量删除一致 */

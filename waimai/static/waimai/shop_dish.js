@@ -27,6 +27,12 @@
     }
 
     function syncBackdrop() {
+        if (!listEl) return;
+        if (expandedGroup) {
+            listEl.classList.add('dish-list--has-expanded');
+        } else {
+            listEl.classList.remove('dish-list--has-expanded');
+        }
         if (!backdrop) return;
         backdrop.hidden = !expandedGroup;
     }

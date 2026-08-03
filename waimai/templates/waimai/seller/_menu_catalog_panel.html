@@ -37,7 +37,7 @@
         {% if menu_profiles %}
         <form method="GET" class="seller-inline-form menu-profile-picker-form" style="margin-top:12px;">
             <label>选择{{ product_shell.catalog_word }}
-                <select name="profile" id="menu-profile-select" data-yc-tour="menu-profile-select">
+                <select name="profile" id="menu-profile-select" data-yc-tour="menu-profile-select"{% if not experience_writable %} data-yc-panel-picker="menu-panel-body"{% endif %}>
                     {% for p in menu_profiles %}
                     <option value="{{ p.profile_id }}" {% if selected_profile and selected_profile.profile_id == p.profile_id %}selected{% endif %}>
                         {{ p.name }}{% if active_profile and active_profile.profile_id == p.profile_id %}（使用中）{% endif %}
@@ -51,7 +51,7 @@
         <div class="menu-profile-detail" id="menu-profile-detail">
             <div class="menu-profile-detail-head">
                 <strong>{{ selected_profile.name }}</strong>
-                <form method="POST" style="display:inline;margin-left:8px;">
+                <form method="POST" style="display:inline;margin-left:8px;"{% if not experience_writable %} data-yc-panel="menu-panel-body"{% endif %}>
                     {% csrf_token %}
                     {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
                     <input type="hidden" name="activate_menu_profile" value="1">
@@ -61,7 +61,7 @@
                         {% if active_profile and active_profile.profile_id == selected_profile.profile_id %}使用中{% else %}切换使用{% endif %}
                     </button>
                 </form>
-                <form method="POST" class="menu-profile-delete-form" style="display:inline;margin-left:4px;">
+                <form method="POST" class="menu-profile-delete-form" style="display:inline;margin-left:4px;"{% if not experience_writable %} data-yc-panel="menu-panel-body"{% endif %}>
                     {% csrf_token %}
                     {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
                     <input type="hidden" name="delete_menu_profile" value="1">
@@ -90,7 +90,7 @@
                 <tr>
                     <td>{{ item.dish.name }}{% if item.is_listed %}{% menu_item_has_guest_price item seller_id as has_guest_price %}{% if not has_guest_price %}<br><span class="card-meta">无任何展示价格，客人看不到</span>{% endif %}{% endif %}</td>
                     <td>
-                        <form method="POST" class="menu-item-toggle-form">
+                        <form method="POST" class="menu-item-toggle-form"{% if not experience_writable %} data-yc-panel="menu-panel-body"{% endif %}>
                             {% csrf_token %}
                             {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
                             <input type="hidden" name="toggle_menu_item_listed" value="1">
@@ -102,7 +102,7 @@
                         </form>
                     </td>
                     <td>
-                        <form method="POST" class="menu-item-toggle-form">
+                        <form method="POST" class="menu-item-toggle-form"{% if not experience_writable %} data-yc-panel="menu-panel-body"{% endif %}>
                             {% csrf_token %}
                             {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
                             <input type="hidden" name="toggle_menu_item_general" value="1">
@@ -115,7 +115,7 @@
                     </td>
                     <td>
                         {% if item.dish.member_price_enabled %}
-                        <form method="POST" class="menu-item-toggle-form">
+                        <form method="POST" class="menu-item-toggle-form"{% if not experience_writable %} data-yc-panel="menu-panel-body"{% endif %}>
                             {% csrf_token %}
                             {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
                             <input type="hidden" name="toggle_menu_item_member" value="1">
@@ -131,7 +131,7 @@
                     </td>
                     <td>
                         {% if item.dish.special_price_enabled %}
-                        <form method="POST" class="menu-item-toggle-form">
+                        <form method="POST" class="menu-item-toggle-form"{% if not experience_writable %} data-yc-panel="menu-panel-body"{% endif %}>
                             {% csrf_token %}
                             {% if experience_writable %}{% include 'waimai/onboarding/experience/_tour_hidden_fields.html' %}{% endif %}
                             <input type="hidden" name="toggle_menu_item_special" value="1">
@@ -146,7 +146,7 @@
                         {% endif %}
                     </td>
                     <td>
-                        <form method="POST" class="menu-item-cap-form">
+                        <form method="POST" class="menu-item-cap-form"{% if not experience_writable %} data-yc-panel="menu-panel-body"{% endif %}>
                             {% csrf_token %}
                             <input type="hidden" name="save_menu_item_cap" value="1">
                             <input type="hidden" name="profile_id" value="{{ selected_profile.profile_id }}">

@@ -37,6 +37,7 @@
         var backdrop = modal.querySelector('.yc-notice-backdrop');
         function close() {
             modal.hidden = true;
+            modal.classList.remove('yc-notice-modal--toast');
             if (typeof onClose === 'function') {
                 var fn = onClose;
                 onClose = null;
@@ -48,6 +49,10 @@
         return modal;
     }
 
+    function isSuccessToast(level, mustAck) {
+        return !mustAck && (level === 'ok' || level === 'success');
+    }
+
     function show(opts) {
         var m = ensureModal();
         if (!m || !textEl || !boxEl) return;
@@ -56,12 +61,16 @@
         var mustAck = opts && typeof opts.mustAck === 'boolean'
             ? opts.mustAck
             : meta.defaultAck;
+        var toast = isSuccessToast(level, mustAck);
         textEl.textContent = (opts && opts.text) || '';
         if (iconEl) iconEl.textContent = meta.icon;
         boxEl.classList.remove('is-ok', 'is-warn', 'is-error');
         boxEl.classList.add(meta.cls);
+        m.classList.toggle('yc-notice-modal--toast', toast);
+        m.setAttribute('aria-modal', toast ? 'false' : 'true');
         if (closeBtn) {
             closeBtn.textContent = mustAck ? '知道了' : '关闭';
+            closeBtn.hidden = toast;
         }
         onClose = opts && opts.onClose ? opts.onClose : null;
         m.hidden = false;
@@ -70,6 +79,7 @@
             window.setTimeout(function () {
                 if (!m.hidden) {
                     m.hidden = true;
+                    m.classList.remove('yc-notice-modal--toast');
                     if (typeof onClose === 'function') {
                         var fn = onClose;
                         onClose = null;

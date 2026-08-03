@@ -80,6 +80,10 @@
             window.history.back();
             return;
         }
+        if (window.YcaoPanel && window.YcaoPanel.tryNavigateProfileSwitch
+            && window.YcaoPanel.tryNavigateProfileSwitch(url)) {
+            return;
+        }
         window.location.href = url;
     }
 
@@ -164,22 +168,35 @@
 
         var menuSel = document.getElementById('menu-profile-select');
         if (menuSel) {
-            var lastVal = menuSel.value;
-            menuSel.addEventListener('focus', function () { lastVal = menuSel.value; });
-            menuSel.addEventListener('change', function () {
-                var u = new URL(window.location.href);
-                u.searchParams.set('profile', menuSel.value);
-                u.searchParams.delete('edit');
-                u.hash = 'menu-panel';
-                var target = u.toString();
-                if (!getDirtyForm()) {
-                    window.location.href = target;
-                    return;
-                }
-                menuSel.value = lastVal;
-                confirmLeave(target, function () { menuSel.value = lastVal; });
+            menuSel.addEventListener('focus', function () {
+                menuSel.dataset.ycLastProfile = menuSel.value;
             });
         }
+
+        /* 事件委托：Panel 刷新会替换 #menu-profile-select，须绑在 document 上 */
+        document.addEventListener('change', function (e) {
+            var menuSel = e.target;
+            if (!menuSel || menuSel.id !== 'menu-profile-select') return;
+            var lastVal = menuSel.dataset.ycLastProfile || menuSel.value;
+            var u = new URL(window.location.href);
+            u.searchParams.set('profile', menuSel.value);
+            u.searchParams.delete('edit');
+            u.hash = 'menu-panel';
+            var target = u.toString();
+            if (!getDirtyForm()) {
+                navigateAway(target);
+                menuSel.dataset.ycLastProfile = menuSel.value;
+                return;
+            }
+            menuSel.value = lastVal;
+            confirmLeave(target, function () { menuSel.value = lastVal; });
+        });
+
+        document.addEventListener('focus', function (e) {
+            if (e.target && e.target.id === 'menu-profile-select') {
+                e.target.dataset.ycLastProfile = e.target.value;
+            }
+        }, true);
 
         window.addEventListener('beforeunload', function (e) {
             if (allowNextUnload) return;
