@@ -1619,3 +1619,7 @@ class OrderMessage(models.Model):
 
     def __str__(self):
         return f'{self.order_id}:{self.author_side}:{self.body[:20]}'
+
+
+# 留言板（正式功能 · 表名沿用 owner_guestbook_*）
+from .guestbook_models import GuestbookMessage, GuestbookSettings, GuestbookThread  # noqa: E402,F401

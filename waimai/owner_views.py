@@ -8,13 +8,16 @@ from django.core.exceptions import ValidationError
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
-from .home_page_helpers import (
-    ensure_server_home_page,
-    get_server_block_spec,
-    list_server_preset_specs,
-)
 from .owner_helpers import user_is_server_manager
-from .scroll_helpers import redirect_with_anchor
+
+# 留言板（正式功能）
+from .guestbook_views import (  # noqa: E402
+    guestbook_open_search,
+    guestbook_post,
+    guestbook_thread_public,
+    server_settings_guestbook,
+    server_settings_guestbook_thread,
+)
 
 
 def _manager_required(view_fn):
@@ -106,91 +109,26 @@ owner_compliance = server_settings_compliance
 @_manager_required
 def server_settings_home_page(request):
     """编辑服务器主页积木"""
-    from .home_block_media import (
-        apply_home_block_image_from_post,
-        block_display_image_src,
-        photo_quota_hint,
-        release_block_photo_quota,
-    )
+    from .home_block_media import photo_quota_hint
+    from .home_page_handlers import handle_server_home_page_post
     from .home_page_helpers import (
-        BLOCK_CUSTOM,
-        BLOCK_DIRECTORY,
-        BLOCK_ORDER_CTA,
         MAX_SERVER_CUSTOM_BLOCKS,
-        add_server_custom_block,
-        block_dom_id,
+        count_server_custom_blocks,
+        ensure_server_home_page,
+        list_server_preset_specs,
     )
-
-    page = ensure_server_home_page()
+    from .home_page_panel_helpers import (
+        SERVER_HOME_BLOCKS_PANEL_ID,
+        build_server_home_blocks,
+    )
 
     if request.method == 'POST':
-        if 'add_server_custom_block' in request.POST:
-            block = add_server_custom_block(page)
-            if block is None:
-                messages.error(request, f'自定义积木最多 {MAX_SERVER_CUSTOM_BLOCKS} 块，无法再添加')
-            else:
-                messages.success(request, '已添加一块自定义积木，请填写内容后保存')
-                return redirect_with_anchor(reverse('server_settings_home_page'), block_dom_id(block))
-            return redirect('server_settings_home_page')
+        response = handle_server_home_page_post(request)
+        if response is not None:
+            return response
 
-        if 'delete_server_home_block' in request.POST:
-            block_id = (request.POST.get('block_id') or '').strip()
-            block = page.blocks.filter(block_id=block_id).first()
-            if not block:
-                messages.error(request, '找不到该积木块')
-            elif block.block_type != BLOCK_CUSTOM:
-                messages.error(request, '预设积木不能删除，只能关闭显示')
-            else:
-                release_block_photo_quota(request.user, block, 'server_home_block')
-                block.delete()
-                messages.success(request, '已删除该自定义积木')
-            return redirect('server_settings_home_page')
-
-        if 'save_server_home_block' in request.POST:
-            block_id = (request.POST.get('block_id') or '').strip()
-            block = page.blocks.filter(block_id=block_id).first()
-            if not block:
-                messages.error(request, '找不到该积木块')
-                return redirect('server_settings_home_page')
-            block.title = (request.POST.get('title') or '')[:120]
-            block.body = request.POST.get('body') or ''
-            block.image_url = ''
-            block.link_url = (request.POST.get('link_url') or '').strip()[:500]
-            block.link_label = (request.POST.get('link_label') or '').strip()[:32]
-            block.nav_label = (request.POST.get('nav_label') or '')[:32]
-            block.is_enabled = request.POST.get('is_enabled') == '1'
-            block.show_in_nav = request.POST.get('show_in_nav') == '1'
-            try:
-                block.sort_order = max(0, int(request.POST.get('sort_order') or block.sort_order))
-            except (TypeError, ValueError):
-                pass
-            err = apply_home_block_image_from_post(
-                request.user, block, request, scope='server_home_block',
-            )
-            if err:
-                messages.error(request, err)
-                return redirect_with_anchor(reverse('server_settings_home_page'), block_dom_id(block))
-            block.save()
-            spec = get_server_block_spec(block.block_type)
-            label = spec.label if spec else block.block_type
-            messages.success(request, f'已保存服务器积木「{label}」')
-            return redirect_with_anchor(reverse('server_settings_home_page'), block_dom_id(block))
-
-    blocks = list(
-        page.blocks.order_by('sort_order', 'block_type')
-    )
-    for b in blocks:
-        b.spec = get_server_block_spec(b.block_type)
-        b.dom_id = block_dom_id(b)
-        b.is_custom = b.block_type == BLOCK_CUSTOM
-        b.display_image_src = block_display_image_src(b)
-        b.shows_rich_media = b.block_type not in (BLOCK_ORDER_CTA, BLOCK_DIRECTORY)
-        if b.is_custom:
-            b.fold_title = (b.title or '').strip() or '自定义积木'
-        else:
-            b.fold_title = b.spec.label if b.spec else b.block_type
-
-    from .home_page_helpers import count_server_custom_blocks
+    page = ensure_server_home_page()
+    blocks = build_server_home_blocks()
     custom_count = count_server_custom_blocks(page)
     ctx = {
         'home_page': page,
@@ -203,6 +141,7 @@ def server_settings_home_page(request):
         'preview_url': '/',
         'save_block_action_name': 'save_server_home_block',
         'delete_block_action_name': 'delete_server_home_block',
+        'home_blocks_panel_id': SERVER_HOME_BLOCKS_PANEL_ID,
     }
     ctx.update(photo_quota_hint(request.user))
     return render(request, 'waimai/owner/server_home.html', ctx)

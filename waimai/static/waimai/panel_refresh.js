@@ -35,6 +35,9 @@
         bindPanelForms(panelEl);
         bindProfilePickers(panelEl);
         bindCashMonthPickers(panelEl);
+        if (window.ycRebindSellerPanelFold) {
+            window.ycRebindSellerPanelFold(panelEl);
+        }
         if (window.ycSellerUnsavedGuard && window.ycSellerUnsavedGuard.registerForm) {
             panelEl.querySelectorAll('form[data-unsaved-guard]').forEach(function (form) {
                 window.ycSellerUnsavedGuard.registerForm(form);
@@ -156,6 +159,12 @@
                 if (data.extra && data.extra.scroll_to) {
                     var anchor = document.getElementById(data.extra.scroll_to);
                     if (anchor) {
+                        if (anchor.tagName === 'DETAILS') {
+                            anchor.open = true;
+                        } else {
+                            var fold = anchor.closest('details');
+                            if (fold) fold.open = true;
+                        }
                         anchor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
                     }
                 } else if (data.scroll_to) {

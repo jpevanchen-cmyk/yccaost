@@ -1,0 +1,38 @@
+{% extends 'waimai/owner/base.html' %}
+{% block title %}留言详情{% endblock %}
+{% block owner_content %}
+<p><a href="{% url 'server_settings_guestbook' %}">← 返回留言列表</a></p>
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h1 style="margin:0 0 8px;font-size:18px;">与 {{ thread.guest_display_name }} 的对话</h1>
+    <p class="card-meta">编号：<strong>{{ thread.public_code }}</strong>
+        · {% if thread.guest_email %}邮箱：{{ thread.guest_email }}{% else %}访客未留邮箱{% endif %}
+        {% if thread.receipt_email_rate_limited %} · ⚠ 邮件防刷上限{% elif thread.receipt_email_failed or thread.email_delivery_suspect %} · ⚠ 邮箱可疑{% endif %}
+        {% if thread.guest_user_id %} · 登录账号 {{ thread.guest_user_id }}{% endif %}
+    </p>
+    <p class="card-meta">访客打开链接：{% url 'guestbook_thread_public' thread.public_code as guest_url %}/guestbook/t/{{ thread.public_code }}/</p>
+</div>
+
+<form method="post" class="card seller-form-stack" style="padding:12px 16px;margin-bottom:14px;">
+    {% csrf_token %}
+    <input type="hidden" name="mark_email_suspect" value="1">
+    <label style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" name="email_suspect" value="1" {% if thread.email_delivery_suspect %}checked{% endif %}>
+        标记：访客邮箱可能无法收信（退信/错误地址）
+    </label>
+    <button type="submit" class="btn btn-sm btn-outline" style="margin-top:8px;">保存邮箱标记</button>
+</form>
+
+{% for msg in messages_list %}
+<div class="card" style="padding:12px;margin-bottom:10px;{% if msg.author_side == 'owner' %}border-left:4px solid #4a90d9;{% endif %}">
+    <div class="card-meta">{{ msg.author_label }} · {{ msg.created_at|date:"Y-m-d H:i" }}{% if msg.author_side == 'owner' and msg.guest_notified %} · 已邮件通知访客{% endif %}</div>
+    <p style="margin:8px 0 0;white-space:pre-wrap;">{{ msg.body }}</p>
+</div>
+{% endfor %}
+
+<form method="post" class="card seller-form-stack" style="padding:16px;">
+    {% csrf_token %}
+    <input type="hidden" name="owner_reply" value="1">
+    <label>您的回复 <textarea name="body" rows="4" required placeholder="回复后，若访客留了邮箱会自动发通知"></textarea></label>
+    <button type="submit" class="btn btn-primary">发送回复</button>
+</form>
+{% endblock %}

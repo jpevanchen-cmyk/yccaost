@@ -1,0 +1,55 @@
+{% extends 'waimai/base.html' %}
+{% block title %}留言 {{ thread.public_code }}{% endblock %}
+{% block content %}
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <p><a href="{{ home_url }}#block-contact_us">← 返回主页留言板</a></p>
+    <h1 style="margin:8px 0;font-size:18px;">留言编号 {{ thread.public_code }}</h1>
+    <p class="card-meta">与 {{ thread.guest_display_name|default:"游客" }} 的对话</p>
+    {% if thread_notice %}
+    <p class="card-meta" style="margin-top:8px;{% if thread_notice_level == 'warn' %}color:#b45309;{% endif %}">{{ thread_notice }}</p>
+    {% endif %}
+</div>
+
+{% if need_password %}
+<div class="card seller-form-stack" style="padding:16px;margin-bottom:14px;">
+    <h2 style="margin:0 0 8px;font-size:16px;">请输入查看密码</h2>
+    {% if password_error %}<p class="card-meta" style="color:#c0392b;">{{ password_error }}</p>{% endif %}
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="unlock_password" value="1">
+        <label>查看密码 <input type="password" name="view_password" class="form-input" maxlength="8" required autofocus></label>
+        <button type="submit" class="btn btn-primary" style="margin-top:10px;">打开</button>
+    </form>
+</div>
+{% else %}
+
+{% for msg in messages_list %}
+<div class="card" style="padding:12px;margin-bottom:10px;{% if msg.author_side == 'owner' %}border-left:4px solid #4a90d9;{% endif %}">
+    <div class="card-meta">{{ msg.author_label }} · {{ msg.created_at|date:"Y-m-d H:i" }}</div>
+    <p style="margin:8px 0 0;white-space:pre-wrap;">{{ msg.body }}</p>
+</div>
+{% empty %}
+<p class="card-meta">暂无消息。</p>
+{% endfor %}
+
+{% if show_email_update %}
+<form method="post" class="card seller-form-stack" style="padding:16px;margin-bottom:14px;">
+    {% csrf_token %}
+    <input type="hidden" name="update_guest_email" value="1">
+    <h2 style="margin:0 0 8px;font-size:16px;">更新联系邮箱</h2>
+    <p class="card-meta" style="margin:0 0 10px;">当前：{% if thread.guest_email %}{{ thread.guest_email }}{% else %}尚未填写{% endif %}</p>
+    <label>新的联系邮箱
+        <input type="email" name="guest_email" class="form-input" maxlength="254" value="{{ thread.guest_email }}" placeholder="you@example.com" required>
+    </label>
+    <button type="submit" class="btn btn-outline" style="margin-top:10px;">保存并尝试重发收条邮件</button>
+</form>
+{% endif %}
+
+<form method="post" class="card seller-form-stack" style="padding:16px;">
+    {% csrf_token %}
+    <input type="hidden" name="guest_reply" value="1">
+    <label>继续留言 <textarea name="body" rows="4" required placeholder="补充说明…"></textarea></label>
+    <button type="submit" class="btn btn-green">发送</button>
+</form>
+{% endif %}
+{% endblock %}

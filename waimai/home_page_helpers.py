@@ -18,6 +18,7 @@ BLOCK_NOTICE = 'notice'
 BLOCK_ORDER_CTA = 'order_cta'
 BLOCK_DIRECTORY = 'directory'
 BLOCK_YECAO_INTRO = 'yecao_intro'
+BLOCK_CONTACT_US = 'contact_us'
 BLOCK_CUSTOM = 'custom'
 
 ORDER_NAV_TO_SHOP = 'to_shop'
@@ -89,6 +90,10 @@ SERVER_PRESET_SPECS: tuple[BlockTypeSpec, ...] = (
     BlockTypeSpec(
         BLOCK_YECAO_INTRO, '野草介绍', '野草', False, True, 40, True,
         '可选：介绍野草系统是什么；默认关闭，绝不强制', 'server',
+    ),
+    BlockTypeSpec(
+        BLOCK_CONTACT_US, '联系我们', '联系', True, True, 50, True,
+        '展示对外联系方式并接收访客留言；名称与邮箱在「留言管理」中填写', 'server',
     ),
 )
 
@@ -292,6 +297,8 @@ def _default_server_content(block_type: str) -> tuple[str, str]:
             '每台服务器属于其拥有者，店铺自管菜品、订单与收款，平台不抽佣。'
             '本块为可选介绍，服务器拥有者可随时关闭。'
         )
+    if block_type == BLOCK_CONTACT_US:
+        return '联系我们', ''
     return '', ''
 
 
@@ -454,6 +461,9 @@ def build_server_home_view_context(request=None) -> dict:
         'order_nav_mode': '',
         'brand_title': site.site_name or '本服务器',
     }
+    from .guestbook_helpers import get_guestbook_settings
+
+    ctx['guestbook_settings'] = get_guestbook_settings()
     ctx = enrich_server_home_context(ctx)
     from .onboarding.context import enrich_server_home_onboarding
     return enrich_server_home_onboarding(ctx)

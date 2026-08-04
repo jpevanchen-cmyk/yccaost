@@ -1,0 +1,39 @@
+{% extends 'waimai/owner/base.html' %}
+{% block title %}留言管理{% endblock %}
+{% block owner_content %}
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h1 style="margin:0 0 8px;font-size:20px;">留言管理</h1>
+    <p class="card-meta" style="margin:0;">体验机每日清空测试数据时<strong>不会</strong>删除留言。未读：{{ unread_count }}</p>
+</div>
+
+<form method="post" class="card seller-form-stack" style="padding:16px;margin-bottom:14px;">
+    {% csrf_token %}
+    <input type="hidden" name="save_contact_settings" value="1">
+    <h2 style="margin:0 0 8px;font-size:16px;">联系我们（服务器主页积木）</h2>
+    <label>对外名称 <input type="text" name="public_display_name" value="{{ guestbook_settings.public_display_name }}" placeholder="如 EVAN CHEN"></label>
+    <label>联系邮箱 <input type="email" name="public_contact_email" value="{{ guestbook_settings.public_contact_email }}" placeholder="对外展示的邮箱"></label>
+    <label>说明文字 <textarea name="block_intro" rows="3" placeholder="可选">{{ guestbook_settings.block_intro }}</textarea></label>
+    <button type="submit" class="btn btn-primary">保存联系信息</button>
+</form>
+
+<div class="card" style="padding:16px;">
+    <h2 style="margin:0 0 12px;font-size:16px;">留言列表</h2>
+    {% if threads %}
+        {% for t in threads %}
+        <div class="line-item" style="padding:10px 0;border-bottom:1px solid #eee;">
+            <a href="{% url 'server_settings_guestbook_thread' t.public_code %}">
+                <strong>{% if t.owner_unread %}🔴 {% endif %}{{ t.guest_display_name|default:"游客" }}</strong>
+            </a>
+            <div class="card-meta">
+                {{ t.public_code }} · {{ t.created_at|date:"Y-m-d H:i" }}
+                · {% if t.guest_email %}留邮箱{% else %}未留邮箱{% endif %}
+                {% if t.receipt_email_rate_limited %} · ⚠ 邮件防刷上限{% elif t.receipt_email_failed or t.email_delivery_suspect %} · ⚠ 邮箱可疑{% endif %}
+                {% if t.guest_user_id %} · 账号 {{ t.guest_user_id }}{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="card-meta">还没有留言。</p>
+    {% endif %}
+</div>
+{% endblock %}

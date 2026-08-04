@@ -1,0 +1,26 @@
+{# 店铺主页 · 积木列表 Panel 片段 #}
+{% for block in home_blocks %}
+<div {% if block.block_type == 'intro' %}data-yc-tour="fold-home-intro"{% elif block.block_type == 'notice' %}data-yc-tour="fold-home-notice"{% elif block.block_type == 'order_cta' %}data-yc-tour="fold-home-cta"{% elif block.is_custom %}data-yc-tour="fold-home-custom-block"{% endif %}>
+{% include 'waimai/seller/_panel_fold.html' with fold_id=block.dom_id fold_title=block.fold_title %}
+    {% if block.is_custom %}<p class="card-meta" style="margin:0 0 8px;">自定义积木</p>{% endif %}
+    {% include 'waimai/seller/_home_block_editor.html' %}
+{% include 'waimai/seller/_panel_fold_end.html' %}
+</div>
+{% endfor %}
+
+{% include 'waimai/seller/_panel_fold.html' with fold_id='custom-blocks-toolbar' fold_title='➕ 自定义积木（添加）' %}
+    <div data-yc-tour="fold-home-custom">
+        <p class="card-meta" style="margin:0 0 10px;" data-yc-tour="home-add-custom">
+        已用 {{ custom_block_count }} / {{ max_custom_blocks }} 块。新加的块会出现在最下面；可写活动介绍、图片、外链等。
+    </p>
+    {% if can_add_custom_block %}
+    <form method="post" style="display:inline;" data-yc-panel="{{ home_blocks_panel_id }}">
+        {% csrf_token %}
+        <input type="hidden" name="add_custom_block" value="1">
+        <button type="submit" class="btn btn-sm btn-outline" data-yc-tour="home-add-custom">+ 添加一块自定义积木</button>
+    </form>
+    {% else %}
+    <p class="card-meta" style="margin:0;">已达上限，请删除不需要的块后再添加。</p>
+    {% endif %}
+    </div>
+{% include 'waimai/seller/_panel_fold_end.html' %}

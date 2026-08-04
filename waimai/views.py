@@ -2154,34 +2154,17 @@ def seller_panel_section(request, section):
             context['error_payment_log_lines'] = read_tech_log_tail('error_payment.log', 150)
     elif section == 'homepage':
         from .home_page_helpers import (
-            BLOCK_CUSTOM,
             MAX_SHOP_CUSTOM_BLOCKS,
-            SERVER_ONLY_BLOCK_TYPES,
-            SHOP_LEGACY_BLOCK_TYPES,
-            block_dom_id,
             count_shop_custom_blocks,
             ensure_home_page_for_seller,
-            get_shop_block_spec,
+        )
+        from .home_page_panel_helpers import (
+            SHOP_HOME_BLOCKS_PANEL_ID,
+            build_shop_home_blocks,
         )
 
         page = ensure_home_page_for_seller(seller_id, shop_profile)
-        # 所有积木（含自定义）统一按排序数字比大小
-        blocks = list(
-            page.blocks.exclude(block_type__in=SERVER_ONLY_BLOCK_TYPES | SHOP_LEGACY_BLOCK_TYPES)
-            .order_by('sort_order', 'block_type')
-        )
-        for b in blocks:
-            b.spec = get_shop_block_spec(b.block_type)
-            b.dom_id = block_dom_id(b)
-            b.is_custom = b.block_type == BLOCK_CUSTOM
-            if b.is_custom:
-                b.fold_title = (b.title or '').strip() or '自定义积木'
-            else:
-                b.fold_title = b.spec.label if b.spec else b.block_type
-            from .home_block_media import block_display_image_src
-            from .home_page_helpers import BLOCK_DIRECTORY, BLOCK_ORDER_CTA
-            b.display_image_src = block_display_image_src(b)
-            b.shows_rich_media = b.block_type not in (BLOCK_ORDER_CTA, BLOCK_DIRECTORY)
+        blocks = build_shop_home_blocks(request, seller_id, shop_profile)
         custom_count = count_shop_custom_blocks(page)
         from .home_block_media import photo_quota_hint
         context.update(photo_quota_hint(request.user))
@@ -2192,6 +2175,7 @@ def seller_panel_section(request, section):
         context['can_add_custom_block'] = custom_count < MAX_SHOP_CUSTOM_BLOCKS
         context['save_block_action_name'] = 'save_home_block'
         context['delete_block_action_name'] = 'delete_home_block'
+        context['home_blocks_panel_id'] = SHOP_HOME_BLOCKS_PANEL_ID
         context['showcase_preview_url'] = '/'
         if shop_profile and (shop_profile.shop_code or '').strip():
             context['showcase_preview_url'] = f"/s/{shop_profile.shop_code.strip()}/home/"

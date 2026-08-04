@@ -49,6 +49,51 @@ def _normalize_email(email: str) -> str:
     return (email or '').strip().lower()
 
 
+def recipient_send_block_reason(
+    email: str,
+    *,
+    kind: str,
+    dedupe_key: str = '',
+) -> str:
+    """
+    判断单个收件邮箱是否被防刷规则拦住。
+    返回空字符串表示可发；否则为 hourly / daily / server_daily / dedupe。
+    """
+    from .models import EmailSendLog
+
+    addr = _normalize_email(email)
+    if not addr:
+        return 'invalid'
+
+    day_start = _beijing_day_start()
+    hour_ago = timezone.now() - timedelta(hours=1)
+    cooldown_since = timezone.now() - timedelta(seconds=_dedupe_cooldown_seconds())
+
+    server_today = EmailSendLog.objects.filter(sent_at__gte=day_start).count()
+    if server_today >= _daily_server_max():
+        logger.warning('邮件防刷：全服务器今日已达上限 %s 封', _daily_server_max())
+        return 'server_daily'
+
+    if EmailSendLog.objects.filter(recipient=addr, sent_at__gte=hour_ago).count() >= _recipient_hourly_max():
+        logger.info('邮件防刷：%s 每小时上限已满，跳过 %s', addr, kind)
+        return 'hourly'
+
+    if EmailSendLog.objects.filter(recipient=addr, sent_at__gte=day_start).count() >= _recipient_daily_max():
+        logger.info('邮件防刷：%s 今日上限已满，跳过 %s', addr, kind)
+        return 'daily'
+
+    dedupe_key = (dedupe_key or '').strip()
+    if dedupe_key and EmailSendLog.objects.filter(
+        dedupe_key=dedupe_key,
+        recipient=addr,
+        sent_at__gte=cooldown_since,
+    ).exists():
+        logger.info('邮件防刷：%s 冷却中（%s），跳过', dedupe_key, kind)
+        return 'dedupe'
+
+    return ''
+
+
 def filter_recipients_by_rate_limit(
     recipients: list[str],
     *,
@@ -59,42 +104,14 @@ def filter_recipients_by_rate_limit(
     返回仍允许发信的收件邮箱；超限的跳过并写日志。
     dedupe_key 相同且在冷却期内：视为重复，不再发。
     """
-    from .models import EmailSendLog
-
     allowed: list[str] = []
-    day_start = _beijing_day_start()
-    hour_ago = timezone.now() - timedelta(hours=1)
-    cooldown_since = timezone.now() - timedelta(seconds=_dedupe_cooldown_seconds())
-
-    server_today = EmailSendLog.objects.filter(sent_at__gte=day_start).count()
-    if server_today >= _daily_server_max():
-        logger.warning('邮件防刷：全服务器今日已达上限 %s 封', _daily_server_max())
-        return []
-
-    dedupe_key = (dedupe_key or '').strip()
     for raw in recipients:
         email = _normalize_email(raw)
         if not email:
             continue
-
-        if EmailSendLog.objects.filter(recipient=email, sent_at__gte=hour_ago).count() >= _recipient_hourly_max():
-            logger.info('邮件防刷：%s 每小时上限已满，跳过 %s', email, kind)
+        if recipient_send_block_reason(email, kind=kind, dedupe_key=dedupe_key):
             continue
-
-        if EmailSendLog.objects.filter(recipient=email, sent_at__gte=day_start).count() >= _recipient_daily_max():
-            logger.info('邮件防刷：%s 今日上限已满，跳过 %s', email, kind)
-            continue
-
-        if dedupe_key and EmailSendLog.objects.filter(
-            dedupe_key=dedupe_key,
-            recipient=email,
-            sent_at__gte=cooldown_since,
-        ).exists():
-            logger.info('邮件防刷：%s 冷却中（%s），跳过', dedupe_key, kind)
-            continue
-
         allowed.append(email)
-
     return allowed
 
 

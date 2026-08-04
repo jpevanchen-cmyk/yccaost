@@ -1,0 +1,11 @@
+{# 店铺主页 · 总设置 Panel 片段 #}
+<form method="post" data-yc-panel="home-page-settings-panel">
+    {% csrf_token %}
+    <input type="hidden" name="save_home_page_settings" value="1">
+    <label class="form-label">顶栏「下单」点击后</label>
+    <select name="order_nav_mode" class="form-input" data-yc-tour="home-nav-mode-select">
+        <option value="to_shop" {% if home_page.order_nav_mode == 'to_shop' %}selected{% endif %}>直接进入下单页</option>
+        <option value="to_cta_block" {% if home_page.order_nav_mode == 'to_cta_block' %}selected{% endif %}>滚到页内「进入店铺」块</option>
+    </select>
+    <button type="submit" class="btn btn-primary" style="margin-top:12px;" data-yc-tour="home-save-settings">保存主页设置</button>
+</form>

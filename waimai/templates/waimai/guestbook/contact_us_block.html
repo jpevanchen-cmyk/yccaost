@@ -1,0 +1,92 @@
+{% load static %}
+<h2 class="showcase-block-title">{{ block.title|default:"联系我们" }}</h2>
+<div class="showcase-block-main guestbook-block" id="guestbook-block-root">
+    {% if guestbook_settings.block_intro %}
+    <div class="showcase-body-wrap"><div class="showcase-body">{{ guestbook_settings.block_intro|linebreaksbr }}</div></div>
+    {% elif block.body %}
+    <div class="showcase-body-wrap"><div class="showcase-body">{{ block.body|linebreaksbr }}</div></div>
+    {% endif %}
+
+    <form id="guestbook-new-form" class="guestbook-form seller-form-stack" method="post" action="{% url 'guestbook_post' %}">
+        {% csrf_token %}
+        <input type="hidden" name="return_anchor" value="block-contact_us">
+        <input type="hidden" name="guest_password" id="guestbook-hidden-password" value="">
+        {% if not user.is_authenticated %}
+        <div class="guestbook-name-row">
+            <label for="guestbook-guest-name">您的称呼（可选）</label>
+            <input id="guestbook-guest-name" type="text" name="guest_name" maxlength="80" placeholder="如 张先生">
+        </div>
+        {% endif %}
+        <label class="guestbook-body-label" for="guestbook-body">留言内容
+            <textarea id="guestbook-body" name="body" rows="4" required placeholder="想说的话…"></textarea>
+        </label>
+        <div class="guestbook-submit-row">
+            <label class="guestbook-email-inline" for="guestbook-guest-email">联系邮箱（若您希望收到回复）
+                <input id="guestbook-guest-email" type="email" name="guest_email" maxlength="254" placeholder="you@example.com">
+            </label>
+            <button type="submit" class="btn btn-green guestbook-submit-btn">提交留言</button>
+        </div>
+    </form>
+
+    <div class="guestbook-search-box" style="margin-top:20px;padding-top:16px;border-top:1px solid #eee;">
+        <h3 style="margin:0 0 8px;font-size:15px;">已有留言？输入编号继续沟通</h3>
+        <form method="post" action="{% url 'guestbook_open_search' %}" class="guestbook-search-form" style="display:flex;gap:8px;flex-wrap:wrap;">
+            {% csrf_token %}
+            <input class="form-input" type="text" name="public_code" maxlength="20" placeholder="如 YC-0805-Ab3CdEfg" style="flex:1;min-width:180px;" autocomplete="off">
+            <button type="submit" class="btn btn-outline">打开留言</button>
+        </form>
+        <p class="card-meta" style="margin:8px 0 0;">提交成功后会显示您的留言编号，也可在收条邮件中查看。</p>
+    </div>
+
+    {% if guestbook_settings.public_display_name or guestbook_settings.public_contact_email %}
+    <div class="guestbook-owner-footer">
+        {% if guestbook_settings.public_display_name %}
+        <p><strong>{{ guestbook_settings.public_display_name }}</strong></p>
+        {% endif %}
+        {% if guestbook_settings.public_contact_email %}
+        <p class="card-meta">邮箱：<a href="mailto:{{ guestbook_settings.public_contact_email }}">{{ guestbook_settings.public_contact_email }}</a></p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{# 确认邮箱弹窗 #}
+<div id="guestbook-confirm-modal" class="yc-notice-modal guestbook-modal" role="dialog" aria-modal="true" hidden>
+    <div class="yc-notice-backdrop"></div>
+    <div class="yc-notice-box" style="max-width:420px;">
+        <h3 style="margin:0 0 10px;font-size:17px;">确认联系信息</h3>
+        <p class="card-meta" style="margin:0 0 12px;">我们的回复将通过邮件通知您，请确认邮箱号码是否正确。</p>
+        <label style="display:block;margin-bottom:10px;">称呼
+            <input type="text" id="guestbook-confirm-name" class="form-input" maxlength="80">
+        </label>
+        <label style="display:block;margin-bottom:10px;">联系邮箱
+            <input type="email" id="guestbook-confirm-email" class="form-input" maxlength="254" placeholder="可不填，但将无法邮件通知">
+        </label>
+        <label style="display:block;margin-bottom:12px;">查看密码（可选，最多 8 位）
+            <input type="text" id="guestbook-confirm-password" class="form-input" maxlength="8" placeholder="防止他人凭编号看到内容">
+        </label>
+        <div style="display:flex;gap:8px;">
+            <button type="button" class="btn btn-primary" id="guestbook-confirm-submit">确认提交</button>
+            <button type="button" class="btn btn-outline" id="guestbook-confirm-cancel">取消</button>
+        </div>
+    </div>
+</div>
+
+{# 成功 / 邮件失败弹窗 #}
+<div id="guestbook-result-modal" class="yc-notice-modal guestbook-modal" role="dialog" aria-modal="true" hidden>
+    <div class="yc-notice-backdrop"></div>
+    <div class="yc-notice-box" style="max-width:440px;">
+        <h3 id="guestbook-result-title" style="margin:0 0 10px;font-size:17px;">留言已提交</h3>
+        <p id="guestbook-result-msg" class="card-meta" style="margin:0 0 12px;"></p>
+        <label style="display:block;margin-bottom:12px;">您的留言编号（请复制保存）
+            <div style="display:flex;gap:8px;margin-top:6px;">
+                <input type="text" id="guestbook-result-code" class="form-input" readonly>
+                <button type="button" class="btn btn-outline" id="guestbook-copy-code">复制</button>
+            </div>
+        </label>
+        <p class="card-meta" style="margin:0 0 12px;">在上方「输入编号继续沟通」处输入此编号，可查看回复并继续留言。建议设置查看密码，否则内容可能被他人浏览。</p>
+        <button type="button" class="btn btn-block btn-primary" id="guestbook-result-close">知道了</button>
+    </div>
+</div>
+
+<script src="{% static 'waimai/guestbook.js' %}?v=3"></script>

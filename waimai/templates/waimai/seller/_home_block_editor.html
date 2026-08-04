@@ -1,5 +1,5 @@
 {# 主页积木编辑：上半显示设置 + 下半前台样式内容区（店铺/服务器共用） #}
-<form method="post" enctype="multipart/form-data" class="home-block-editor">
+<form method="post" enctype="multipart/form-data" class="home-block-editor" data-yc-panel="{{ home_blocks_panel_id|default:'home-page-blocks-panel' }}">
     {% csrf_token %}
     <input type="hidden" name="{{ save_block_action_name }}" value="1">
     <input type="hidden" name="block_id" value="{{ block.block_id }}">
@@ -99,7 +99,7 @@
     </div>
 </form>
 {% if block.is_custom %}
-<form method="post" style="margin-top:8px;" onsubmit="return confirm('确定删除这块自定义积木吗？');">
+<form method="post" style="margin-top:8px;" onsubmit="return confirm('确定删除这块自定义积木吗？');" data-yc-panel="{{ home_blocks_panel_id|default:'home-page-blocks-panel' }}">
     {% csrf_token %}
     <input type="hidden" name="{{ delete_block_action_name }}" value="1">
     <input type="hidden" name="block_id" value="{{ block.block_id }}">
