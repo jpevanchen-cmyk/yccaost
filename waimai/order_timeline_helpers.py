@@ -96,12 +96,47 @@ def _estimated_ready_label(order: BuyOrder) -> str:
     return '预计时间'
 
 
-def _should_show_estimated_ready(order: BuyOrder) -> bool:
+def should_show_estimated_ready(order: BuyOrder) -> bool:
+    """买家列表/详情等是否仍应展示「预计出餐/取餐」标签。"""
     if not order.estimated_ready_at:
         return False
     if order.order_status in ('completed', 'cancelled'):
         return False
     return order.order_status in _ESTIMATED_READY_STATUSES
+
+
+def should_show_estimated_ready_on_kitchen_board(order: BuyOrder) -> bool:
+    """后厨看板：尚未全部备好时才展示预计出餐/取餐。"""
+    if not should_show_estimated_ready(order):
+        return False
+    from .kitchen_helpers import count_kitchen_units
+
+    total, prepared = count_kitchen_units(order)
+    if total > 0 and prepared >= total:
+        return False
+    return True
+
+
+def should_show_estimated_ready_on_waiter_board(order: BuyOrder) -> bool:
+    """服务员看板：尚未全部交给骑手/客人时才展示预计出餐/取餐。"""
+    if not should_show_estimated_ready(order):
+        return False
+    if order.fulfillment_type == 'delivery':
+        from .waiter_helpers import delivery_handoff_ready
+
+        if delivery_handoff_ready(order):
+            return False
+    else:
+        from .waiter_helpers import count_order_units
+
+        total, served = count_order_units(order.dish_items)
+        if total > 0 and served >= total:
+            return False
+    return True
+
+
+def _should_show_estimated_ready(order: BuyOrder) -> bool:
+    return should_show_estimated_ready(order)
 
 
 def _should_show_estimated_delivery(order: BuyOrder, delivery) -> bool:
@@ -112,6 +147,66 @@ def _should_show_estimated_delivery(order: BuyOrder, delivery) -> bool:
     if delivery.delivery_status in ('completed', 'cancelled'):
         return False
     return True
+
+
+def compute_wait_display(deadline, *, now=None) -> dict | None:
+    """工作台倒计时/超时正计时（§5.6.7 · A.15.9）：未过点黑字「还剩 xx 分」，过后红字「已超时 xx 分」。"""
+    if not deadline:
+        return None
+    moment = now or timezone.now()
+    if timezone.is_naive(deadline):
+        deadline = timezone.make_aware(deadline, timezone.get_current_timezone())
+    if timezone.is_naive(moment):
+        moment = timezone.make_aware(moment, timezone.get_current_timezone())
+    total_seconds = int((deadline - moment).total_seconds())
+    minutes = abs(total_seconds) // 60
+    if total_seconds >= 0:
+        text = '还剩不到 1 分' if minutes < 1 else f'还剩 {minutes} 分'
+        return {'text': text, 'is_overdue': False, 'css_class': 'wait-countdown'}
+    text = '已超时不到 1 分' if minutes < 1 else f'已超时 {minutes} 分'
+    return {'text': text, 'is_overdue': True, 'css_class': 'wait-overdue'}
+
+
+def should_show_rider_pickup_eta(delivery) -> bool:
+    """骑手待取餐：展示预计取餐倒计时/超时。"""
+    if not delivery or delivery.delivery_status != 'accepted':
+        return False
+    buy = getattr(delivery, 'buy_order', None)
+    return bool(buy and buy.estimated_ready_at)
+
+
+def should_show_rider_delivery_eta(delivery) -> bool:
+    """骑手配送中/超时：展示预计送达倒计时/超时正计时。"""
+    if not delivery:
+        return False
+    if delivery.delivery_status not in ('in_transit', 'overtime'):
+        return False
+    return bool(delivery.estimated_delivery_time)
+
+
+def build_rider_pickup_wait_display(delivery, *, now=None) -> dict | None:
+    """骑手 · 预计取餐（基于订单预计出餐/可取餐时间）。"""
+    if not should_show_rider_pickup_eta(delivery):
+        return None
+    buy = delivery.buy_order
+    display = compute_wait_display(buy.estimated_ready_at, now=now)
+    if not display:
+        return None
+    display = dict(display)
+    display['label'] = '预计取餐'
+    return display
+
+
+def build_rider_delivery_wait_display(delivery, *, now=None) -> dict | None:
+    """骑手 · 预计送达（开始送餐后写入 estimated_delivery_time）。"""
+    if not should_show_rider_delivery_eta(delivery):
+        return None
+    display = compute_wait_display(delivery.estimated_delivery_time, now=now)
+    if not display:
+        return None
+    display = dict(display)
+    display['label'] = '预计送达'
+    return display
 
 
 def _viewer_codes(viewer: str) -> frozenset[str] | None:
@@ -236,7 +331,7 @@ def build_order_timeline(order: BuyOrder, *, viewer: str = VIEWER_BUYER) -> list
             rows.append((est_label, order.estimated_ready_at))
 
     if _should_show_estimated_delivery(order, delivery) and viewer in (
-        VIEWER_BUYER, VIEWER_SELLER, VIEWER_STAFF, VIEWER_WORK,
+        VIEWER_BUYER, VIEWER_SELLER, VIEWER_STAFF, VIEWER_WORK, VIEWER_RIDER,
     ):
         if not any(lbl == '预计送达' for lbl, _ in rows):
             rows.append(('预计送达', delivery.estimated_delivery_time))

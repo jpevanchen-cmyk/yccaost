@@ -1428,6 +1428,36 @@ body.seller-page .content {
     margin-top: 12px;
 }
 
+.seller-panel-fold-body > p:first-child {
+    margin-top: 0;
+}
+
+/* 骑手 Tab：配送折叠块内的子卡片与待派单池 */
+.seller-panel-fold-body .rider-pending-pool {
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--yc-border);
+}
+
+.seller-panel-fold-body .rider-delivery-subcard {
+    margin-bottom: 10px;
+    border: 1px solid var(--yc-border);
+    border-radius: calc(var(--yc-radius) - 2px);
+}
+
+.seller-panel-fold-body .rider-delivery-subcard > summary {
+    font-size: 16px;
+    padding: 12px 14px;
+}
+
+.seller-panel-fold-body .rider-delivery-subcard:last-child {
+    margin-bottom: 0;
+}
+
+.seller-panel-fold-body .rider-delivery-orders {
+    margin-top: 4px;
+}
+
 .seller-panel-fold-body h3 {
     margin-top: 12px;
     font-size: 16px;
@@ -2735,7 +2765,17 @@ body.dish-lightbox-open {
 
 .delivery-status-accepted { background: #2196f3; }
 .delivery-status-picked_up { background: #ff9800; }
+.delivery-status-in_transit { background: #4caf50; }
+.delivery-status-overtime { background: #c62828; }
 .delivery-status-other { background: #999; }
+
+.rider-wait-line {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.45;
+}
+.wait-countdown { color: #1a1a1a; }
+.wait-overdue { color: #c62828; }
 
 .delivery-action-stack {
     display: flex;

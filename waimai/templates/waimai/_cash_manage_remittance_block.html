@@ -5,13 +5,17 @@
     <strong>{{ remit.rider_id }}</strong> · {{ remit.order_count }} 单 ·
     <strong>¥{{ remit.total_amount }}</strong>
     {% if remit.note %}<p class="card-meta" style="margin:4px 0;">配送员备注：{{ remit.note }}</p>{% endif %}
-    <form method="post" action="{{ form_action }}" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
+    <form method="post" action="{{ form_action }}" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;"
+          data-yc-panel="{{ cash_panel_id|default:'cash-manage-panel-body' }}">
         {% csrf_token %}
         <input type="hidden" name="request_id" value="{{ remit.request_id }}">
+        {# Panel Ajax 提交时不会带上「点了哪个按钮」，必须用隐藏域记录操作类型 #}
+        <input type="hidden" name="cash_manage_action" value="">
         <input type="text" name="review_note" maxlength="500" placeholder="退回时必须填写原因" style="flex:1;min-width:160px;">
-        <button type="submit" class="btn btn-sm btn-green" name="cash_manage_action" value="confirm_remittance"
-                onclick="return confirm('确认已收到 ¥{{ remit.total_amount }} 现金？');">确认入金</button>
-        <button type="submit" class="btn btn-sm btn-outline" name="cash_manage_action" value="reject_remittance">退回申请</button>
+        <button type="submit" class="btn btn-sm btn-green"
+                onclick="this.form.cash_manage_action.value='confirm_remittance'; return confirm('确认已收到 ¥{{ remit.total_amount }} 现金？');">确认入金</button>
+        <button type="submit" class="btn btn-sm btn-outline"
+                onclick="this.form.cash_manage_action.value='reject_remittance';">退回申请</button>
     </form>
 </div>
 {% endfor %}

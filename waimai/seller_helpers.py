@@ -84,12 +84,16 @@ def handle_seller_post(request, seller_id, section):
 
         if 'cash_manage_action' in request.POST:
             from .plugins.fulfillment.ownership import fulfillment_plugin_enabled
-            from .workbench_handlers import handle_cash_management_post
+            from .cash_manage_handlers import handle_cash_management_post
+            from .cash_manage_panel_helpers import attach_seller_cash_manage_panel_ctx
 
             if not fulfillment_plugin_enabled(seller_id):
                 messages.error(request, '履约配送插件未启用，无法处理现金管理')
                 return _seller_panel_redirect('cash_manage', request=request)
             redirect_to = reverse('seller_panel_section', kwargs={'section': 'cash_manage'})
+            attach_seller_cash_manage_panel_ctx(
+                request, seller_id, redirect_to=redirect_to,
+            )
             return handle_cash_management_post(
                 request, seller_id, operator=request.user, redirect_to=redirect_to,
             )

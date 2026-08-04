@@ -31,7 +31,7 @@
             · {{ order.created_at|beijing:"m-d H:i" }}
         </p>
         <span class="delivery-status-badge delivery-status-accepted">{{ row.phase_label }}</span>
-        {% if order.estimated_ready_at %}
+        {% if order.should_show_estimated_ready_on_waiter_board %}
         <span class="delivery-status-badge badge-order-prep">⏱ {{ order.get_estimated_ready_label }}</span>
         {% endif %}
 

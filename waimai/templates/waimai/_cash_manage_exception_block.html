@@ -11,6 +11,7 @@
         {% if order.cash_exception_note %}<br>电话备注：{{ order.cash_exception_note }}{% endif %}
     </p>
     <form method="post" action="{{ form_action }}" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;"
+          data-yc-panel="{{ cash_panel_id|default:'cash-manage-panel-body' }}"
           onsubmit="return confirm('确认由管理人员同意少收并直接兜底结单？');">
         {% csrf_token %}
         <input type="hidden" name="cash_manage_action" value="approve_exception">

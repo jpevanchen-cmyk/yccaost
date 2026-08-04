@@ -44,10 +44,12 @@
         <form method="post" action="{{ form_action }}" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
             {% csrf_token %}
             <input type="hidden" name="request_id" value="{{ remit.request_id }}">
+            <input type="hidden" name="cash_manage_action" value="">
             <input type="text" name="review_note" maxlength="500" placeholder="退回时必须填写原因">
-            <button type="submit" class="btn btn-sm btn-green" name="cash_manage_action" value="confirm_remittance"
-                    onclick="return confirm('确认已收到 ¥{{ remit.total_amount }} 现金？');">确认入金</button>
-            <button type="submit" class="btn btn-sm btn-outline" name="cash_manage_action" value="reject_remittance">退回申请</button>
+            <button type="submit" class="btn btn-sm btn-green"
+                    onclick="this.form.cash_manage_action.value='confirm_remittance'; return confirm('确认已收到 ¥{{ remit.total_amount }} 现金？');">确认入金</button>
+            <button type="submit" class="btn btn-sm btn-outline"
+                    onclick="this.form.cash_manage_action.value='reject_remittance';">退回申请</button>
         </form>
     </div>
     {% endfor %}

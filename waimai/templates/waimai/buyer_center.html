@@ -18,7 +18,7 @@
 
 <div class="card" style="margin-bottom:14px;">
     <h2 style="margin-top:0;">订单邮件通知</h2>
-    <p class="card-meta">自愿开启。目前会通知：订单有新留言、货到付款需您确认实付金额。由服务器统一邮箱发出。</p>
+    <p class="card-meta">自愿开启。目前会通知：订单有新留言、货到付款需您确认实际支付金额。由服务器统一邮箱发出。</p>
     <form method="post" class="seller-form-stack">
         {% csrf_token %}
         <input type="hidden" name="save_buyer_notify" value="1">
@@ -47,7 +47,7 @@
             <span class="badge badge-order-prep">{{ order.get_order_status_display }}</span>
             <span class="badge badge-default">{{ order.get_payment_status_display }}</span>
             {% if order.cash_shortfall_status == 'buyer_pending' %}
-            <span class="badge badge-pay-uncollected">请确认实付金额</span>
+            <span class="badge badge-pay-uncollected">请确认实际支付金额</span>
             {% endif %}
         </p>
         <a class="btn btn-outline btn-sm" href="{% url 'order_detail' order.order_id %}">

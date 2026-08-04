@@ -1178,6 +1178,24 @@ class BuyOrder(models.Model):
             return '打包自取：请到店取餐并付款。'
         return '外卖货到付款：店家会先备货并派骑手，骑手送达时向您收现金（也可当面扫码付）。'
 
+    def should_show_estimated_ready_at(self):
+        """是否仍应展示预计出餐/取餐时间（与订单历程规则一致）。"""
+        from .order_timeline_helpers import should_show_estimated_ready
+
+        return should_show_estimated_ready(self)
+
+    def should_show_estimated_ready_on_kitchen_board(self):
+        """后厨看板是否仍应展示预计出餐/取餐时间。"""
+        from .order_timeline_helpers import should_show_estimated_ready_on_kitchen_board
+
+        return should_show_estimated_ready_on_kitchen_board(self)
+
+    def should_show_estimated_ready_on_waiter_board(self):
+        """服务员看板是否仍应展示预计出餐/取餐时间。"""
+        from .order_timeline_helpers import should_show_estimated_ready_on_waiter_board
+
+        return should_show_estimated_ready_on_waiter_board(self)
+
     def get_estimated_ready_label(self):
         """预计完成/出餐/取餐时间的展示文案（北京时间）"""
         if not self.estimated_ready_at:

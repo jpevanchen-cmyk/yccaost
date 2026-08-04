@@ -31,7 +31,7 @@
 
 <div class="detail-highlight" data-yc-tour="order-detail-hero">
     <p class="status-hero">{{ order.get_order_status_display }}</p>
-    {% if order.estimated_ready_at and order.order_status != 'completed' %}
+    {% if order.should_show_estimated_ready_at %}
     <p class="msg-ok" style="margin:10px 0 0;font-size:16px;">⏱ {{ order_shell.estimated_ready_label }}</p>
     {% endif %}
     <p class="card-meta" style="margin:0;">
@@ -57,8 +57,9 @@
 {% include 'waimai/_order_cashier_qr_block.html' %}
 
 {% if order.is_delivery_cod and order.cash_collected_amount %}
-<details class="seller-panel-fold">
-    <summary>货到付款实收核对</summary>
+<details class="seller-panel-fold" id="buyer-cash-confirm"
+         {% if viewer_role == 'buyer' and order.cash_shortfall_status == 'buyer_pending' %}open{% endif %}>
+    <summary>实际支付金额确认</summary>
     <div class="seller-panel-fold-body">
         <div class="detail-row"><span>订单应收</span><span>¥{{ order.total_amount }}</span></div>
         <div class="detail-row"><span>配送员登记实付</span><span>¥{{ order.cash_collected_amount }}</span></div>
@@ -82,7 +83,7 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
             <form method="post" onsubmit="return confirm('确认您本单实际只支付了 ¥{{ order.cash_collected_amount }}？');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-green" name="cash_shortfall_response" value="accept">确认实付金额</button>
+                <button type="submit" class="btn btn-green" name="cash_shortfall_response" value="accept">实际支付金额确认</button>
             </form>
             <form method="post" onsubmit="return confirm('确定拒绝这份实付金额记录？配送员将不能交餐结单。');">
                 {% csrf_token %}

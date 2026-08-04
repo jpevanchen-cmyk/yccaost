@@ -119,7 +119,9 @@
     </div>
     {% elif current_view == 'cash_manage' %}
     <h2 style="margin:0 0 10px;font-size:18px;">💵 {{ workbench_shell.view_cash_manage_title }}</h2>
+    <div id="work-cash-manage-panel-body" data-yc-panel-id="work-cash-manage-panel-body">
     {% include 'waimai/_shop_work_cash_manage_panel.html' with form_action=form_action %}
+    </div>
     {% elif current_view == 'waiter' %}
     <h2 style="margin:0 0 10px;font-size:18px;">🍽 {{ workbench_shell.view_waiter_title }}</h2>
     <div id="work-waiter-panel-body" data-yc-panel-id="work-waiter-panel-body">

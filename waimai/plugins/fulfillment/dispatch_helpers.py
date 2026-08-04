@@ -31,9 +31,11 @@ def get_shop_riders(seller_id, *, active_only=True):
 
 def count_rider_active_orders(rider_username):
     """配送员当前未完成配送单数量"""
+    from waimai.plugins.fulfillment.delivery_workflow_helpers import RIDER_ACTIVE_DELIVERY_STATUSES
+
     return DeliveryOrder.objects.filter(
         rider_id=rider_username,
-        delivery_status__in=['accepted', 'picked_up', 'in_transit'],
+        delivery_status__in=RIDER_ACTIVE_DELIVERY_STATUSES,
     ).count()
 
 

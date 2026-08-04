@@ -17,7 +17,7 @@
 
 <div class="detail-highlight">
     <p class="status-hero">{{ order.get_order_status_display }}</p>
-    {% if order.estimated_ready_at and order.order_status != 'completed' and order.order_status != 'cancelled' %}
+    {% if order.should_show_estimated_ready_at %}
     <p class="msg-ok" style="margin:10px 0 0;font-size:16px;">⏱ {{ order.get_estimated_ready_label }}</p>
     {% endif %}
     <p class="card-meta" style="margin:0;">

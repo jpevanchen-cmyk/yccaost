@@ -2712,7 +2712,7 @@ def order_detail(request, order_id):
 
     if request.method == 'POST' and 'cash_shortfall_response' in request.POST:
         if not user or user.role != 'buyer':
-            messages.error(request, '只有本订单买家可以确认实付金额')
+            messages.error(request, '只有本订单买家可以确认实际支付金额')
         else:
             from .payments import buyer_respond_cash_shortfall
 

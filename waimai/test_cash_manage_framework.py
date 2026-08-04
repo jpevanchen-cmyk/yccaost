@@ -328,3 +328,142 @@ class CashManageFrameworkTests(TestCase):
         self.assertEqual(data['panel_id'], 'work-cash-manage-panel-body')
         self.assertIn('¥15.00', data['html'])
         self.assertIn('data-yc-cash-month-picker', data['html'])
+
+    def test_workbench_confirm_remittance_panel_json(self):
+        """工作台现金 Tab · 确认入金走 Panel JSON。"""
+        from waimai.rider_cash_helpers import create_cash_remittance_request
+
+        now = timezone.now()
+        BuyOrder.objects.create(
+            buyer_id='buyer_remit',
+            seller_id=self.seller.username,
+            total_amount=Decimal('40'),
+            subtotal_amount=Decimal('40'),
+            delivery_fee=Decimal('0'),
+            dish_items=[],
+            payment_status='paid',
+            order_status='completed',
+            fulfillment_type='delivery',
+            payment_method='cash',
+            cash_collected_at=now,
+            cash_collected_by='rider1',
+            cash_collected_amount=Decimal('40'),
+        )
+        remit, create_msg = create_cash_remittance_request(
+            self.seller.username, 'rider1',
+        )
+        self.assertIsNotNone(remit, create_msg)
+        self.client.force_login(self.manager)
+        session = self.client.session
+        establish_shop_work_session(
+            type('R', (), {'session': session})(),
+            self.manager,
+            seller_id=self.seller.username,
+            shop_code='cmshop',
+        )
+        session.save()
+        url = reverse('shop_work', kwargs={'shop_code': 'cmshop'}) + '?view=cash_manage'
+        resp = self.client.post(
+            url,
+            {
+                'cash_manage_action': 'confirm_remittance',
+                'request_id': str(remit.request_id),
+            },
+            HTTP_X_REQUESTED_WITH=PANEL_REQUEST_HEADER,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['ok'])
+        self.assertEqual(data['panel_id'], 'work-cash-manage-panel-body')
+        remit.refresh_from_db()
+        self.assertEqual(remit.status, 'confirmed')
+
+    def test_seller_confirm_remittance_panel_json(self):
+        """卖家后台现金管理 · 确认入金走 Panel JSON。"""
+        from waimai.rider_cash_helpers import create_cash_remittance_request
+
+        now = timezone.now()
+        BuyOrder.objects.create(
+            buyer_id='buyer_seller_remit',
+            seller_id=self.seller.username,
+            total_amount=Decimal('35'),
+            subtotal_amount=Decimal('35'),
+            delivery_fee=Decimal('0'),
+            dish_items=[],
+            payment_status='paid',
+            order_status='completed',
+            fulfillment_type='delivery',
+            payment_method='cash',
+            cash_collected_at=now,
+            cash_collected_by='rider1',
+            cash_collected_amount=Decimal('35'),
+        )
+        remit, create_msg = create_cash_remittance_request(
+            self.seller.username, 'rider1',
+        )
+        self.assertIsNotNone(remit, create_msg)
+        self.client.force_login(self.seller)
+        url = reverse('seller_panel_section', kwargs={'section': 'cash_manage'})
+        resp = self.client.post(
+            url,
+            {
+                'cash_manage_action': 'confirm_remittance',
+                'request_id': str(remit.request_id),
+            },
+            HTTP_X_REQUESTED_WITH=PANEL_REQUEST_HEADER,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['ok'])
+        self.assertEqual(data['panel_id'], 'cash-manage-panel-body')
+        remit.refresh_from_db()
+        self.assertEqual(remit.status, 'confirmed')
+
+    def test_workbench_reject_remittance_panel_json(self):
+        """工作台现金 Tab · 退回交款走 Panel JSON。"""
+        from waimai.rider_cash_helpers import create_cash_remittance_request
+
+        now = timezone.now()
+        BuyOrder.objects.create(
+            buyer_id='buyer_reject_remit',
+            seller_id=self.seller.username,
+            total_amount=Decimal('25'),
+            subtotal_amount=Decimal('25'),
+            delivery_fee=Decimal('0'),
+            dish_items=[],
+            payment_status='paid',
+            order_status='completed',
+            fulfillment_type='delivery',
+            payment_method='cash',
+            cash_collected_at=now,
+            cash_collected_by='rider1',
+            cash_collected_amount=Decimal('25'),
+        )
+        remit, create_msg = create_cash_remittance_request(
+            self.seller.username, 'rider1',
+        )
+        self.assertIsNotNone(remit, create_msg)
+        self.client.force_login(self.manager)
+        session = self.client.session
+        establish_shop_work_session(
+            type('R', (), {'session': session})(),
+            self.manager,
+            seller_id=self.seller.username,
+            shop_code='cmshop',
+        )
+        session.save()
+        url = reverse('shop_work', kwargs={'shop_code': 'cmshop'}) + '?view=cash_manage'
+        resp = self.client.post(
+            url,
+            {
+                'cash_manage_action': 'reject_remittance',
+                'request_id': str(remit.request_id),
+                'review_note': '现金数额与登记不符',
+            },
+            HTTP_X_REQUESTED_WITH=PANEL_REQUEST_HEADER,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['ok'])
+        remit.refresh_from_db()
+        self.assertEqual(remit.status, 'rejected')

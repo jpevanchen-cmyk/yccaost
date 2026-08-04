@@ -15,6 +15,7 @@ PANEL_IDS = {
     'orders': 'work-orders-panel-body',
     'cashier': 'work-cashier-panel-body',
     'rider': 'work-rider-panel-body',
+    'cash_manage': 'work-cash-manage-panel-body',
 }
 
 
@@ -122,6 +123,16 @@ def render_workbench_panel_html(request: HttpRequest, panel_ctx: dict) -> str:
         ctx['can_operate'] = bool(panel_ctx.get('can_operate_rider'))
         ctx['show_rider_extras'] = bool(panel_ctx.get('show_rider_extras'))
         return render_to_string('waimai/_shop_work_rider_panel.html', ctx, request=request)
+
+    if view == 'cash_manage':
+        from .cash_manage_panel_helpers import render_workbench_cash_manage_panel_html
+
+        return render_workbench_cash_manage_panel_html(
+            request,
+            seller_id,
+            work_user=work_user,
+            form_action=form_action,
+        )
 
     return ''
 

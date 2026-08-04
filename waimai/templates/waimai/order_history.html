@@ -37,7 +37,7 @@
             {% endif %}
             <span class="badge badge-order-prep" style="margin-left:6px;">{{ order.get_order_status_display }}</span>
             {% if order.cash_shortfall_status == 'buyer_pending' %}
-            <span class="badge badge-pay-uncollected" style="margin-left:6px;">请当面确认实付金额</span>
+            <span class="badge badge-pay-uncollected" style="margin-left:6px;">请确认实际支付金额</span>
             {% endif %}
         </div>
         <div class="order-card-actions">
@@ -47,16 +47,16 @@
                 <span class="msg-unread-dot" title="有未读沟通">{{ row.unread_msg_count }}</span>
                 {% endif %}
             </a>
-            {% if order.payment_status == 'pending_payment' and not order.is_in_store_cash_order and not order.is_cash_awaiting_confirm %}
+            {% if order.cash_shortfall_status == 'buyer_pending' %}
+            <a class="btn btn-orange btn-sm" href="{% url 'order_detail' order.order_id %}#buyer-cash-confirm">实际支付金额确认</a>
+            {% elif order.payment_status == 'pending_payment' and not order.is_in_store_cash_order and not order.is_cash_awaiting_confirm %}
             <a class="btn btn-wechat btn-sm" href="{% url 'pay_order' order.order_id %}">去支付</a>
             {% elif order.is_awaiting_in_store_order_confirm %}
             <span class="badge badge-pay-pending">{{ order.get_order_status_display }}</span>
             {% elif order.is_cash_receipt_pending %}
             <span class="badge badge-pay-pending">到店付现金</span>
-            {% elif order.cash_shortfall_status == 'buyer_pending' %}
-            <a class="btn btn-orange btn-sm" href="{% url 'order_detail' order.order_id %}">确认实付金额</a>
             {% endif %}
-            {% if order.estimated_ready_at and order.order_status != 'completed' %}
+            {% if order.should_show_estimated_ready_at %}
             <span class="badge badge-order-prep" style="margin-left:6px;">{{ order.get_estimated_ready_label }}</span>
             {% endif %}
         </div>

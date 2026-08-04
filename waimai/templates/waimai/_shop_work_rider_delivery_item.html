@@ -1,0 +1,117 @@
+{# 骑手 · 单笔配送折叠卡内容（展开后显示） #}
+<p class="delivery-card-meta" style="margin-top:0;">
+    <a href="{% url 'shop_work_order' shop_work_code order.buy_order.order_id %}">联系 / 沟通</a>
+    · 订单 {{ order.buy_order.get_display_order_no }}
+</p>
+<p class="delivery-card-meta">
+    <strong>{{ workbench_shell.pickup_label }}</strong>：{{ order.pickup_address }}<br>
+    <strong>送达</strong>：{{ order.delivery_address }}<br>
+    配送费：<strong style="color:var(--yc-orange);">¥{{ order.delivery_fee }}</strong>
+    · 约 {{ order.distance_km }} 公里
+</p>
+<span class="delivery-status-badge
+    {% if order.delivery_status == 'accepted' %}delivery-status-accepted
+    {% elif order.delivery_status == 'picked_up' %}delivery-status-picked_up
+    {% elif order.delivery_status == 'in_transit' %}delivery-status-in_transit
+    {% elif order.delivery_status == 'overtime' %}delivery-status-overtime
+    {% else %}delivery-status-other{% endif %}">
+    {{ order.get_delivery_status_display }}
+</span>
+{% if order.rider_pickup_wait %}
+<p class="rider-wait-line {{ order.rider_pickup_wait.css_class }}" style="margin:8px 0 0;">
+    ⏱ {{ order.rider_pickup_wait.label }} · {{ order.rider_pickup_wait.text }}
+</p>
+{% endif %}
+{% if order.rider_delivery_wait %}
+<p class="rider-wait-line {{ order.rider_delivery_wait.css_class }}" style="margin:8px 0 0;">
+    ⏱ {{ order.rider_delivery_wait.label }} · {{ order.rider_delivery_wait.text }}
+</p>
+{% endif %}
+{% if order.buy_order.is_delivery_cod %}
+<div class="delivery-cod-box">
+    <p class="delivery-cod-line">💵 <strong>货到付款</strong> · 应收 <strong style="color:var(--yc-orange);">¥{{ order.buy_order.total_amount }}</strong></p>
+    {% if order.buy_order.payment_status == 'paid' %}
+    <p class="card-meta">✅ 已收款{% if order.buy_order.cash_collected_amount %}（实收 ¥{{ order.buy_order.cash_collected_amount }}）{% else %}（顾客已在线付款）{% endif %}，开始送餐后点「我已送达」。</p>
+    {% elif order.buy_order.cash_shortfall_status == 'buyer_pending' %}
+    <p class="msg-err">等待买家当面确认：实付 ¥{{ order.buy_order.cash_collected_amount }}，少付 ¥{{ order.buy_order.cash_shortfall_amount }}。确认前不能交餐或结单。</p>
+    {% elif order.buy_order.cash_shortfall_status == 'buyer_rejected' %}
+    <p class="msg-err">买家已拒绝确认少付。请继续协商；无法解决时电话联系管理人员，并在下方标记异常。</p>
+    {% elif order.buy_order.cash_shortfall_status == 'exception' %}
+    <p class="msg-err">已标记现金异常，等待管理人员处理。电话备注：{{ order.buy_order.cash_exception_note }}</p>
+    {% else %}
+    <p class="card-meta">尚未收款。开始送餐后可在送达时登记实收金额；确认收款后才能点「我已送达」。</p>
+    {% endif %}
+</div>
+{% endif %}
+<div class="delivery-action-stack">
+    {% if not order.handoff_ready %}
+    <p class="card-meta">{{ workbench_shell.handoff_wait_text }}</p>
+    {% endif %}
+    {% if can_operate %}
+    <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
+        {% csrf_token %}
+        <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
+        <input type="hidden" name="action" value="pickup">
+        <button type="submit" class="btn btn-pickup"
+            {% if order.delivery_status != 'accepted' or not order.handoff_ready %}disabled{% endif %}>
+            {{ workbench_shell.pickup_button }}
+        </button>
+    </form>
+    <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
+        {% csrf_token %}
+        <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
+        <input type="hidden" name="action" value="start_delivery">
+        {% if order.delivery_status == 'in_transit' or order.delivery_status == 'overtime' %}
+        <button type="button" class="btn btn-orange" disabled style="opacity:0.55;cursor:default;">
+            已开始送餐
+        </button>
+        {% else %}
+        <button type="submit" class="btn btn-orange"
+            {% if order.delivery_status != 'picked_up' %}disabled title="请先取餐"{% endif %}>
+            {{ workbench_shell.start_delivery_button|default:"开始送餐" }}
+        </button>
+        {% endif %}
+    </form>
+    {% if order.buy_order.is_cod_awaiting_collection %}
+    <form method="POST" class="delivery-cash-form"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
+        {% csrf_token %}
+        <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
+        <input type="hidden" name="action" value="collect_cash">
+        <label class="delivery-cash-label">收到现金（元）
+            <input type="number" name="cash_amount" step="0.01" min="0"
+                value="{{ order.buy_order.total_amount }}" inputmode="decimal">
+        </label>
+        <label class="delivery-cash-label">少收原因（实收不足时必填）
+            <input type="text" name="shortfall_reason" maxlength="500"
+                value="{{ order.buy_order.cash_shortfall_reason }}"
+                placeholder="例如：买家缺少零钱，双方同意少付">
+        </label>
+        <button type="submit" class="btn btn-orange"
+            {% if order.delivery_status != 'picked_up' and order.delivery_status != 'in_transit' and order.delivery_status != 'overtime' %}disabled title="请先取餐"{% endif %}>
+            登记实收金额
+        </button>
+    </form>
+    {% if order.buy_order.cash_shortfall_status == 'buyer_pending' or order.buy_order.cash_shortfall_status == 'buyer_rejected' or order.buy_order.cash_shortfall_status == 'exception' %}
+    <form method="POST" class="delivery-cash-form"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
+        {% csrf_token %}
+        <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
+        <input type="hidden" name="action" value="mark_cash_exception">
+        <label class="delivery-cash-label">电话沟通与管理指示备注
+            <textarea name="exception_note" rows="2" maxlength="500"
+                placeholder="例如：02:30 已电话联系店长，指示暂不交餐并等待处理">{{ order.buy_order.cash_exception_note }}</textarea>
+        </label>
+        <button type="submit" class="btn btn-outline">标记现金异常</button>
+    </form>
+    {% endif %}
+    {% endif %}
+    <form method="POST"{% if form_action %} action="{{ form_action }}"{% endif %} data-yc-panel="work-rider-panel-body">
+        {% csrf_token %}
+        <input type="hidden" name="delivery_id" value="{{ order.delivery_id }}">
+        <input type="hidden" name="action" value="complete">
+        <button type="submit" class="btn btn-complete"
+            {% if order.delivery_status != 'in_transit' and order.delivery_status != 'overtime' or order.buy_order.is_cod_awaiting_collection %}disabled{% endif %}>
+            我已送达
+        </button>
+    </form>
+    {% endif %}
+</div>

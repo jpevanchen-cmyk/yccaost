@@ -233,7 +233,7 @@ class CashReconciliationTests(WorkflowImprovementBase):
 
         page = client.get(f'/order/{order.order_id}/')
         self.assertEqual(page.status_code, 200)
-        self.assertContains(page, '确认实付金额')
+        self.assertContains(page, '实际支付金额确认')
         response = client.post(
             f'/order/{order.order_id}/',
             {'cash_shortfall_response': 'accept'},
@@ -241,6 +241,22 @@ class CashReconciliationTests(WorkflowImprovementBase):
         self.assertEqual(response.status_code, 302)
         order.refresh_from_db()
         self.assertEqual(order.cash_shortfall_status, 'buyer_confirmed')
+
+    def test_order_history_links_cash_confirm_anchor(self):
+        """买家订单列表：待确认少付时按钮应跳到核对折叠区。"""
+        order = self.make_picked_up_cod()
+        ok, _ = rider_collect_cash(order, self.rider.username, '18.00', '买家现金不足')
+        self.assertTrue(ok)
+        order.refresh_from_db()
+        html = render_to_string('waimai/order_history.html', {
+            'order_rows': [{
+                'order': order,
+                'shop_name': '流程试验店',
+                'unread_msg_count': 0,
+            }],
+        })
+        self.assertIn('#buyer-cash-confirm', html)
+        self.assertIn('实际支付金额确认', html)
 
     def test_rejected_shortfall_needs_manager_fallback(self):
         order = self.make_picked_up_cod()
@@ -264,6 +280,29 @@ class CashReconciliationTests(WorkflowImprovementBase):
         self.assertEqual(order.order_status, 'completed')
         self.assertEqual(order.payment_status, 'paid')
         self.assertEqual(order.delivery_order.delivery_status, 'completed')
+
+    def test_manager_approve_works_when_rider_in_transit(self):
+        """配送中（已取餐并开始送）时，管理人员仍可兜底结单。"""
+        order = self.make_picked_up_cod()
+        rider_collect_cash(order, self.rider.username, '18.00', '买家现金不足')
+        buyer_respond_cash_shortfall(order, self.buyer.username, accept=False)
+        order.refresh_from_db()
+        mark_cash_exception(
+            order, self.rider.username, '已电话联系店长，等待处理',
+        )
+        delivery = order.delivery_order
+        delivery.delivery_status = 'in_transit'
+        delivery.save(update_fields=['delivery_status', 'updated_at'])
+        order.order_status = 'delivering'
+        order.save(update_fields=['order_status', 'updated_at'])
+
+        ok, msg = manager_approve_cash_exception(
+            order, self.seller.username, '店长电话同意少收并交餐',
+        )
+        self.assertTrue(ok, msg)
+        order.refresh_from_db()
+        self.assertEqual(order.order_status, 'completed')
+        self.assertEqual(order.payment_status, 'paid')
 
     def test_rider_requests_remittance_before_manager_confirms(self):
         order = self.make_picked_up_cod()
@@ -316,10 +355,23 @@ class CashReconciliationTests(WorkflowImprovementBase):
         )
 
         common = {
-            'form_action': '/s/flowshop/work/?view=orders',
+            'form_action': '/s/flowshop/work/?view=cash_manage',
             'shop_work_code': 'flowshop',
             'workbench_shell': build_workbench_shell(self.seller.username),
         }
+        from waimai.cash_manage_helpers import build_workbench_cash_manage_context
+
+        cash_context = build_workbench_cash_manage_context(
+            self.seller.username,
+            work_user=self.seller,
+        )
+        cash_html = render_to_string(
+            'waimai/_shop_work_cash_manage_panel.html',
+            {**common, **cash_context},
+        )
+        self.assertIn('货到付款异常', cash_html)
+        self.assertIn('待确认现金交款', cash_html)
+
         order_context = build_order_desk_context(
             self.seller.username, work_user=self.seller,
         )
@@ -327,8 +379,6 @@ class CashReconciliationTests(WorkflowImprovementBase):
             'waimai/_shop_work_orders_panel.html',
             {**common, **order_context},
         )
-        self.assertIn('货到付款异常', order_html)
-        self.assertIn('待确认现金交款', order_html)
 
         rider_context = build_rider_board_context(
             self.rider, self.seller.username,

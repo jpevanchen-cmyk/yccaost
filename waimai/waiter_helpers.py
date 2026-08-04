@@ -29,8 +29,8 @@ WAITER_SERVICE_STATUS_CHOICES = (
     (WAITER_STATUS_SETTLED, '已结账'),
 )
 
-# 骑手已取餐后，外卖单不再出现在服务员台
-_DELIVERY_DONE_STATUSES = ('picked_up', 'in_transit', 'completed', 'cancelled')
+# 骑手已取餐后，外卖单不再出现在服务员台（与 delivery_workflow_helpers 对齐）
+from waimai.plugins.fulfillment.delivery_workflow_helpers import WAITER_HIDE_DELIVERY_STATUSES
 
 
 def get_shop_waiters(seller_id: str, *, active_only: bool = False):
@@ -158,7 +158,7 @@ def query_waiter_active_orders(seller_id: str, *, sort_mode: str = 'newest'):
     # 外卖：骑手已取走则不再跟踪
     qs = qs.exclude(
         fulfillment_type='delivery',
-        delivery_order__delivery_status__in=_DELIVERY_DONE_STATUSES,
+        delivery_order__delivery_status__in=WAITER_HIDE_DELIVERY_STATUSES,
     )
     from .workbench_sort_helpers import order_queryset_by_created
 

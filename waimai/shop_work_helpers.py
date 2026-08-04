@@ -540,9 +540,39 @@ def build_rider_board_context(user, seller_id: str, *, sort_mode: str = 'newest'
 
     from .workbench_sort_helpers import order_queryset_by_created
 
+    pending_list = list(query_pending_dispatch_orders(seller_id)[:30])
     active_list = list(order_queryset_by_created(active_orders, sort_mode))
+
+    from waimai.dispatch_display_helpers import enrich_pending_dispatch_order
+    from waimai.models import ShopProfile
+
+    shop_pickup_raw = '店铺取货点'
+    try:
+        shop_pickup_raw = ShopProfile.objects.get(seller_id=seller_id).address or shop_pickup_raw
+    except ShopProfile.DoesNotExist:
+        pass
+    for order in pending_list:
+        enrich_pending_dispatch_order(order, shop_address=shop_pickup_raw)
+
+    from waimai.order_timeline_helpers import (
+        build_rider_delivery_wait_display,
+        build_rider_pickup_wait_display,
+    )
+    from waimai.plugins.fulfillment.delivery_workflow_helpers import sync_delivery_overtime
+
     for order in active_list:
         order.handoff_ready = delivery_handoff_ready(order.buy_order)
+        sync_delivery_overtime(order)
+        order.rider_pickup_wait = build_rider_pickup_wait_display(order)
+        order.rider_delivery_wait = build_rider_delivery_wait_display(order)
+        short_id = str(order.delivery_id.hex)[:8]
+        addr = (order.delivery_address or '').strip()
+        if len(addr) > 18:
+            addr = addr[:18] + '…'
+        order.rider_fold_id = f'delivery-{short_id}'
+        order.rider_fold_title = (
+            f'配送 #{short_id} · {order.get_delivery_status_display()} · {addr}'
+        )
 
     rider_cash = None
     if not seller_mode:
@@ -550,12 +580,19 @@ def build_rider_board_context(user, seller_id: str, *, sort_mode: str = 'newest'
 
         rider_cash = rider_remittance_context(seller_id, rider_id)
 
+    has_delivery = bool(active_list) or bool(pending_list)
+    has_cash = False
+    if rider_cash:
+        has_cash = bool(rider_cash.get('available_count') or rider_cash.get('requests'))
+
     return {
         'active_orders': active_list,
-        'pending_dispatch_orders': list(query_pending_dispatch_orders(seller_id)[:30]),
+        'pending_dispatch_orders': pending_list,
         'rider_can_claim': (not seller_mode and validate_shop_rider(seller_id, rider_id)),
         'rider_id': rider_id,
         'rider_cash_remittance': rider_cash,
+        'rider_fold_delivery_open': has_delivery or not has_cash,
+        'rider_fold_cash_open': has_cash and not has_delivery,
         # 真实工作台无演示入金数据；给 None 让模板 default: 可安全求值（演示预览仍有该变量）
         'onboarding_demo_rider_cash': None,
     }

@@ -202,6 +202,9 @@ class RiderStartedButtonTests(Progress83Base):
             delivery_status='in_transit',
             in_transit_at=timezone.now(),
         )
+        delivery.handoff_ready = True
+        delivery.rider_fold_id = 'delivery-test1234'
+        delivery.rider_fold_title = '配送 #test1234 · 配送中 · 顾客地址'
         html = render_to_string(
             'waimai/_shop_work_rider_panel.html',
             {
@@ -211,6 +214,8 @@ class RiderStartedButtonTests(Progress83Base):
                 'shop_work_code': 'shop83',
                 'workbench_shell': build_workbench_shell(self.seller.username),
                 'pending_dispatch_orders': [],
+                'rider_fold_delivery_open': True,
+                'rider_fold_cash_open': False,
                 'form_action': '',
                 'show_rider_extras': False,
             },

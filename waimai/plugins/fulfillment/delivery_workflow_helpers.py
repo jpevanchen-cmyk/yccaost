@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -21,6 +23,12 @@ RIDER_COMPLETABLE_DELIVERY_STATUSES = frozenset({'in_transit', 'overtime'})
 # 可取餐 / 登记现金的配送状态
 RIDER_POST_PICKUP_STATUSES = frozenset({'picked_up', 'in_transit', 'overtime'})
 
+# 骑手手头尚未完结的配送单（派单负载统计用）
+RIDER_ACTIVE_DELIVERY_STATUSES = frozenset({'accepted', 'picked_up', 'in_transit', 'overtime'})
+
+# 外卖单已交骑手负责，服务员看板应隐藏
+WAITER_HIDE_DELIVERY_STATUSES = frozenset(RIDER_POST_PICKUP_STATUSES | {'completed', 'cancelled'})
+
 _VIOLATION_HINTS = {
     'delivery_pickup_should_be_awaiting_delivery': '取餐后应进入「待配送」，不能直接变成「配送中」。',
     'invalid_transition': '订单主状态不允许这样变更。',
@@ -35,6 +43,23 @@ def violation_hint(code: str) -> str:
         return '订单状态变更被拒绝。'
     first = code.split(',')[0].strip()
     return _VIOLATION_HINTS.get(first, '订单状态变更被拒绝。')
+
+
+def sync_delivery_overtime(delivery: DeliveryOrder) -> bool:
+    """配送中且已过预计送达 → 记 overtime（仍可点「我已送达」）。"""
+    if delivery.delivery_status != 'in_transit':
+        return False
+    if not delivery.estimated_delivery_time:
+        return False
+    now = timezone.now()
+    deadline = delivery.estimated_delivery_time
+    if timezone.is_naive(deadline):
+        deadline = timezone.make_aware(deadline, timezone.get_current_timezone())
+    if now <= deadline:
+        return False
+    delivery.delivery_status = 'overtime'
+    delivery.save(update_fields=['delivery_status', 'updated_at'])
+    return True
 
 
 def rider_has_in_transit_order(rider_id: str, *, exclude_delivery_id=None) -> bool:
@@ -118,9 +143,16 @@ def apply_rider_start_delivery(delivery: DeliveryOrder) -> tuple[bool, str]:
     if buy.order_status != 'delivering':
         return False, violation_hint('invalid_transition')
 
+    from waimai.plugins.dining.wait_time_helpers import resolve_wait_minutes
+
+    now = timezone.now()
+    minutes = resolve_wait_minutes(buy.seller_id, 'delivery', at=now)
     delivery.delivery_status = 'in_transit'
-    delivery.in_transit_at = timezone.now()
-    delivery.save(update_fields=['delivery_status', 'in_transit_at', 'updated_at'])
+    delivery.in_transit_at = now
+    delivery.estimated_delivery_time = now + timedelta(minutes=minutes)
+    delivery.save(update_fields=[
+        'delivery_status', 'in_transit_at', 'estimated_delivery_time', 'updated_at',
+    ])
     buy.save(update_fields=list(dict.fromkeys(fields)) or ['order_status', 'updated_at'])
     return True, '已开始送餐'
 

@@ -299,7 +299,7 @@ def buyer_respond_cash_shortfall(order: BuyOrder, buyer_id: str, *, accept: bool
         'cash_shortfall_status', 'cash_shortfall_buyer_responded_at',
         'cash_collected_at', 'payment_status', 'payment_time', 'updated_at',
     ])
-    return True, f'您已确认实付 ¥{order.cash_collected_amount}，配送员现在可以交餐'
+    return True, f'您已确认实际支付 ¥{order.cash_collected_amount}，配送员现在可以交餐'
 
 
 @transaction.atomic
@@ -333,9 +333,11 @@ def manager_approve_cash_exception(order: BuyOrder, manager_id: str, note: str) 
         return False, '请写明兜底决定和原因（至少五个字）'
     if order.cash_shortfall_status not in ('buyer_pending', 'buyer_rejected', 'exception'):
         return False, '当前订单没有可兜底的现金异常'
+    from ..plugins.fulfillment.delivery_workflow_helpers import RIDER_POST_PICKUP_STATUSES
+
     delivery = getattr(order, 'delivery_order', None)
-    if not delivery or delivery.delivery_status != 'picked_up':
-        return False, '配送员尚未取餐，当前不能兜底结单'
+    if not delivery or delivery.delivery_status not in RIDER_POST_PICKUP_STATUSES:
+        return False, '配送员尚未取餐或尚未开始配送，当前不能兜底结单'
 
     now = timezone.now()
     order.cash_shortfall_status = 'manager_approved'
