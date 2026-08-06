@@ -426,10 +426,11 @@ def build_waiter_board_context(
         waiter_can_mark_all_served,
     )
 
-    raw_orders = list(query_waiter_active_orders(seller_id, sort_mode=sort_mode))
+    raw_orders = list(query_waiter_active_orders(seller_id))
     dispatch_riders = list(get_shop_riders(seller_id))
     from .order_message_helpers import unread_map_for_orders
     from .wait_time_helpers import can_adjust_order_wait_time
+    from .workbench_sort_helpers import group_board_rows_by_fulfillment, sort_waiter_board_rows
 
     unread_map = unread_map_for_orders(raw_orders, side='shop')
     orders = []
@@ -461,7 +462,9 @@ def build_waiter_board_context(
             'rider_id': delivery.rider_id if delivery else '',
             'delivery_status': delivery.get_delivery_status_display() if delivery else '',
         })
-    return {'orders': orders, 'dispatch_riders': dispatch_riders}
+    orders = sort_waiter_board_rows(orders)
+    order_groups = group_board_rows_by_fulfillment(orders, fold_id_prefix='waiter')
+    return {'orders': orders, 'order_groups': order_groups, 'dispatch_riders': dispatch_riders}
 
 
 def build_kitchen_board_context(
@@ -482,12 +485,11 @@ def build_kitchen_board_context(
         recent_kitchen_activity_logs,
     )
 
-    from .workbench_sort_helpers import order_queryset_by_created
+    from .workbench_shell_helpers import build_workbench_shell
+    from .workbench_sort_helpers import group_board_rows_by_fulfillment, sort_kitchen_board_rows
 
-    raw_orders = list(order_queryset_by_created(
-        query_kitchen_board_orders(seller_id),
-        sort_mode,
-    ))
+    shell = build_workbench_shell(seller_id)
+    raw_orders = list(query_kitchen_board_orders(seller_id))
     dispatch_riders = list(get_shop_riders(seller_id))
     from .wait_time_helpers import can_adjust_order_wait_time
 
@@ -514,9 +516,15 @@ def build_kitchen_board_context(
             ),
             'rider_id': delivery.rider_id if delivery else '',
         })
+    summary_rows = build_kitchen_summary(raw_orders)
+    rows = sort_kitchen_board_rows(rows)
+    order_groups = group_board_rows_by_fulfillment(rows, fold_id_prefix='kitchen')
     return {
         'orders': rows,
-        'summary_rows': build_kitchen_summary(raw_orders),
+        'order_groups': order_groups,
+        'summary_rows': summary_rows,
+        'kitchen_summary_fold_open': bool(summary_rows),
+        'kitchen_summary_fold_title': f'📦 {shell["kitchen_summary_title"]}',
         'new_order_ts': latest_kitchen_new_order_ts(raw_orders),
         'dispatch_riders': dispatch_riders,
     }

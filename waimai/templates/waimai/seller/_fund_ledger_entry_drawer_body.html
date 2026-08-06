@@ -1,0 +1,53 @@
+{# 资金流水 · 单笔流水浮层内容 #}
+<div class="yc-detail-drawer-section">
+    <p class="card-meta" style="margin:0 0 10px;">完整流水号：<strong>{{ row.display_no_full }}</strong></p>
+    <div class="detail-row"><span>业务</span><span>{{ row.business_type }}</span></div>
+    <div class="detail-row"><span>方向 / 金额</span><span>{{ row.direction }} · {{ row.amount }}</span></div>
+    <div class="detail-row"><span>支付方式</span><span>{{ row.payment_method }}</span></div>
+    <div class="detail-row"><span>流水状态</span><span>{{ row.entry_status }}</span></div>
+    <div class="detail-row"><span>资金状态</span><span>{{ row.fund_status }}</span></div>
+    {% if row.refund_status != '—' %}
+    <div class="detail-row"><span>退款状态</span><span>{{ row.refund_status }}</span></div>
+    {% endif %}
+    <div class="detail-row"><span>发生时间</span><span>{{ row.occurred_at }}</span></div>
+    <div class="detail-row"><span>操作人</span><span>{{ row.operator }}</span></div>
+    <div class="detail-row"><span>来源</span><span>{{ row.source }}</span></div>
+    <div class="detail-row"><span>依据编号</span><span style="word-break:break-all;">{{ row.reference_key }}</span></div>
+    {% if row.note %}
+    <div class="detail-row"><span>备注</span><span>{{ row.note }}</span></div>
+    {% endif %}
+    {% if row.related_ledger_id %}
+    <p class="card-meta" style="margin:10px 0 0;">
+        关联流水：
+        <button type="button" class="btn btn-link btn-sm yc-fl-drawer-link"
+                data-yc-fl-entry="{{ row.related_ledger_id }}"
+                data-yc-fl-entry-label="{{ row.related_display_no }}">
+            {{ row.related_display_no }}
+        </button>
+        <span class="card-meta">（{{ row.related_display_no_full }}）</span>
+    </p>
+    {% endif %}
+    {% if row.order_id %}
+    <p style="margin:12px 0 0;">
+        <button type="button" class="btn btn-outline btn-sm btn-block yc-fl-drawer-link"
+                data-yc-fl-order="{{ row.order_id }}"
+                data-yc-fl-order-label="{{ row.order_no }}">
+            查看订单 {{ row.order_no }}
+        </button>
+    </p>
+    {% endif %}
+</div>
+{% if tracks %}
+<div class="yc-detail-drawer-section" style="margin-top:14px;">
+    <h3 style="font-size:15px;margin:0 0 8px;">状态追踪</h3>
+    <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.55;">
+        {% for t in tracks %}
+        <li style="margin-bottom:8px;">
+            {{ t.at }} · {{ t.field }}：{{ t.before }} → {{ t.after }}
+            {% if t.operator %}（{{ t.operator }}）{% endif %}
+            {% if t.note %}<br><span class="card-meta">{{ t.note }}</span>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}

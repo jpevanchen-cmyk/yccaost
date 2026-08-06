@@ -1608,6 +1608,77 @@ body.seller-page .content {
     color: #e65100;
 }
 
+/* 资金流水 · 表格与侧滑浮层 */
+.fund-ledger-table-wrap {
+    margin-top: 8px;
+}
+
+.fund-ledger-code-cell {
+    word-break: break-all;
+    max-width: 108px;
+}
+
+.fund-ledger-code-cell .btn-link {
+    padding: 0;
+    text-align: left;
+    white-space: normal;
+    word-break: break-all;
+}
+
+.yc-detail-drawer {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 280;
+}
+
+.yc-detail-drawer.is-open {
+    display: block;
+}
+
+.yc-detail-drawer-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.yc-detail-drawer-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(100%, 440px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    background: var(--yc-card);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+    z-index: 2;
+    padding: 0 16px calc(20px + var(--yc-safe-bottom));
+}
+
+.yc-detail-drawer-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--yc-card);
+    padding: 14px 0 10px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--yc-border);
+}
+
+.yc-detail-drawer-section {
+    padding-bottom: 4px;
+}
+
+body.yc-detail-drawer-open {
+    overflow: hidden;
+}
+
 .seller-table {
     width: 100%;
     border-collapse: collapse;
@@ -1693,6 +1764,16 @@ body.seller-page .content {
 
 .yc-notice-box.is-ok .yc-notice-text {
     color: inherit;
+}
+
+.yc-notice-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.yc-notice-retry[hidden] {
+    display: none !important;
 }
 
 /* 成功类：顶部小条，无灰罩，不挡下方点击（数秒后自动消失） */
@@ -3734,4 +3815,65 @@ body.yc-tour-active {
     overflow-y: auto;
     line-height: 1.55;
     field-sizing: content;
+}
+
+/* Panel 静默请求：0 秒锁屏、5 秒转圈、20 秒超时（进度 80 · §5.12.8.1） */
+.yc-panel-loading {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    pointer-events: auto;
+}
+.yc-panel-loading[hidden] {
+    display: none !important;
+}
+/* 0～5 秒：透明遮罩，挡住点击滑动 */
+.yc-panel-loading.is-blocking {
+    background: transparent;
+}
+/* ≥5 秒：显示转圈 */
+.yc-panel-loading.is-blocking.is-visible {
+    background: rgba(0, 0, 0, 0.28);
+}
+.yc-panel-loading.is-blocking .yc-panel-loading-box {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+.yc-panel-loading.is-blocking.is-visible .yc-panel-loading-box {
+    opacity: 1;
+    visibility: visible;
+}
+/* Panel 等待锁屏：不用 overflow:hidden（滚动条保持可见）；滚动由 JS + 透明遮罩拦截 */
+body.yc-panel-wait-locked {
+    touch-action: none;
+}
+.yc-panel-loading-box {
+    background: #fff;
+    padding: 20px 28px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+    max-width: 88vw;
+}
+.yc-panel-loading-spinner {
+    width: 36px;
+    height: 36px;
+    margin: 0 auto 10px;
+    border: 3px solid #e8e8e8;
+    border-top-color: #2e7d32;
+    border-radius: 50%;
+    animation: yc-panel-spin 0.85s linear infinite;
+}
+.yc-panel-loading-text {
+    margin: 0;
+    font-size: 15px;
+    color: #333;
+}
+@keyframes yc-panel-spin {
+    to { transform: rotate(360deg); }
 }

@@ -1,4 +1,4 @@
-# 商品多图：文件夹、压缩、上传（A.11.11 · 批次 G · G1-2～G1-5 · 试跑补丁 H：逐张上传 + 事后压缩）
+# 商品多图：文件夹、压缩、上传（A.11.11 · 批次 G · G1-2～G1-4 · 试跑补丁 H：逐张上传 + 事后压缩）
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from pathlib import Path
 from uuid import UUID
 
 from django.conf import settings
-from django.core.files.base import ContentFile
 from django.db import transaction
 
 from .product_display_code_helpers import normalize_display_code
@@ -483,140 +482,3 @@ def sync_dish_images_from_folder(dish) -> tuple[str | None, int]:
         mounted += 1
 
     return None, mounted
-
-
-# ---------- G1-5：旧 image_url 外链迁移落盘并清空字段 ----------
-
-LEGACY_MIGRATION_UA = 'YecaoST/1.0 (dish-image-migration)'
-
-
-def _legacy_image_url_value(dish) -> str:
-    """读取商品上尚未清空的旧外链（空则返回空串）。"""
-    raw = getattr(dish, 'image_url', None)
-    if raw is None:
-        return ''
-    return str(raw).strip()
-
-
-def _clear_dish_image_url(dish, *, dry_run: bool = False) -> None:
-    """迁移后一律清空旧外链字段。"""
-    if dry_run:
-        return
-    dish.image_url = ''
-    dish.save(update_fields=['image_url'])
-
-
-def _download_legacy_image_bytes(url: str) -> bytes | None:
-    """从旧外链下载原图字节；失败或过大则返回 None。"""
-    import urllib.request
-
-    req = urllib.request.Request(
-        url,
-        headers={'User-Agent': LEGACY_MIGRATION_UA},
-        method='GET',
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = resp.read(MAX_DISH_IMAGE_UPLOAD_BYTES + 1)
-            if len(data) > MAX_DISH_IMAGE_UPLOAD_BYTES or not data:
-                return None
-            return data
-    except Exception:
-        return None
-
-
-def _legacy_bytes_to_jpeg(raw_bytes: bytes) -> bytes | None:
-    """把下载到的任意图片字节压成 JPEG；无法识别则 None。"""
-    from django.core.files.uploadedfile import SimpleUploadedFile
-
-    try:
-        uploaded = SimpleUploadedFile(
-            'legacy.bin',
-            raw_bytes,
-            content_type='application/octet-stream',
-        )
-        return compress_image_to_jpeg_bytes(uploaded)
-    except Exception:
-        return None
-
-
-@transaction.atomic
-def migrate_legacy_dish_image_url(dish, *, dry_run: bool = False) -> str:
-    """
-    单商品旧外链迁移：有效则落本地第 1 张（或补空位），无论成败都清空 image_url。
-    返回：downloaded / dead / cleared_only / full / skipped
-    """
-    url = _legacy_image_url_value(dish)
-    if not url:
-        return 'skipped'
-
-    if count_dish_images(dish) > 0:
-        _clear_dish_image_url(dish, dry_run=dry_run)
-        return 'cleared_only'
-
-    slots = _next_sort_indices(dish, 1)
-    if isinstance(slots, str):
-        _clear_dish_image_url(dish, dry_run=dry_run)
-        return 'full'
-
-    sort_index = slots[0]
-    raw = _download_legacy_image_bytes(url)
-    if not raw:
-        _clear_dish_image_url(dish, dry_run=dry_run)
-        return 'dead'
-
-    jpeg_bytes = _legacy_bytes_to_jpeg(raw)
-    if not jpeg_bytes:
-        _clear_dish_image_url(dish, dry_run=dry_run)
-        return 'dead'
-
-    if dry_run:
-        return 'downloaded'
-
-    code = normalize_display_code(dish.display_code)
-    if not code:
-        from .product_display_code_helpers import assign_display_code_to_dish
-
-        assign_display_code_to_dish(dish)
-        dish.save(update_fields=['display_code'])
-        code = normalize_display_code(dish.display_code)
-        if not code:
-            _clear_dish_image_url(dish)
-            return 'dead'
-
-    from .models import DishImage
-
-    record = DishImage(
-        dish=dish,
-        seller_id=dish.seller_id,
-        display_code=code,
-        sort_index=sort_index,
-    )
-    filename = f'{code}-{sort_index}.jpg'
-    record.image.save(filename, ContentFile(jpeg_bytes), save=True)
-    _clear_dish_image_url(dish)
-    return 'downloaded'
-
-
-def migrate_all_legacy_dish_image_urls(queryset=None, *, dry_run: bool = False) -> dict[str, int]:
-    """批量迁移旧外链；返回各结果计数。"""
-    from django.db.models import Q
-
-    from .models import Dish
-
-    stats: dict[str, int] = {
-        'downloaded': 0,
-        'dead': 0,
-        'cleared_only': 0,
-        'full': 0,
-        'skipped': 0,
-    }
-    qs = queryset if queryset is not None else Dish.objects.all()
-    qs = qs.filter(Q(image_url__isnull=False) & ~Q(image_url=''))
-    for dish in qs.iterator():
-        if not _legacy_image_url_value(dish):
-            stats['skipped'] += 1
-            continue
-        result = migrate_legacy_dish_image_url(dish, dry_run=dry_run)
-        stats[result] = stats.get(result, 0) + 1
-    return stats

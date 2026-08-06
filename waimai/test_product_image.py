@@ -2,7 +2,6 @@
 
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import patch
 
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -14,7 +13,6 @@ from waimai.product_image_helpers import (
     apply_dish_image_uploads,
     delete_all_images_for_dish,
     delete_dish_image,
-    migrate_legacy_dish_image_url,
     move_dish_image,
     sync_dish_images_from_folder,
 )
@@ -164,83 +162,3 @@ class ProductImageUploadTests(TestCase):
         seg = html[idx:idx + 1500]
         self.assertIn('csrfmiddlewaretoken', seg)
         self.assertIn('sync_dish_images', html[idx:])
-
-
-def _make_png_bytes(size=(800, 600)):
-    from PIL import Image
-
-    buf = BytesIO()
-    Image.new('RGB', size, color=(200, 100, 50)).save(buf, format='PNG')
-    return buf.getvalue()
-
-
-@override_settings(MEDIA_ROOT=Path(settings.BASE_DIR) / 'test_media_g15')
-class ProductImageLegacyUrlMigrationTests(TestCase):
-    def setUp(self):
-        self.media_root = Path(settings.MEDIA_ROOT)
-        self.media_root.mkdir(parents=True, exist_ok=True)
-        self.seller = User.objects.create_user(
-            username='legacy_img_seller',
-            password='test-pass',
-            role='seller',
-        )
-        self.dish = Dish.objects.create(
-            seller_id=self.seller.username,
-            name='旧外链商品',
-            price='9.00',
-            image_url='https://example.com/old.png',
-        )
-
-    def tearDown(self):
-        if self.dish.pk:
-            delete_all_images_for_dish(self.dish)
-        if self.media_root.exists():
-            for p in sorted(self.media_root.rglob('*'), reverse=True):
-                if p.is_file():
-                    p.unlink(missing_ok=True)
-                elif p.is_dir():
-                    p.rmdir()
-            self.media_root.rmdir()
-
-    @patch('waimai.product_image_helpers._download_legacy_image_bytes')
-    def test_migrate_downloads_url_and_clears_field(self, mock_download):
-        mock_download.return_value = _make_png_bytes()
-        result = migrate_legacy_dish_image_url(self.dish)
-        self.assertEqual(result, 'downloaded')
-        self.dish.refresh_from_db()
-        self.assertEqual(self.dish.image_url, '')
-        self.assertEqual(self.dish.product_images.count(), 1)
-        record = self.dish.product_images.get()
-        self.assertEqual(record.sort_index, 1)
-        self.assertTrue(Path(settings.MEDIA_ROOT / record.image.name).is_file())
-
-    @patch('waimai.product_image_helpers._download_legacy_image_bytes')
-    def test_migrate_dead_url_clears_field_only(self, mock_download):
-        mock_download.return_value = None
-        result = migrate_legacy_dish_image_url(self.dish)
-        self.assertEqual(result, 'dead')
-        self.dish.refresh_from_db()
-        self.assertEqual(self.dish.image_url, '')
-        self.assertEqual(self.dish.product_images.count(), 0)
-
-    @patch('waimai.product_image_helpers._download_legacy_image_bytes')
-    def test_migrate_skips_download_when_local_images_exist(self, mock_download):
-        apply_dish_image_uploads(self.dish, [_make_png_upload()])
-        Dish.objects.filter(pk=self.dish.pk).update(image_url='https://example.com/old.png')
-        self.dish.refresh_from_db()
-        result = migrate_legacy_dish_image_url(self.dish)
-        self.assertEqual(result, 'cleared_only')
-        mock_download.assert_not_called()
-        self.dish.refresh_from_db()
-        self.assertEqual(self.dish.image_url, '')
-        self.assertEqual(self.dish.product_images.count(), 1)
-
-    @patch('waimai.product_image_helpers._download_legacy_image_bytes')
-    def test_migrate_dry_run_does_not_change_database(self, mock_download):
-        mock_download.return_value = _make_png_bytes()
-        result = migrate_legacy_dish_image_url(self.dish, dry_run=True)
-        self.assertEqual(result, 'downloaded')
-        self.dish.refresh_from_db()
-        self.assertEqual(self.dish.image_url, 'https://example.com/old.png')
-        self.assertEqual(self.dish.product_images.count(), 0)
-        mock_download.assert_called_once()

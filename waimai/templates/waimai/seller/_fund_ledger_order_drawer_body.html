@@ -1,0 +1,35 @@
+{# 资金流水 · 订单摘要浮层 #}
+<div class="yc-detail-drawer-section">
+    <p class="card-meta" style="margin:0 0 8px;">完整订单号：<strong>{{ order_no_full }}</strong></p>
+    <div class="detail-row"><span>履约</span><span>{{ order.get_fulfillment_display_short }}</span></div>
+    <div class="detail-row"><span>订单状态</span><span>{{ order.get_order_status_display }}</span></div>
+    <div class="detail-row"><span>支付</span><span>{{ order.get_payment_status_display }} · {{ order.get_payment_method_display|default:"—" }}</span></div>
+    <div class="detail-row"><span>合计</span><span style="color:var(--yc-orange);">¥{{ order.total_amount }}</span></div>
+    {% if order.buyer_note %}
+    <div class="detail-row"><span>备注</span><span>{{ order.buyer_note }}</span></div>
+    {% endif %}
+</div>
+
+{% if fund_ledger_rows %}
+<div class="yc-detail-drawer-section" style="margin-top:14px;">
+    <h3 style="font-size:15px;margin:0 0 8px;">本单资金明细</h3>
+    {% for block in fund_ledger_rows %}
+    <div style="border:1px solid var(--yc-border);border-radius:8px;padding:10px;margin-bottom:8px;">
+        <div style="font-weight:600;margin-bottom:4px;">
+            <button type="button" class="btn btn-link btn-sm yc-fl-drawer-link" style="padding:0;"
+                    data-yc-fl-entry="{{ block.entry.ledger_id }}"
+                    data-yc-fl-entry-label="{{ block.entry.display_no }}">
+                {{ block.entry.display_no }}
+            </button>
+            · {{ block.entry.business_type }}
+        </div>
+        <div class="card-meta">{{ block.entry.amount }} · {{ block.entry.fund_status }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<p class="card-meta" style="margin-top:12px;">
+    需要改单、沟通或取消？请
+    <a href="{% url 'order_detail' order.order_id %}" target="_blank" rel="noopener">在新标签页打开完整订单</a>。
+</p>

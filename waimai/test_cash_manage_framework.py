@@ -61,7 +61,7 @@ class CashManageFrameworkTests(TestCase):
         url = reverse('seller_panel_section', kwargs={'section': 'cash_manage'})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '现金管理')
+        self.assertContains(response, '外卖现金管理')
 
     def test_workbench_shows_cash_manage_tab_for_manager(self):
         self.client.force_login(self.manager)
@@ -76,7 +76,7 @@ class CashManageFrameworkTests(TestCase):
         url = reverse('shop_work', kwargs={'shop_code': 'cmshop'}) + '?view=cash_manage'
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '现金管理')
+        self.assertContains(response, '外卖现金管理')
 
     def test_workbench_hides_cash_manage_tab_for_waiter_without_perm(self):
         self.client.force_login(self.waiter)
@@ -103,7 +103,7 @@ class CashManageFrameworkTests(TestCase):
         self.assertNotIn('cash_exception_orders', ctx)
 
     def test_daily_table_two_decimals_and_totals(self):
-        """按日表格金额两位小数，合计行第 2～5 列有数。"""
+        """按日表格金额两位小数，合计行有数。"""
         now = timezone.now()
         day = to_beijing(now).date().isoformat()
         BuyOrder.objects.create(
@@ -125,10 +125,58 @@ class CashManageFrameworkTests(TestCase):
         self.assertEqual(len(table['rows']), 1)
         row = table['rows'][0]
         self.assertEqual(row['date'], day)
-        self.assertEqual(row['pending_amount'], Decimal('91.20'))
-        self.assertEqual(row['daily_total'], Decimal('91.20'))
-        self.assertEqual(table['totals']['pending_count'], 1)
-        self.assertEqual(table['totals']['pending_amount'], Decimal('91.20'))
+        self.assertEqual(row['order_count'], 1)
+        self.assertEqual(row['expected_amount'], Decimal('91.20'))
+        self.assertEqual(row['unremitted_amount'], Decimal('91.20'))
+        self.assertEqual(row['shortfall_amount'], Decimal('0.00'))
+        self.assertEqual(table['totals']['order_count'], 1)
+        self.assertEqual(table['totals']['unremitted_amount'], Decimal('91.20'))
+
+    def test_daily_table_shortfall_column(self):
+        """异常减收列汇总少付差额。"""
+        now = timezone.now()
+        BuyOrder.objects.create(
+            buyer_id='buyer_short',
+            seller_id=self.seller.username,
+            total_amount=Decimal('100.00'),
+            subtotal_amount=Decimal('100.00'),
+            delivery_fee=Decimal('0'),
+            dish_items=[],
+            payment_status='paid',
+            order_status='completed',
+            fulfillment_type='delivery',
+            payment_method='cash',
+            cash_collected_at=now,
+            cash_collected_by='rider1',
+            cash_collected_amount=Decimal('90.00'),
+            cash_shortfall_status='manager_approved',
+        )
+        row = build_cash_manage_daily_table(self.seller.username)['rows'][0]
+        self.assertEqual(row['expected_amount'], Decimal('100.00'))
+        self.assertEqual(row['unremitted_amount'], Decimal('90.00'))
+        self.assertEqual(row['shortfall_amount'], Decimal('10.00'))
+        self.assertIn('异常减收', row['note'])
+
+    def test_daily_table_auto_note_unremitted(self):
+        """未入金时在备注中提示。"""
+        now = timezone.now()
+        BuyOrder.objects.create(
+            buyer_id='buyer_pending',
+            seller_id=self.seller.username,
+            total_amount=Decimal('50.00'),
+            subtotal_amount=Decimal('50.00'),
+            delivery_fee=Decimal('0'),
+            dish_items=[],
+            payment_status='paid',
+            order_status='completed',
+            fulfillment_type='delivery',
+            payment_method='cash',
+            cash_collected_at=now,
+            cash_collected_by='rider1',
+            cash_collected_amount=Decimal('50.00'),
+        )
+        row = build_cash_manage_daily_table(self.seller.username)['rows'][0]
+        self.assertIn('尚有未入金', row['note'])
 
     def test_seller_and_workbench_show_daily_table(self):
         now = timezone.now()
@@ -150,8 +198,8 @@ class CashManageFrameworkTests(TestCase):
         self.client.force_login(self.seller)
         seller_url = reverse('seller_panel_section', kwargs={'section': 'cash_manage'})
         response = self.client.get(seller_url)
-        self.assertContains(response, '待入金单数')
-        self.assertContains(response, '现金日汇总')
+        self.assertContains(response, '现金单数')
+        self.assertContains(response, '外卖现金日汇总')
         self.assertContains(response, 'seller-panel-fold')
         self.assertContains(response, '¥10.00')
         self.assertNotContains(response, '0000000000000')
@@ -167,7 +215,7 @@ class CashManageFrameworkTests(TestCase):
         session.save()
         work_url = reverse('shop_work', kwargs={'shop_code': 'cmshop'}) + '?view=cash_manage'
         work_resp = self.client.get(work_url)
-        self.assertContains(work_resp, '待入金单数')
+        self.assertContains(work_resp, '现金单数')
         self.assertContains(work_resp, '合计')
         self.assertContains(work_resp, '¥10.00')
 
@@ -208,7 +256,7 @@ class CashManageFrameworkTests(TestCase):
         )
         table = build_cash_manage_daily_table(self.seller.username, year_month='2026-01')
         self.assertEqual(len(table['rows']), 1)
-        self.assertEqual(table['rows'][0]['daily_total'], Decimal('20.00'))
+        self.assertEqual(table['rows'][0]['expected_amount'], Decimal('20.00'))
         self.assertEqual(resolve_cash_month('2026-2'), '2026-02')
 
     def test_workbench_history_fold_and_pagination(self):

@@ -15,7 +15,8 @@ _CORE_SELLER_NAV: list[SellerNavItem] = [
     # 营业状态属店铺经营基础（A.15.10）；堂食由饮食插件提供（order=40）
     SellerNavItem('operating', '营业状态', '🕐', '营业', order=35),
     SellerNavItem('workbench', '员工工作台', '👥', '工作台', order=50),
-    SellerNavItem('cash_manage', '现金管理', '💵', '现金', order=65),
+    SellerNavItem('cash_manage', '外卖现金管理', '💵', '外卖现金', order=65),
+    SellerNavItem('fund_ledger', '资金流水', '📒', '流水', order=66),
     # 配送费规则已迁履约插件贡献
     SellerNavItem('payment', '支付设置', '💳', '支付', order=70),
     SellerNavItem('audit', '操作留痕', '📝', '留痕', order=80),

@@ -65,6 +65,14 @@ def confirm_order_paid(order: BuyOrder, payment_method: str, paid_at=None):
             from ..order_alert_helpers import maybe_notify_merchant_new_order
 
             maybe_notify_merchant_new_order(order)
+            from ..fund_ledger_hooks import record_order_payment_received
+
+            record_order_payment_received(
+                order,
+                payment_method,
+                source='payments.service.confirm_order_paid',
+                operator='system',
+            )
         return
     confirm_dining_order_paid(order, payment_method, paid_at=paid_at)
 
@@ -122,6 +130,8 @@ def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentIni
         )
 
     if method == 'cash':
+        from ..order_qr_helpers import order_cash_code_url
+
         cap_fail = _ensure_catalog_sales_for_cash(order)
         if cap_fail:
             return cap_fail
@@ -141,7 +151,7 @@ def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentIni
             maybe_notify_merchant_new_order(order)
             return PaymentInitResult(
                 ok=True,
-                redirect_url=f'/order/{order.order_id}/?cash_pending=1&order=1',
+                redirect_url=order_cash_code_url(order.order_id),
             )
         # 到店付（堂食/打包）与外卖货到付款：均立即进入待备货，先备货再收款。
         # 外卖货到付款改正：先备货、派单，送达时由骑手收款（不再「确认收款后才备货派单」）。
@@ -155,17 +165,20 @@ def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentIni
         assign_default_wait_time(order, save=False)
         update_fields.extend(['order_status', 'estimated_ready_at'])
         order.save(update_fields=update_fields)
+        from ..fund_ledger_hooks import record_payment_method_selected
+
+        record_payment_method_selected(
+            order,
+            'cash',
+            source='payments.service.initiate_payment.cash_dining',
+            operator=getattr(order, 'buyer_id', '') or 'buyer',
+        )
         from ..order_alert_helpers import maybe_notify_merchant_new_order
 
         maybe_notify_merchant_new_order(order)
-        suffix = 'cod=1'
-        if order.is_dine_in():
-            suffix = 'dine_in=1'
-        elif order.is_takeaway():
-            suffix = 'takeaway=1'
         return PaymentInitResult(
             ok=True,
-            redirect_url=f'/order/{order.order_id}/?cash_pending=1&{suffix}',
+            redirect_url=order_cash_code_url(order.order_id),
         )
 
     if method == 'wechat':
@@ -191,6 +204,16 @@ def confirm_cash_payment(order: BuyOrder) -> tuple[bool, str]:
             return False, '当前订单状态不能确认收款'
         # 仅到账，不再改履约状态（店内单已在备货流中）
         mark_payment_received(order, 'cash')
+        from ..fund_ledger_hooks import record_order_payment_received
+        from ..models import FundLedgerEntry
+
+        record_order_payment_received(
+            order,
+            'cash',
+            source='payments.service.confirm_cash_payment.in_store',
+            operator='seller',
+            fund_status=FundLedgerEntry.FUND_STATUS_CUSTOMER_PAID,
+        )
         from ..waiter_helpers import sync_waiter_service_status
 
         fields = sync_waiter_service_status(order)
@@ -270,6 +293,9 @@ def rider_collect_cash(
         'payment_status', 'payment_time', 'cash_shortfall_status',
         'cash_shortfall_reason', 'cash_shortfall_buyer_responded_at', 'updated_at',
     ])
+    from ..fund_ledger_hooks import record_rider_cash_collected
+
+    record_rider_cash_collected(order, rider_id, source='payments.service.rider_collect_cash')
     return True, f'已确认收款 ¥{amt}'
 
 
@@ -299,6 +325,9 @@ def buyer_respond_cash_shortfall(order: BuyOrder, buyer_id: str, *, accept: bool
         'cash_shortfall_status', 'cash_shortfall_buyer_responded_at',
         'cash_collected_at', 'payment_status', 'payment_time', 'updated_at',
     ])
+    from ..fund_ledger_hooks import record_rider_cash_collected
+
+    record_rider_cash_collected(order, order.cash_collected_by or buyer_id, source='payments.service.buyer_respond_cash_shortfall')
     return True, f'您已确认实际支付 ¥{order.cash_collected_amount}，配送员现在可以交餐'
 
 
@@ -365,6 +394,14 @@ def manager_approve_cash_exception(order: BuyOrder, manager_id: str, note: str) 
     delivery.delivery_status = 'completed'
     delivery.completed_at = now
     delivery.save(update_fields=['delivery_status', 'completed_at', 'updated_at'])
+    from ..fund_ledger_hooks import record_cash_exception_settled
+
+    record_cash_exception_settled(
+        order,
+        manager_id,
+        source='payments.service.manager_approve_cash_exception',
+        note=note,
+    )
     return True, '管理人员已按少收金额兜底结单，处理决定已留痕'
 
 
@@ -381,6 +418,13 @@ def confirm_cash_remittance(orders, confirmer_id: str) -> tuple[int, str]:
         order.cash_remitted_at = now
         order.cash_remitted_by = confirmer_id or ''
         order.save(update_fields=['cash_remitted_at', 'cash_remitted_by', 'updated_at'])
+        from ..fund_ledger_hooks import record_cash_remittance_confirmed
+
+        record_cash_remittance_confirmed(
+            order,
+            confirmer_id,
+            source='payments.service.confirm_cash_remittance',
+        )
         count += 1
     if count == 0:
         return 0, '没有需要确认入金的现金单'

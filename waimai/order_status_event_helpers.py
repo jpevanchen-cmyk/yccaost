@@ -124,22 +124,10 @@ def try_complete_order(
 
     from django.utils import timezone
 
-    from .order_timeline_helpers import (
-        TL_ORDER_COMPLETED,
-        record_timeline_event,
-    )
-
     if getattr(order, 'pk', None):
         if not getattr(order, 'completed_at', None):
             order.completed_at = timezone.now()
             extra.append('completed_at')
-        record_timeline_event(
-            order,
-            TL_ORDER_COMPLETED,
-            '订单已完成',
-            occurred_at=order.completed_at,
-            once=True,
-        )
 
     if order.is_dine_in():
         from .plugins.dining.guest_order_helpers import maybe_close_table_session_after_settle
@@ -194,6 +182,9 @@ def apply_prep_progress_event(order: BuyOrder, *, source: str) -> list[str]:
             order, 'preparing', source=f'{source}.rollback',
         )
         update_fields.extend(extra)
+        if 'order_status' in extra and order.ready_at is not None:
+            order.ready_at = None
+            update_fields.append('ready_at')
 
     if update_fields:
         update_fields.append('updated_at')
@@ -240,6 +231,11 @@ def handle_order_status_event(
         update_fields.extend(apply_prep_progress_event(order, source=source))
 
     elif event == EVENT_GOODS_FULLY_DELIVERED:
+        from django.utils import timezone
+
+        if _all_goods_served(order) and not getattr(order, 'goods_delivered_at', None):
+            order.goods_delivered_at = timezone.now()
+            update_fields.append('goods_delivered_at')
         update_fields.extend(
             apply_goods_delivered_side_effects(order, source=source),
         )
@@ -289,89 +285,6 @@ def handle_order_status_event(
     else:
         logger.warning('未知订单主状态事件 %s source=%s', event, source)
 
-    _sync_timeline_for_event(order, event)
-
     if update_fields:
         update_fields.append('updated_at')
     return list(dict.fromkeys(update_fields))
-
-
-def _sync_timeline_for_event(order: BuyOrder, event: str) -> None:
-    """事件处理后写入历程表与关键时间戳。"""
-    if not getattr(order, 'pk', None):
-        return
-    from django.utils import timezone
-
-    from .order_timeline_helpers import (
-        TL_DELIVERY_COMPLETED,
-        TL_DELIVERY_PICKED_UP,
-        TL_DELIVERY_STARTED,
-        TL_GOODS_DELIVERED,
-        TL_ORDER_COMPLETED,
-        TL_PAYMENT_RECEIVED,
-        TL_PREP_STARTED,
-        TL_READY,
-        record_timeline_event,
-    )
-
-    now = timezone.now()
-
-    if event == EVENT_PAYMENT_RECEIVED and order.payment_status == 'paid':
-        record_timeline_event(
-            order, TL_PAYMENT_RECEIVED, '已支付',
-            occurred_at=getattr(order, 'payment_time', None) or now,
-        )
-
-    if event == EVENT_PREP_PROGRESS:
-        preparing_at = getattr(order, 'preparing_at', None)
-        if preparing_at:
-            record_timeline_event(
-                order, TL_PREP_STARTED, '开始备货', occurred_at=preparing_at,
-            )
-        ready_at = getattr(order, 'ready_at', None)
-        if ready_at:
-            if order.is_basic_order():
-                lbl = '已备货'
-            elif order.is_dine_in():
-                lbl = '已出餐'
-            elif order.is_takeaway():
-                lbl = '已备好待取'
-            else:
-                lbl = '出餐可配送'
-            record_timeline_event(order, TL_READY, lbl, occurred_at=ready_at)
-
-    if event == EVENT_GOODS_FULLY_DELIVERED and _all_goods_served(order):
-        if not getattr(order, 'goods_delivered_at', None):
-            order.goods_delivered_at = now
-            order.save(update_fields=['goods_delivered_at', 'updated_at'])
-        record_timeline_event(
-            order, TL_GOODS_DELIVERED, '商品已全部交付',
-            occurred_at=getattr(order, 'goods_delivered_at', None) or now,
-            once=True,
-        )
-
-    delivery = getattr(order, 'delivery_order', None)
-    if event == EVENT_DELIVERY_PICKED_UP and delivery and delivery.picked_up_at:
-        record_timeline_event(
-            order, TL_DELIVERY_PICKED_UP, '骑手已取餐',
-            occurred_at=delivery.picked_up_at,
-        )
-    if event == EVENT_DELIVERY_STARTED and delivery:
-        if not delivery.in_transit_at:
-            delivery.in_transit_at = now
-            delivery.save(update_fields=['in_transit_at', 'updated_at'])
-        record_timeline_event(
-            order, TL_DELIVERY_STARTED, '开始送餐',
-            occurred_at=delivery.in_transit_at,
-        )
-    if event == EVENT_DELIVERY_COMPLETED and delivery and delivery.completed_at:
-        record_timeline_event(
-            order, TL_DELIVERY_COMPLETED, '已送达',
-            occurred_at=delivery.completed_at,
-        )
-        if order.completed_at:
-            record_timeline_event(
-                order, TL_ORDER_COMPLETED, '订单已完成',
-                occurred_at=getattr(order, 'completed_at', None) or now,
-                once=True,
-            )

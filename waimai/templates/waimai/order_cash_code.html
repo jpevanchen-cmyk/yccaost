@@ -1,0 +1,48 @@
+{% extends 'waimai/base.html' %}
+{% block title %}订单码 · 现金支付 - 野草系统{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url=page_back_url back_label=page_back_label %}
+{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:420px;margin:0 auto;">
+    <h2 class="page-title" style="font-size:20px;margin-bottom:8px;">🧾 订单码 · 现金支付</h2>
+    <p class="card-meta" style="margin:0 0 12px;">
+        订单号 <strong>{{ order.get_display_order_no }}</strong>
+        · {{ order_shell.fulfillment_label }}
+        · 合计 <strong style="color:var(--yc-orange);">¥{{ order.total_amount }}</strong>
+    </p>
+
+    <div class="msg-ok" style="margin-bottom:14px;text-align:left;">
+        您可以出示订单码进行取餐与支付。
+    </div>
+    <p class="card-meta" style="margin-bottom:16px;text-align:left;">
+        如果需要沟通，请打开订单详情，在订单沟通中进行留言。
+    </p>
+
+    {% if qr_bundle %}
+    <div class="order-qr-print-card" style="text-align:center;padding:16px 12px;border:1px solid #eee;border-radius:10px;margin-bottom:16px;">
+        <p style="margin:0 0 4px;font-size:15px;"><strong>{{ qr_bundle.display_no }}</strong></p>
+        <p class="pay-amount" style="margin:8px 0;">¥{{ qr_bundle.amount }}</p>
+        <img src="{{ qr_bundle.qr_data_url }}" alt="订单二维码" width="200" height="200" style="margin:12px auto;display:block;">
+        {% if qr_bundle.barcode_data_url %}
+        <p class="card-meta" style="margin:8px 0 4px;">扫码枪 · 条形码</p>
+        <img src="{{ qr_bundle.barcode_data_url }}" alt="订单条形码" style="max-width:100%;height:auto;margin:0 auto;display:block;">
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="card-meta" style="margin-bottom:16px;padding:12px;background:#fafafa;border-radius:8px;">
+        暂无法显示二维码时，请记牢上方订单号，或打开完整订单查看付款说明。
+    </p>
+    {% endif %}
+
+    <div style="display:flex;flex-direction:column;gap:10px;">
+        <a class="btn btn-green btn-block" href="{{ shop_url }}">继续点菜</a>
+        <a class="btn btn-outline btn-block" href="{{ order_detail_url }}">查看完整订单</a>
+        {% if qr_bundle %}
+        <a class="btn btn-outline btn-block" href="{{ cash_code_print_url }}" target="_blank" rel="noopener">打印订单码</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

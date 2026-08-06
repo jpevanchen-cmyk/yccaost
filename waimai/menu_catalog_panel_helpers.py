@@ -53,3 +53,39 @@ def render_menu_catalog_panel_html(
     """渲染菜单清单 Panel HTML 片段"""
     ctx = build_menu_catalog_panel_context(request, seller_id, profile_pick=profile_pick)
     return render_to_string('waimai/seller/_menu_catalog_panel.html', ctx, request=request)
+
+
+# 与 _menu_catalog_panel.html 中带 data-yc-panel 的表单一致（幂等第 4 步）
+MENU_CATALOG_PANEL_IDEMPOTENT_KEYS = (
+    'toggle_menu_item_listed',
+    'toggle_menu_item_general',
+    'toggle_menu_item_member',
+    'toggle_menu_item_special',
+    'save_menu_item_cap',
+    'activate_menu_profile',
+    'delete_menu_profile',
+)
+
+
+def detect_menu_catalog_panel_action(request) -> str | None:
+    """识别卖家清单 Panel 写操作类型；非 Panel 幂等范围返回 None。"""
+    for key in MENU_CATALOG_PANEL_IDEMPOTENT_KEYS:
+        if key in request.POST:
+            return key
+    return None
+
+
+def run_menu_catalog_idempotent(request, seller_id: str, action: str, execute):
+    """
+    卖家清单 Panel 写操作幂等（进度 80 · 幂等第 4 步）。
+    同一 scope+键只改一次数据库，重复请求返回首次 Panel JSON。
+    """
+    from .idempotency_helpers import idempotency_scope, run_idempotent
+
+    actor = (
+        str(request.user.pk)
+        if getattr(request.user, 'is_authenticated', False)
+        else (request.session.session_key or 'anon')[:32]
+    )
+    scope = idempotency_scope('menu_catalog', action, seller_id, actor)
+    return run_idempotent(request, scope, execute)

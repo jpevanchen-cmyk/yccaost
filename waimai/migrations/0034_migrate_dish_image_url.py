@@ -4,10 +4,8 @@ from django.db import migrations, models
 
 
 def migrate_legacy_dish_image_urls_forward(apps, schema_editor):
-    """部署 migrate 时自动把仍有价值的外链下载到本地并清空字段。"""
-    from waimai.product_image_helpers import migrate_all_legacy_dish_image_urls
-
-    migrate_all_legacy_dish_image_urls()
+    """历史占位：项目已无旧外链数据；0048 会删除该字段。"""
+    pass
 
 
 def normalize_null_image_urls(apps, schema_editor):

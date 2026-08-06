@@ -1,0 +1,31 @@
+{% if fund_ledger_rows %}
+<details class="seller-panel-fold" data-yc-tour="order-fund-ledger">
+    <summary>资金明细（总流水）</summary>
+    <div class="seller-panel-fold-body">
+        <p class="card-meta">与订单上「支付结论」互补；查双收/双退以流水为准。</p>
+        {% for block in fund_ledger_rows %}
+        <div style="border:1px solid #e8e8e8;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+            <div style="font-weight:600;margin-bottom:6px;">{{ block.entry.display_no }} · {{ block.entry.business_type }}</div>
+            <div class="detail-row"><span>金额</span><span>{{ block.entry.amount }}（{{ block.entry.direction }}）</span></div>
+            <div class="detail-row"><span>支付方式</span><span>{{ block.entry.payment_method }}</span></div>
+            <div class="detail-row"><span>流水状态</span><span>{{ block.entry.entry_status }}</span></div>
+            <div class="detail-row"><span>资金状态</span><span>{{ block.entry.fund_status }}</span></div>
+            {% if block.entry.note %}
+            <div class="detail-row"><span>备注</span><span>{{ block.entry.note }}</span></div>
+            {% endif %}
+            {% if block.tracks %}
+            <details style="margin-top:8px;">
+                <summary class="card-meta">状态追踪（{{ block.tracks|length }} 条）</summary>
+                <ul style="margin:8px 0 0;padding-left:18px;font-size:14px;">
+                    {% for t in block.tracks %}
+                    <li>{{ t.at }} · {{ t.field }}：{{ t.before }} → {{ t.after }}（{{ t.operator }}）</li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <p class="card-meta"><a href="{% url 'seller_panel_section' 'fund_ledger' %}">打开全店资金流水</a></p>
+    </div>
+</details>
+{% endif %}

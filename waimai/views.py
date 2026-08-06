@@ -411,9 +411,42 @@ def shop_work(request, shop_code):
             elif not is_status_action and not perms.get(current_view):
                 messages.error(request, '您没有权限执行此操作')
                 return redirect(build_shop_work_path(code, view=current_view))
-            response = handle_shop_work_post(
-                request, seller_id, code, current_view, perms, work_user=work_user,
+            from .workbench_panel_helpers import (
+                detect_workbench_panel_action,
+                run_workbench_idempotent,
             )
+            from .cash_manage_panel_helpers import (
+                detect_cash_manage_panel_action,
+                run_cash_manage_idempotent,
+            )
+
+            cash_action = detect_cash_manage_panel_action(request)
+            if cash_action:
+                response = run_cash_manage_idempotent(
+                    request,
+                    seller_id,
+                    work_user,
+                    cash_action,
+                    lambda: handle_shop_work_post(
+                        request, seller_id, code, current_view, perms, work_user=work_user,
+                    ),
+                )
+            else:
+                wb_action = detect_workbench_panel_action(request)
+                if wb_action:
+                    response = run_workbench_idempotent(
+                        request,
+                        seller_id,
+                        work_user,
+                        wb_action,
+                        lambda: handle_shop_work_post(
+                            request, seller_id, code, current_view, perms, work_user=work_user,
+                        ),
+                    )
+                else:
+                    response = handle_shop_work_post(
+                        request, seller_id, code, current_view, perms, work_user=work_user,
+                    )
             if response:
                 return response
 
@@ -934,12 +967,48 @@ def seller_order_cashier_qr_print(request, order_id):
     })
 
 
+def _execute_waiter_pay_order_post(request, order):
+    """服务员协助收款 POST（幂等第 7 步 · 由 run_idempotent 包裹）。"""
+    from .payments import build_pay_page_context
+    from .shop_work_helpers import resolve_waiter_return_url
+    from .waiter_handlers import handle_waiter_pay_post
+    from .waiter_helpers import sync_waiter_service_status
+
+    result = handle_waiter_pay_post(request, order, _client_ip(request))
+    if not result.ok:
+        messages.error(request, result.message)
+        return redirect('waiter_pay_order', order_id=order.order_id)
+    if result.redirect_url:
+        if 'success=1' in result.redirect_url:
+            fields = sync_waiter_service_status(order)
+            if fields:
+                order.save(update_fields=fields)
+            messages.success(request, '支付成功')
+            return redirect(resolve_waiter_return_url(request))
+        if result.redirect_url.startswith('/order/'):
+            messages.success(request, '已选择现金，待店家备货后可点「确认已收现金」')
+            return redirect(resolve_waiter_return_url(request))
+        return redirect(result.redirect_url)
+    if result.template_name:
+        ctx = build_pay_page_context(order)
+        ctx.update(result.extra_context or {})
+        ctx['wechat_pay_mode'] = True
+        tpl = (
+            'waimai/waiter_pay_wechat.html'
+            if result.template_name == 'waimai/pay_wechat.html'
+            else result.template_name
+        )
+        return render(request, tpl, ctx)
+    return redirect('waiter_pay_order', order_id=order.order_id)
+
+
 def waiter_pay_order(request, order_id):
     """服务员协助收款：选择支付方式（绑定本单）；认工作台登录身份"""
+    from .idempotency_helpers import extract_idempotency_key
+    from .initiate_payment_helpers import run_initiate_payment_idempotent
     from .payments import build_pay_page_context
     from .shop_work_auth import get_shop_work_user
-    from .waiter_handlers import handle_waiter_pay_post
-    from .waiter_helpers import ensure_waiter_employer, sync_waiter_service_status
+    from .waiter_helpers import ensure_waiter_employer
     from .shop_work_helpers import resolve_waiter_return_url
 
     from .staff_account_helpers import PERM_DINING_WAITER, staff_has_permission
@@ -953,37 +1022,20 @@ def waiter_pay_order(request, order_id):
         return redirect(resolve_waiter_return_url(request))
 
     order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)
+
+    if request.method == 'POST' and extract_idempotency_key(request):
+        return run_initiate_payment_idempotent(
+            request, order, lambda: _execute_waiter_pay_order_post(request, order),
+        )
+
     if order.payment_status != 'pending_payment':
         messages.info(request, '该订单无需再收款')
         return redirect(resolve_waiter_return_url(request))
 
     if request.method == 'POST':
-        result = handle_waiter_pay_post(request, order, _client_ip(request))
-        if not result.ok:
-            messages.error(request, result.message)
-            return redirect('waiter_pay_order', order_id=order.order_id)
-        if result.redirect_url:
-            if 'success=1' in result.redirect_url:
-                fields = sync_waiter_service_status(order)
-                if fields:
-                    order.save(update_fields=fields)
-                messages.success(request, '支付成功')
-                return redirect(resolve_waiter_return_url(request))
-            if result.redirect_url.startswith('/order/'):
-                messages.success(request, '已选择现金，待店家备货后可点「确认已收现金」')
-                return redirect(resolve_waiter_return_url(request))
-            return redirect(result.redirect_url)
-        if result.template_name:
-            ctx = build_pay_page_context(order)
-            ctx.update(result.extra_context or {})
-            ctx['wechat_pay_mode'] = True
-            tpl = (
-                'waimai/waiter_pay_wechat.html'
-                if result.template_name == 'waimai/pay_wechat.html'
-                else result.template_name
-            )
-            return render(request, tpl, ctx)
-        return redirect('waiter_pay_order', order_id=order.order_id)
+        return run_initiate_payment_idempotent(
+            request, order, lambda: _execute_waiter_pay_order_post(request, order),
+        )
 
     ctx = build_pay_page_context(order)
     ctx['waiter_pay_mode'] = True
@@ -1063,43 +1115,128 @@ def _shop_cart_context(cart, seller_id):
     }
 
 
-def _shop_cart_json(request, cart, seller_id, shop_profile):
-    """无刷新购物车操作成功后，返回可整体替换的购物车外壳。"""
-    from django.template.loader import render_to_string
-
-    from .channel_helpers import channel_template_flags, resolve_shop_channel
-    from .plugins.dining.buyer_entry import get_buyer_table_session
-    from .product_shell_helpers import build_product_shell
-
-    table_session = get_buyer_table_session(request, seller_id)
-    shop_channel = resolve_shop_channel(request, seller_id, table_session)
-    ctx = {
-        'seller_id': seller_id,
-        'shop_profile': shop_profile,
-        'product_shell': build_product_shell(seller_id),
-        **channel_template_flags(shop_channel),
-        **_shop_cart_context(cart, seller_id),
-    }
-    return JsonResponse({
-        'ok': True,
-        'cart_count': ctx['cart_count'],
-        'cart_total': str(ctx['cart_total']),
-        'cart_shell_html': render_to_string(
-            'waimai/_shop_cart_shell.html', ctx, request=request,
-        ),
-    })
-
-
-def _is_cart_fetch(request) -> bool:
-    """是否为店铺页的无刷新购物车请求。"""
-    return request.headers.get('X-Requested-With') == 'YecaoCart'
+def _shop_cart_panel_ok(request, cart, seller_id, shop_profile):
+    """无刷新购物车操作成功后，返回 Panel 统一 JSON。"""
+    from .shop_cart_panel_helpers import shop_cart_panel_ok
+    return shop_cart_panel_ok(request, cart, seller_id, shop_profile)
 
 
 def _shop_cart_error(request, message: str):
-    """无刷新请求返回白话错误；普通提交继续由原页面显示。"""
-    if _is_cart_fetch(request):
-        return JsonResponse({'ok': False, 'message': message}, status=400)
-    return None
+    """Panel 请求返回白话错误；普通提交继续由原页面显示。"""
+    from .shop_cart_panel_helpers import shop_cart_panel_fail_or_none
+    return shop_cart_panel_fail_or_none(request, message)
+
+
+def _execute_shop_cart_add_to_cart(request, seller_id, shop_profile):
+    """加购（幂等第 3 步 · 由 run_shop_cart_idempotent 包裹）。"""
+    from .channel_helpers import require_shop_channel
+    from .panel_refresh_helpers import is_panel_refresh
+    from .product_shell_helpers import build_product_shell, catalog_controls_shop_display
+
+    table_sess = get_buyer_table_session(request, seller_id)
+    cart = get_shop_cart(request.session, seller_id)
+    dish_id = request.POST.get('dish_id')
+    tier = request.POST.get('price_tier', PRICE_TIER_GENERAL)
+    cart = normalize_cart_keys(cart)
+    ft, ch_err = require_shop_channel(request, seller_id, table_sess)
+    if ch_err:
+        fetch_error = _shop_cart_error(request, ch_err)
+        if fetch_error:
+            return fetch_error
+        return _shop_render(request, seller_id, cart, shop_profile, error=ch_err)
+    ok_admit, admit_msg = check_order_admission(seller_id, ft)
+    if not ok_admit:
+        fetch_error = _shop_cart_error(request, admit_msg)
+        if fetch_error:
+            return fetch_error
+        return _shop_render(request, seller_id, cart, shop_profile, error=admit_msg)
+    try:
+        dish = Dish.objects.get(dish_id=dish_id, seller_id=seller_id, is_active=True)
+    except Dish.DoesNotExist:
+        fetch_error = _shop_cart_error(request, '商品不存在或已下架')
+        if fetch_error:
+            return fetch_error
+        return _shop_render(request, seller_id, cart, shop_profile, error='商品不存在或已下架')
+    from .product_shell_helpers import build_product_shell, catalog_controls_shop_display
+
+    if catalog_controls_shop_display(seller_id) and not dish_visible_on_shop(seller_id, dish_id):
+        catalog_word = build_product_shell(seller_id).get('catalog_word', '商品列表')
+        err_text = f'该商品不在当前使用中的{catalog_word}里'
+        fetch_error = _shop_cart_error(request, err_text)
+        if fetch_error:
+            return fetch_error
+        return _shop_render(request, seller_id, cart, shop_profile, error=err_text)
+    line_key = cart_line_key(dish_id, tier)
+    qty = cart.get(line_key, 0) + 1
+    ok, msg = validate_tier_purchase(
+        dish, tier, request.user, seller_id, qty, cart, line_key=line_key,
+    )
+    if not ok:
+        fetch_error = _shop_cart_error(request, msg)
+        if fetch_error:
+            return fetch_error
+        return _shop_render(request, seller_id, cart, shop_profile, error=msg)
+    cart[line_key] = qty
+    set_shop_cart(request.session, seller_id, cart)
+    if is_panel_refresh(request):
+        return _shop_cart_panel_ok(request, cart, seller_id, shop_profile)
+    if request.POST.get('stay_in_cart'):
+        return _shop_cart_redirect(seller_id, keep_cart_open=True)
+    return _shop_cart_redirect(seller_id, dish_id=dish_id, price_tier=tier)
+
+
+def _execute_shop_cart_decrease_from_cart(request, seller_id, shop_profile):
+    """减购（幂等第 3 步）。"""
+    from .panel_refresh_helpers import is_panel_refresh
+
+    cart = get_shop_cart(request.session, seller_id)
+    line_key = request.POST.get('line_key') or cart_line_key(
+        request.POST.get('dish_id'), request.POST.get('price_tier', PRICE_TIER_GENERAL),
+    )
+    cart = normalize_cart_keys(cart)
+    if line_key in cart:
+        cart[line_key] = cart.get(line_key, 0) - 1
+        if cart[line_key] < 0:
+            cart[line_key] = 0
+    set_shop_cart(request.session, seller_id, cart)
+    if is_panel_refresh(request):
+        return _shop_cart_panel_ok(request, cart, seller_id, shop_profile)
+    return _shop_cart_redirect(seller_id, keep_cart_open=True)
+
+
+def _execute_shop_cart_remove_from_cart(request, seller_id, shop_profile):
+    """删行（幂等第 3 步）。"""
+    from .panel_refresh_helpers import is_panel_refresh
+
+    cart = get_shop_cart(request.session, seller_id)
+    line_key = request.POST.get('line_key') or cart_line_key(
+        request.POST.get('dish_id'), request.POST.get('price_tier', PRICE_TIER_GENERAL),
+    )
+    cart = normalize_cart_keys(cart)
+    cart.pop(line_key, None)
+    set_shop_cart(request.session, seller_id, cart)
+    if is_panel_refresh(request):
+        return _shop_cart_panel_ok(request, cart, seller_id, shop_profile)
+    return _shop_cart_redirect(seller_id, keep_cart_open=True)
+
+
+def _execute_shop_cart_update_cart(request, seller_id, shop_profile):
+    """改数量（幂等第 3 步）。"""
+    from .panel_refresh_helpers import is_panel_refresh
+
+    cart = get_shop_cart(request.session, seller_id)
+    line_key = request.POST.get('line_key') or cart_line_key(
+        request.POST.get('dish_id'), request.POST.get('price_tier', PRICE_TIER_GENERAL),
+    )
+    qty = int(request.POST.get('quantity', 1))
+    if qty < 0:
+        qty = 0
+    cart = normalize_cart_keys(cart)
+    cart[line_key] = qty
+    set_shop_cart(request.session, seller_id, cart)
+    if is_panel_refresh(request):
+        return _shop_cart_panel_ok(request, cart, seller_id, shop_profile)
+    return _shop_cart_redirect(seller_id, keep_cart_open=True)
 
 
 def _shop_page_dishes(seller_id):
@@ -1110,47 +1247,27 @@ def _shop_page_dishes(seller_id):
     return dishes, using_menu
 
 
-def _merge_cart_into_order(order, cart_items, seller_id, distance_km, fulfillment_type):
-    """桌码主单：待支付单上合并加点"""
-    from decimal import Decimal
-    dish_map = {}
-    for row in order.dish_items or []:
-        did = str(row.get('dish_id', '')).replace('-', '')
-        tier = row.get('price_tier', PRICE_TIER_GENERAL)
-        dish_map[f'{did}:{tier}'] = dict(row)
+def _redirect_after_table_main_merge(request, merged, *, is_guest, seller_id):
+    """桌码主单合并加点成功后的跳转（幂等第 8 步）。"""
+    from .guest_order_helpers import apply_guest_onsite_cash
+    from .menu_helpers import try_apply_catalog_sales_for_order
+    from .order_qr_helpers import order_cash_code_url
 
-    for item in cart_items:
-        did = item['dish'].dish_id.hex
-        tier = item.get('price_tier', PRICE_TIER_GENERAL)
-        map_key = f'{did}:{tier}'
-        if map_key in dish_map:
-            dish_map[map_key]['quantity'] = int(dish_map[map_key].get('quantity', 0)) + item['quantity']
-        else:
-            dish_map[map_key] = {
-                'line_id': uuid.uuid4().hex,
-                'dish_id': did,
-                'name': item['dish'].name,
-                'price': float(item['unit_price']),
-                'quantity': item['quantity'],
-                'price_tier': tier,
-                'prepared_count': 0,
-                'served_count': 0,
-            }
-
-    merged = list(dish_map.values())
-    subtotal = sum(Decimal(str(r['price'])) * r['quantity'] for r in merged)
-    delivery_fee, fee_detail = build_order_pricing(
-        seller_id, subtotal, distance_km, fulfillment_type,
-    )
-    if delivery_fee is None:
-        return None
-    order.dish_items = merged
-    order.subtotal_amount = subtotal
-    order.delivery_fee = delivery_fee
-    order.delivery_fee_detail = fee_detail
-    order.total_amount = subtotal + delivery_fee
-    order.save()
-    return order
+    if merged.payment_method == 'cash' or (is_guest and merged.catalog_sales_applied):
+        ok_cap, cap_errors = try_apply_catalog_sales_for_order(merged)
+        if not ok_cap:
+            for err in cap_errors:
+                messages.error(request, err)
+            return redirect(f'/shop/?seller_id={seller_id}')
+    if is_guest:
+        if not merged.payment_method:
+            ok_cash, cash_errors = apply_guest_onsite_cash(merged)
+            if not ok_cash:
+                for err in cash_errors:
+                    messages.error(request, err)
+                return redirect(f'/shop/?seller_id={seller_id}')
+        return redirect(order_cash_code_url(merged.order_id))
+    return redirect('pay_order', order_id=merged.order_id)
 
 
 def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
@@ -1160,6 +1277,7 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         channel_template_flags,
         dining_plugin_enabled,
         homepage_channel_switch_enabled,
+        is_channel_repick,
         list_homepage_channels,
         resolve_shop_channel,
     )
@@ -1174,12 +1292,14 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
     table_session = get_buyer_table_session(request, seller_id)
     auto_pick_single_homepage_channel(request, seller_id, table_session)
     shop_channel = resolve_shop_channel(request, seller_id, table_session)
+    channel_repick_mode = (not table_session) and is_channel_repick(request.session, seller_id)
     need_channel_pick = (not table_session) and (not shop_channel)
+    show_channel_pick = need_channel_pick or channel_repick_mode
     # 本桌进行中的订单：游客/买家回店后可一点打开详情（结账翻台后不再显示）
     table_open_order = get_open_order_for_session(table_session) if table_session else None
 
     dish_rows = []
-    if shop_channel:
+    if shop_channel and not channel_repick_mode:
         for dish in dishes:
             gallery = build_dish_image_gallery(dish)
             tier_options = build_dish_tier_options(
@@ -1206,8 +1326,10 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         'table_label': table_session.display_label() if table_session else '',
         'table_open_order': table_open_order,
         'need_channel_pick': need_channel_pick,
+        'channel_repick_mode': channel_repick_mode,
+        'show_channel_pick': show_channel_pick,
         'dining_plugin_enabled': dining_plugin_enabled(seller_id),
-        'channel_options': list_homepage_channels(seller_id) if (need_channel_pick or not table_session) else [],
+        'channel_options': list_homepage_channels(seller_id) if show_channel_pick else [],
         'can_switch_shop_channel': (
             (not table_session) and homepage_channel_switch_enabled(seller_id)
         ),
@@ -1331,14 +1453,18 @@ def product_scan_add(request, display_code, tier):
 
 def shop_page(request):
     """店铺页面：选通道 + 菜品展示 + 购物车 + 下单确认"""
+    from django.shortcuts import redirect
+
     from .channel_helpers import (
         CHANNEL_DELIVERY,
         build_address_and_distance,
-        clear_shop_channel,
         get_shop_channel,
+        is_channel_repick,
         require_shop_channel,
+        set_channel_repick,
         try_set_homepage_channel,
     )
+    from .panel_refresh_helpers import is_panel_refresh
 
     seller_id = request.GET.get('seller_id', 'seller_001')
     cart = get_shop_cart(request.session, seller_id)
@@ -1350,7 +1476,7 @@ def shop_page(request):
         table_sess = get_buyer_table_session(request, seller_id)
 
         if action == 'set_channel':
-            # 批次 C：换通道时清空购物车，避免外卖菜带进打包
+            # 选通道：仅当通道真的变更时才清空购物车（同通道 = 取消重选）
             old_channel = get_shop_channel(request.session, seller_id)
             new_channel = (request.POST.get('channel') or '').strip()
             ok, msg = try_set_homepage_channel(
@@ -1358,108 +1484,51 @@ def shop_page(request):
             )
             if not ok:
                 return _shop_render(request, seller_id, cart, shop_profile, error=msg)
+            set_channel_repick(request.session, seller_id, False)
             if old_channel and new_channel and old_channel != new_channel:
                 set_shop_cart(request.session, seller_id, {})
-            return _shop_cart_redirect(seller_id)
+            return redirect(f'/shop/?seller_id={seller_id}')
 
-        if action == 'clear_channel':
+        if action == 'start_channel_repick':
             if table_sess:
                 return _shop_render(
                     request, seller_id, cart, shop_profile,
                     error='扫桌码模式下为堂食通道，不能切换为外卖或打包。',
                 )
-            clear_shop_channel(request.session, seller_id)
-            # 批次 C：点「更换通道」时一并清空购物车
-            set_shop_cart(request.session, seller_id, {})
-            return _shop_cart_redirect(seller_id)
+            set_channel_repick(request.session, seller_id, True)
+            return redirect(f'/shop/?seller_id={seller_id}')
+
+        if action == 'cancel_channel_repick':
+            set_channel_repick(request.session, seller_id, False)
+            return redirect(f'/shop/?seller_id={seller_id}')
 
         if action == 'add_to_cart':
-            dish_id = request.POST.get('dish_id')
-            tier = request.POST.get('price_tier', PRICE_TIER_GENERAL)
-            cart = normalize_cart_keys(cart)
-            ft, ch_err = require_shop_channel(request, seller_id, table_sess)
-            if ch_err:
-                fetch_error = _shop_cart_error(request, ch_err)
-                if fetch_error:
-                    return fetch_error
-                return _shop_render(request, seller_id, cart, shop_profile, error=ch_err)
-            ok_admit, admit_msg = check_order_admission(seller_id, ft)
-            if not ok_admit:
-                fetch_error = _shop_cart_error(request, admit_msg)
-                if fetch_error:
-                    return fetch_error
-                return _shop_render(request, seller_id, cart, shop_profile, error=admit_msg)
-            try:
-                dish = Dish.objects.get(dish_id=dish_id, seller_id=seller_id, is_active=True)
-            except Dish.DoesNotExist:
-                fetch_error = _shop_cart_error(request, '商品不存在或已下架')
-                if fetch_error:
-                    return fetch_error
-                return _shop_render(request, seller_id, cart, shop_profile, error='商品不存在或已下架')
-            from .product_shell_helpers import catalog_controls_shop_display
-
-            if catalog_controls_shop_display(seller_id) and not dish_visible_on_shop(seller_id, dish_id):
-                from .product_shell_helpers import build_product_shell
-                catalog_word = build_product_shell(seller_id).get('catalog_word', '商品列表')
-                err_text = f'该商品不在当前使用中的{catalog_word}里'
-                fetch_error = _shop_cart_error(request, err_text)
-                if fetch_error:
-                    return fetch_error
-                return _shop_render(request, seller_id, cart, shop_profile, error=err_text)
-            line_key = cart_line_key(dish_id, tier)
-            qty = cart.get(line_key, 0) + 1
-            ok, msg = validate_tier_purchase(
-                dish, tier, request.user, seller_id, qty, cart, line_key=line_key,
+            from .shop_cart_panel_helpers import run_shop_cart_idempotent
+            return run_shop_cart_idempotent(
+                request, seller_id, action,
+                lambda: _execute_shop_cart_add_to_cart(request, seller_id, shop_profile),
             )
-            if not ok:
-                fetch_error = _shop_cart_error(request, msg)
-                if fetch_error:
-                    return fetch_error
-                return _shop_render(request, seller_id, cart, shop_profile, error=msg)
-            cart[line_key] = qty
-            set_shop_cart(request.session, seller_id, cart)
-            if _is_cart_fetch(request):
-                return _shop_cart_json(request, cart, seller_id, shop_profile)
-            if request.POST.get('stay_in_cart'):
-                return _shop_cart_redirect(seller_id, keep_cart_open=True)
-            return _shop_cart_redirect(seller_id, dish_id=dish_id, price_tier=tier)
 
         if action == 'decrease_from_cart':
-            line_key = request.POST.get('line_key') or cart_line_key(
-                request.POST.get('dish_id'), request.POST.get('price_tier', PRICE_TIER_GENERAL),
+            from .shop_cart_panel_helpers import run_shop_cart_idempotent
+            return run_shop_cart_idempotent(
+                request, seller_id, action,
+                lambda: _execute_shop_cart_decrease_from_cart(request, seller_id, shop_profile),
             )
-            cart = normalize_cart_keys(cart)
-            if line_key in cart:
-                cart[line_key] = cart.get(line_key, 0) - 1
-                if cart[line_key] < 0:
-                    cart[line_key] = 0
-            set_shop_cart(request.session, seller_id, cart)
-            if _is_cart_fetch(request):
-                return _shop_cart_json(request, cart, seller_id, shop_profile)
-            return _shop_cart_redirect(seller_id, keep_cart_open=True)
 
         if action == 'remove_from_cart':
-            line_key = request.POST.get('line_key') or cart_line_key(
-                request.POST.get('dish_id'), request.POST.get('price_tier', PRICE_TIER_GENERAL),
+            from .shop_cart_panel_helpers import run_shop_cart_idempotent
+            return run_shop_cart_idempotent(
+                request, seller_id, action,
+                lambda: _execute_shop_cart_remove_from_cart(request, seller_id, shop_profile),
             )
-            cart = normalize_cart_keys(cart)
-            cart.pop(line_key, None)
-            set_shop_cart(request.session, seller_id, cart)
-            if _is_cart_fetch(request):
-                return _shop_cart_json(request, cart, seller_id, shop_profile)
-            return _shop_cart_redirect(seller_id, keep_cart_open=True)
 
         if action == 'update_cart':
-            line_key = request.POST.get('line_key') or cart_line_key(
-                request.POST.get('dish_id'), request.POST.get('price_tier', PRICE_TIER_GENERAL),
+            from .shop_cart_panel_helpers import run_shop_cart_idempotent
+            return run_shop_cart_idempotent(
+                request, seller_id, action,
+                lambda: _execute_shop_cart_update_cart(request, seller_id, shop_profile),
             )
-            qty = int(request.POST.get('quantity', 1))
-            if qty < 0:
-                qty = 0
-            cart = normalize_cart_keys(cart)
-            cart[line_key] = qty
-            set_shop_cart(request.session, seller_id, cart)
-            return _shop_cart_redirect(seller_id, keep_cart_open=True)
 
         if action == 'checkout':
             from .channel_helpers import CHANNEL_DINE_IN
@@ -1695,6 +1764,57 @@ def seller_pending_remittances_json(request):
 
 
 @login_required
+@require_GET
+def seller_fund_ledger_entry_drawer(request, ledger_id):
+    """资金流水页：Ajax 拉单笔流水浮层 HTML。"""
+    if request.user.role != 'seller':
+        return JsonResponse({'ok': False, 'message': '请先登录卖家账号'}, status=403)
+    seller_id = request.user.username
+    from django.template.loader import render_to_string
+
+    from .fund_ledger_helpers import build_ledger_entry_drawer_context
+    from .models import FundLedgerEntry
+
+    entry = (
+        FundLedgerEntry.objects.filter(ledger_id=ledger_id, seller_id=seller_id)
+        .select_related('buy_order', 'related_ledger')
+        .prefetch_related('status_tracks')
+        .first()
+    )
+    if not entry:
+        return JsonResponse({'ok': False, 'message': '找不到这条流水'}, status=404)
+    html = render_to_string(
+        'waimai/seller/_fund_ledger_entry_drawer_body.html',
+        build_ledger_entry_drawer_context(entry),
+        request=request,
+    )
+    return JsonResponse({'ok': True, 'html': html})
+
+
+@login_required
+@require_GET
+def seller_fund_ledger_order_drawer(request, order_id):
+    """资金流水页：Ajax 拉订单摘要浮层 HTML。"""
+    if request.user.role != 'seller':
+        return JsonResponse({'ok': False, 'message': '请先登录卖家账号'}, status=403)
+    seller_id = request.user.username
+    from django.template.loader import render_to_string
+
+    from .fund_ledger_helpers import build_order_drawer_context
+    from .models import BuyOrder
+
+    order = BuyOrder.objects.filter(order_id=order_id, seller_id=seller_id).first()
+    if not order:
+        return JsonResponse({'ok': False, 'message': '找不到这笔订单'}, status=404)
+    html = render_to_string(
+        'waimai/seller/_fund_ledger_order_drawer_body.html',
+        build_order_drawer_context(order),
+        request=request,
+    )
+    return JsonResponse({'ok': True, 'html': html})
+
+
+@login_required
 def seller_panel(request):
     """卖家管理入口：默认进入订单页（仅店主生态登录）"""
     if request.user.role != 'seller':
@@ -1781,7 +1901,7 @@ def seller_panel_section(request, section):
 
     valid = (
         'orders', 'products', 'operating', 'dine', 'workbench', 'delivery',
-        'payment', 'cash_manage', 'audit', 'homepage', 'plugins',
+        'payment', 'cash_manage', 'fund_ledger', 'audit', 'homepage', 'plugins',
     )
     if section not in valid:
         return redirect('seller_panel_section', section='orders')
@@ -1846,7 +1966,21 @@ def seller_panel_section(request, section):
                 from .product_seller_handlers import handle_upload_dish_image_ajax
 
                 return handle_upload_dish_image_ajax(request, seller_id)
-            response = handle_products_post(request, seller_id)
+            from .menu_catalog_panel_helpers import (
+                detect_menu_catalog_panel_action,
+                run_menu_catalog_idempotent,
+            )
+
+            menu_action = detect_menu_catalog_panel_action(request)
+            if menu_action:
+                response = run_menu_catalog_idempotent(
+                    request,
+                    seller_id,
+                    menu_action,
+                    lambda: handle_products_post(request, seller_id),
+                )
+            else:
+                response = handle_products_post(request, seller_id)
         elif section == 'workbench':
             from .workbench_handlers import handle_seller_workbench_post
             response = handle_seller_workbench_post(request, seller_id)
@@ -2114,6 +2248,11 @@ def seller_panel_section(request, section):
             'seller_panel_section', kwargs={'section': 'cash_manage'},
         )
         return render(request, 'waimai/seller/cash_manage.html', context)
+    elif section == 'fund_ledger':
+        from .fund_ledger_helpers import build_seller_fund_ledger_context
+
+        context.update(build_seller_fund_ledger_context(seller_id, request))
+        return render(request, 'waimai/seller/fund_ledger.html', context)
     elif section == 'audit':
         from .audit_helpers import (
             can_view_tech_logs,
@@ -2201,6 +2340,16 @@ def place_order(request):
     if request.method != 'POST':
         return redirect('shop')
 
+    from .idempotency_helpers import idempotency_scope, run_idempotent
+
+    seller_id = (request.POST.get('seller_id') or 'seller_001').strip()
+    session_key = (request.session.session_key or 'anon')[:32]
+    scope = idempotency_scope('place_order', seller_id, session_key)
+    return run_idempotent(request, scope, lambda: _execute_place_order(request))
+
+
+def _execute_place_order(request):
+    """place_order 实际建单逻辑（幂等第 2 步 · 由 run_idempotent 包裹）。"""
     from .channel_helpers import (
         CHANNEL_DINE_IN,
         build_address_and_distance,
@@ -2306,67 +2455,77 @@ def place_order(request):
 
     table_label = ''
     order_kind = 'normal'
+    order = None
     if table_sess:
         table_label = table_sess.display_label()
         if table_sess.session_type == 'main':
             order_kind = 'table_main'
-            open_order = get_open_order_for_session(table_sess)
-            if open_order and open_order.payment_status == 'pending_payment':
-                merged = _merge_cart_into_order(
-                    open_order, cart_items, seller_id, distance_km, fulfillment_type,
+            from waimai.plugins.dining.table_main_merge_helpers import (
+                place_or_merge_table_main_order,
+            )
+
+            def _create_table_main_order():
+                return BuyOrder.objects.create(
+                    buyer_id=buyer_id,
+                    seller_id=seller_id,
+                    total_amount=total_amount,
+                    subtotal_amount=subtotal,
+                    delivery_fee=delivery_fee,
+                    delivery_fee_detail=fee_detail,
+                    dish_items=dish_items_json,
+                    payment_status='pending_payment',
+                    order_status='created',
+                    delivery_address=delivery_address,
+                    fulfillment_type=fulfillment_type,
+                    distance_km=distance_km,
+                    table_session=table_sess,
+                    table_label=table_label,
+                    order_kind=order_kind,
+                    guest_nickname=guest_nickname,
                 )
-                if merged:
-                    # 合并加点时若原单无称呼、本次填了，补上称呼
-                    if guest_nickname and not (merged.guest_nickname or '').strip():
-                        merged.guest_nickname = guest_nickname
-                        merged.save(update_fields=['guest_nickname', 'updated_at'])
-                    set_shop_cart(request.session, seller_id, {})
-                    if merged.payment_method == 'cash' or (
-                        is_guest and merged.catalog_sales_applied
-                    ):
-                        ok_cap, cap_errors = try_apply_catalog_sales_for_order(merged)
-                        if not ok_cap:
-                            for err in cap_errors:
-                                messages.error(request, err)
-                            return redirect(f'/shop/?seller_id={seller_id}')
-                    if is_guest:
-                        if not merged.payment_method:
-                            ok_cash, cash_errors = apply_guest_onsite_cash(merged)
-                            if not ok_cash:
-                                for err in cash_errors:
-                                    messages.error(request, err)
-                                return redirect(f'/shop/?seller_id={seller_id}')
-                        return redirect(
-                            f'/order/{merged.order_id}/?cash_pending=1&dine_in=1'
-                        )
-                    return redirect('pay_order', order_id=merged.order_id)
+
+            action, order = place_or_merge_table_main_order(
+                table_sess,
+                cart_items,
+                seller_id,
+                distance_km,
+                fulfillment_type,
+                create_order_fn=_create_table_main_order,
+            )
+            if action == 'failed':
+                return redirect(f'/shop/?seller_id={seller_id}&error=距离超过配送范围')
+            if action == 'merged':
+                if guest_nickname and not (order.guest_nickname or '').strip():
+                    order.guest_nickname = guest_nickname
+                    order.save(update_fields=['guest_nickname', 'updated_at'])
+                set_shop_cart(request.session, seller_id, {})
+                return _redirect_after_table_main_merge(
+                    request, order, is_guest=is_guest, seller_id=seller_id,
+                )
         elif table_sess.session_type == 'virtual':
             order_kind = 'virtual'
         elif table_sess.session_type == 'share_waiter':
             order_kind = 'share_waiter'
 
-    order = BuyOrder.objects.create(
-        buyer_id=buyer_id,
-        seller_id=seller_id,
-        total_amount=total_amount,
-        subtotal_amount=subtotal,
-        delivery_fee=delivery_fee,
-        delivery_fee_detail=fee_detail,
-        dish_items=dish_items_json,
-        payment_status='pending_payment',
-        order_status='created',
-        delivery_address=delivery_address,
-        fulfillment_type=fulfillment_type,
-        distance_km=distance_km,
-        table_session=table_sess,
-        table_label=table_label,
-        order_kind=order_kind,
-        guest_nickname=guest_nickname,
-    )
-
-    from .order_timeline_helpers import record_order_created
-
-    record_order_created(order)
+    if order is None:
+        order = BuyOrder.objects.create(
+            buyer_id=buyer_id,
+            seller_id=seller_id,
+            total_amount=total_amount,
+            subtotal_amount=subtotal,
+            delivery_fee=delivery_fee,
+            delivery_fee_detail=fee_detail,
+            dish_items=dish_items_json,
+            payment_status='pending_payment',
+            order_status='created',
+            delivery_address=delivery_address,
+            fulfillment_type=fulfillment_type,
+            distance_km=distance_km,
+            table_session=table_sess,
+            table_label=table_label,
+            order_kind=order_kind,
+            guest_nickname=guest_nickname,
+        )
 
     set_shop_cart(request.session, seller_id, {})
     from .audit_helpers import write_audit_log
@@ -2382,6 +2541,8 @@ def place_order(request):
 
     # 游客堂食：直接现场付现金，跳过在线支付页
     if is_guest:
+        from .order_qr_helpers import order_cash_code_url
+
         ok_cash, cash_errors = apply_guest_onsite_cash(order)
         if not ok_cash:
             from .order_status_transition_helpers import transition_order_status
@@ -2394,14 +2555,36 @@ def place_order(request):
             for err in cash_errors:
                 messages.error(request, err)
             return redirect(f'/shop/?seller_id={seller_id}')
-        return redirect(f'/order/{order.order_id}/?cash_pending=1&dine_in=1')
+        return redirect(order_cash_code_url(order.order_id))
 
+    return redirect('pay_order', order_id=order.order_id)
+
+
+def _execute_pay_order_post(request, order):
+    """支付页 POST：选支付方式（幂等第 7 步 · 由 run_idempotent 包裹）。"""
+    method = request.POST.get('payment_method', '').strip()
+    result = initiate_payment(order, method, _client_ip(request))
+    if not result.ok:
+        for err in (result.messages or [result.message]):
+            if err:
+                messages.error(request, err)
+        return redirect('pay_order', order_id=order.order_id)
+    if result.redirect_url:
+        return redirect(result.redirect_url)
+    if result.template_name:
+        ctx = build_pay_page_context(order)
+        ctx.update(result.extra_context or {})
+        ctx['wechat_pay_mode'] = True
+        return render(request, result.template_name, ctx)
     return redirect('pay_order', order_id=order.order_id)
 
 
 def pay_order(request, order_id):
     """待支付页：多支付方式选择 / 微信扫码。游客堂食单靠桌台会话认领。"""
     from .guest_order_helpers import buyer_or_guest_can_access_order
+    from .idempotency_helpers import extract_idempotency_key
+    from .initiate_payment_helpers import run_initiate_payment_idempotent
+    from .order_qr_helpers import order_cash_code_url
 
     order = get_object_or_404(BuyOrder, order_id=order_id)
     table_sess = get_buyer_table_session(request, order.seller_id)
@@ -2410,13 +2593,19 @@ def pay_order(request, order_id):
             return redirect('order_history')
         return redirect('login')
 
+    # 带幂等键的 POST 须先重放，避免首单已付清后被「非待支付」挡在外面
+    if request.method == 'POST' and extract_idempotency_key(request):
+        return run_initiate_payment_idempotent(
+            request, order, lambda: _execute_pay_order_post(request, order),
+        )
+
     if order.payment_status != 'pending_payment':
         if order.is_guest_order():
             return redirect('order_detail', order_id=order.order_id)
         return redirect('order_history')
 
     if order.is_cash_awaiting_confirm():
-        return redirect(f'/order/{order.order_id}/?cash_pending=1')
+        return redirect(order_cash_code_url(order.order_id))
 
     # 游客堂食单不应进在线支付页：补走现场付
     if order.is_guest_order() and order.is_dine_in():
@@ -2427,25 +2616,14 @@ def pay_order(request, order_id):
             for err in cash_errors:
                 messages.error(request, err)
             return redirect('pay_order', order_id=order.order_id)
-        return redirect(f'/order/{order.order_id}/?cash_pending=1&dine_in=1')
+        return redirect(order_cash_code_url(order.order_id))
 
     ctx = build_pay_page_context(order)
 
     if request.method == 'POST':
-        method = request.POST.get('payment_method', '').strip()
-        result = initiate_payment(order, method, _client_ip(request))
-        if not result.ok:
-            for err in (result.messages or [result.message]):
-                if err:
-                    messages.error(request, err)
-            return redirect('pay_order', order_id=order.order_id)
-        if result.redirect_url:
-            return redirect(result.redirect_url)
-        if result.template_name:
-            ctx.update(result.extra_context or {})
-            ctx['wechat_pay_mode'] = True
-            return render(request, result.template_name, ctx)
-        return redirect('pay_order', order_id=order.order_id)
+        return run_initiate_payment_idempotent(
+            request, order, lambda: _execute_pay_order_post(request, order),
+        )
 
     pending = ctx.get('pending_wechat_record')
     if pending and pending.code_url:
@@ -2629,6 +2807,51 @@ def _order_page_viewer(request):
     return None
 
 
+def order_cash_code(request, order_id):
+    """买家轻页订单码（现金选单后 · 只读）。"""
+    from .guest_order_helpers import buyer_or_guest_can_access_order
+    from .order_qr_helpers import build_order_cash_code_page_context, order_cash_code_url
+
+    order = get_object_or_404(BuyOrder, order_id=order_id)
+    table_sess = get_buyer_table_session(request, order.seller_id)
+    if not buyer_or_guest_can_access_order(request, order, table_sess):
+        if request.user.is_authenticated:
+            return redirect('order_history')
+        return redirect('login')
+    if order.payment_method != 'cash' or order.payment_status != 'pending_payment':
+        return redirect('order_detail', order_id=order.order_id)
+    context = build_order_cash_code_page_context(request, order)
+    context['page_back_url'] = context['shop_url']
+    context['page_back_label'] = '返回店铺继续点菜'
+    return render(request, 'waimai/order_cash_code.html', context)
+
+
+def order_cash_code_print(request, order_id):
+    """买家轻页订单码 · 打印版（只读）。"""
+    from .guest_order_helpers import buyer_or_guest_can_access_order
+    from .order_qr_helpers import build_order_cashier_qr_bundle, order_cash_code_url, resolve_shop_code_for_order
+
+    order = get_object_or_404(BuyOrder, order_id=order_id)
+    table_sess = get_buyer_table_session(request, order.seller_id)
+    if not buyer_or_guest_can_access_order(request, order, table_sess):
+        if request.user.is_authenticated:
+            return redirect('order_history')
+        return redirect('login')
+    shop_profile = ShopProfile.objects.filter(seller_id=order.seller_id).first()
+    qr_bundle = build_order_cashier_qr_bundle(
+        request, order, resolve_shop_code_for_order(order),
+    )
+    if not qr_bundle:
+        messages.info(request, '当前订单暂不可打印收银码，请查看轻页说明。')
+        return redirect(order_cash_code_url(order.order_id))
+    return render(request, 'waimai/order_cashier_qr_print.html', {
+        'order': order,
+        'qr_bundle': qr_bundle,
+        'shop_name': shop_profile.shop_name if shop_profile else '',
+        'back_url': order_cash_code_url(order.order_id),
+    })
+
+
 def order_detail(request, order_id):
     """订单详情（买家、卖家后台、骑手、堂食游客本机）。员工请走工作台订单中转页。"""
     from .guest_order_helpers import guest_can_access_order
@@ -2803,6 +3026,12 @@ def order_detail(request, order_id):
 
     timeline_viewer = viewer_role if viewer_role in ('buyer', 'seller', 'rider') else 'buyer'
 
+    fund_ledger_rows = []
+    if viewer_role == 'seller':
+        from .fund_ledger_helpers import list_order_fund_ledger_entries
+
+        fund_ledger_rows = list_order_fund_ledger_entries(order)
+
     return render(request, 'waimai/order_detail.html', {
         'order': order,
         'order_shell': order_shell,
@@ -2825,5 +3054,6 @@ def order_detail(request, order_id):
         'shop_work_code': '',
         'shop_work_back_url': '',
         'guest_shop_back_url': f'/shop/?seller_id={order.seller_id}' if viewer_role == 'guest' else '',
+        'fund_ledger_rows': fund_ledger_rows,
         **qr_ctx,
     })

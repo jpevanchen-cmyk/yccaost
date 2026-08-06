@@ -1,0 +1,95 @@
+{% extends 'waimai/seller/base.html' %}
+{% load static %}
+
+{% block title %}资金流水 - 野草系统{% endblock %}
+
+{% block seller_content %}
+<div class="seller-panel-box">
+    <h2 style="margin:0 0 8px;">📒 资金流水</h2>
+    <p class="card-meta" style="margin-bottom:12px;">
+        全店资金总账；下方标签只是筛选同一张表。点流水号或订单号可在浮层查看详情，不关本页。
+    </p>
+
+    <div class="seller-tabs-mobile" style="margin-bottom:12px;">
+        {% for code, label in fund_ledger_tabs %}
+        <a href="{% url 'seller_panel_section' 'fund_ledger' %}?tab={{ code }}"
+           class="seller-tab {% if fund_ledger_tab == code %}active{% endif %}">{{ label }}</a>
+        {% endfor %}
+    </div>
+
+    {% if fund_ledger_empty %}
+    <p class="card-meta">当前筛选下还没有流水记录。新订单支付、收款、入金确认后会自动写入。</p>
+    {% else %}
+    <div class="fund-ledger-table-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <table class="seller-table fund-ledger-table">
+            <thead>
+                <tr>
+                    <th>流水号</th>
+                    <th>订单</th>
+                    <th>方向</th>
+                    <th>金额</th>
+                    <th>支付方式</th>
+                    <th>业务</th>
+                    <th>流水状态</th>
+                    <th>资金状态</th>
+                    <th>时间</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in fund_ledger_entries %}
+                <tr>
+                    <td class="fund-ledger-code-cell">
+                        <button type="button" class="btn btn-link btn-sm yc-fl-drawer-link"
+                                title="{{ row.display_no_full }}"
+                                data-yc-fl-entry="{{ row.ledger_id }}"
+                                data-yc-fl-entry-label="{{ row.display_no }}">{{ row.display_no }}</button>
+                    </td>
+                    <td class="fund-ledger-code-cell">
+                        {% if row.order_id %}
+                        <button type="button" class="btn btn-link btn-sm yc-fl-drawer-link"
+                                title="{{ row.order_no_full }}"
+                                data-yc-fl-order="{{ row.order_id }}"
+                                data-yc-fl-order-label="{{ row.order_no }}">{{ row.order_no }}</button>
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                    <td>{{ row.direction }}</td>
+                    <td>{{ row.amount }}</td>
+                    <td>{{ row.payment_method }}</td>
+                    <td>{{ row.business_type }}</td>
+                    <td>{{ row.entry_status }}</td>
+                    <td>{{ row.fund_status }}</td>
+                    <td>{{ row.occurred_at }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+<div class="yc-detail-drawer" id="fund-ledger-drawer" hidden aria-hidden="true">
+    <div class="yc-detail-drawer-backdrop" data-yc-fl-drawer-close></div>
+    <div class="yc-detail-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="fund-ledger-drawer-title">
+        <div class="yc-detail-drawer-head">
+            <h2 id="fund-ledger-drawer-title" style="margin:0;font-size:17px;">详情</h2>
+            <button type="button" class="btn btn-outline btn-sm" data-yc-fl-drawer-close aria-label="关闭">关闭</button>
+        </div>
+        <div class="yc-detail-drawer-body" id="fund-ledger-drawer-body">
+            <p class="card-meta">加载中…</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block pre_mobile_js %}
+{{ block.super }}
+<script>
+window.YC_FUND_LEDGER_DRAWER = {
+    entryUrlTemplate: "{% url 'seller_fund_ledger_entry_drawer' ledger_id='00000000-0000-0000-0000-000000000000' %}",
+    orderUrlTemplate: "{% url 'seller_fund_ledger_order_drawer' order_id='00000000-0000-0000-0000-000000000000' %}"
+};
+</script>
+<script src="{% static 'waimai/fund_ledger_drawer.js' %}?v=1"></script>
+{% endblock %}

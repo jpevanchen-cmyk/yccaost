@@ -77,15 +77,26 @@
       if (hiddenPwd && confirmPwd) hiddenPwd.value = confirmPwd.value;
 
       setSubmitting(true);
+      var idemKey = '';
+      if (window.YcIdempotency && typeof window.YcIdempotency.newKey === 'function') {
+        idemKey = window.YcIdempotency.newKey();
+      }
       var fd = new FormData(form);
+      if (window.YcIdempotency && typeof window.YcIdempotency.applyToFormData === 'function') {
+        window.YcIdempotency.applyToFormData(fd, idemKey);
+      }
+      var headers = {
+        'X-YC-Guestbook': '1',
+        'X-CSRFToken': csrfToken(),
+        Accept: 'application/json',
+      };
+      if (window.YcIdempotency && typeof window.YcIdempotency.applyToHeaders === 'function') {
+        headers = window.YcIdempotency.applyToHeaders(headers, idemKey);
+      }
       fetch(form.action, {
         method: 'POST',
         body: fd,
-        headers: {
-          'X-YC-Guestbook': '1',
-          'X-CSRFToken': csrfToken(),
-          Accept: 'application/json',
-        },
+        headers: headers,
         credentials: 'same-origin',
       })
         .then(function (res) {

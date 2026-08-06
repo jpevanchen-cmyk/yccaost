@@ -19,7 +19,9 @@
     var iconEl = null;
     var boxEl = null;
     var closeBtn = null;
+    var retryBtn = null;
     var onClose = null;
+    var onRetry = null;
 
     function normLevel(level) {
         var key = (level || 'ok').toLowerCase();
@@ -34,10 +36,15 @@
         iconEl = modal.querySelector('.yc-notice-icon');
         boxEl = modal.querySelector('.yc-notice-box');
         closeBtn = modal.querySelector('.yc-notice-close');
+        retryBtn = modal.querySelector('.yc-notice-retry');
         var backdrop = modal.querySelector('.yc-notice-backdrop');
         function close() {
             modal.hidden = true;
             modal.classList.remove('yc-notice-modal--toast');
+            onRetry = null;
+            if (retryBtn) {
+                retryBtn.hidden = true;
+            }
             if (typeof onClose === 'function') {
                 var fn = onClose;
                 onClose = null;
@@ -45,6 +52,15 @@
             }
         }
         if (closeBtn) closeBtn.addEventListener('click', close);
+        if (retryBtn) {
+            retryBtn.addEventListener('click', function () {
+                var retryFn = onRetry;
+                close();
+                if (typeof retryFn === 'function') {
+                    retryFn();
+                }
+            });
+        }
         if (backdrop) backdrop.addEventListener('click', close);
         return modal;
     }
@@ -73,6 +89,15 @@
             closeBtn.hidden = toast;
         }
         onClose = opts && opts.onClose ? opts.onClose : null;
+        onRetry = opts && opts.onRetry ? opts.onRetry : null;
+        if (retryBtn) {
+            if (opts && opts.retryLabel && onRetry && mustAck && !toast) {
+                retryBtn.textContent = opts.retryLabel;
+                retryBtn.hidden = false;
+            } else {
+                retryBtn.hidden = true;
+            }
+        }
         m.hidden = false;
         if (!mustAck) {
             var delay = Number(opts && opts.autoCloseMs) || 3200;

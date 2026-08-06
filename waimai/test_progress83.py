@@ -12,7 +12,7 @@ from django.utils import timezone
 from waimai.flash_notice_helpers import collect_page_notices
 from waimai.models import BuyOrder, DeliveryOrder, ShopProfile
 from waimai.order_cancel_helpers import cancel_order_by_buyer
-from waimai.order_timeline_helpers import TL_ORDER_CREATED, build_order_timeline, record_order_created
+from waimai.order_timeline_helpers import build_order_timeline
 from waimai.order_status_transition_helpers import buyer_can_self_cancel_order
 from waimai.staff_account_helpers import (
     authenticate_shop_work_user,
@@ -66,7 +66,7 @@ class BuyerCancelCreatedTests(Progress83Base):
 
 
 class OrderTimelineTests(Progress83Base):
-    def test_record_order_created_writes_timeline(self):
+    def test_build_timeline_shows_order_created_from_source(self):
         order = BuyOrder.objects.create(
             buyer_id=self.buyer.username,
             seller_id=self.seller.username,
@@ -76,11 +76,9 @@ class OrderTimelineTests(Progress83Base):
             order_status='created',
             fulfillment_type='order',
         )
-        record_order_created(order)
         rows = build_order_timeline(order, viewer='buyer')
         labels = [label for label, _ in rows]
         self.assertIn('订单已生成', labels)
-        self.assertTrue(order.timeline_events.filter(event_code=TL_ORDER_CREATED).exists())
 
 
 class OwnerWorkbenchStaffTests(Progress83Base):

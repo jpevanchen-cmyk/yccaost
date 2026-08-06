@@ -39,30 +39,35 @@ def _manager_required(view_fn):
 @require_POST
 @csrf_protect
 def guestbook_post(request):
-    """服务器主页「联系我们」提交留言（支持 Ajax JSON）"""
+    """服务器主页「联系我们」提交留言（支持 Ajax JSON · 幂等第 10 步）"""
     from .guestbook_helpers import apply_guestbook_actor_cookie, post_guestbook_message
+    from .guestbook_post_idempotency_helpers import run_guestbook_post_idempotent
 
-    ok, payload = post_guestbook_message(
-        request,
-        body=request.POST.get('body') or '',
-        guest_name=request.POST.get('guest_name') or '',
-        guest_email=request.POST.get('guest_email') or '',
-        guest_password=request.POST.get('guest_password') or '',
-    )
+    def execute():
+        ok, payload = post_guestbook_message(
+            request,
+            body=request.POST.get('body') or '',
+            guest_name=request.POST.get('guest_name') or '',
+            guest_email=request.POST.get('guest_email') or '',
+            guest_password=request.POST.get('guest_password') or '',
+        )
 
-    if _wants_json(request):
+        if _wants_json(request):
+            if ok:
+                return JsonResponse({'ok': True, **payload})
+            return JsonResponse(
+                {'ok': False, 'error': payload.get('error', '提交失败')},
+                status=400,
+            )
+
         if ok:
-            resp = JsonResponse({'ok': True, **payload})
+            messages.success(request, payload.get('message') or '留言已提交')
         else:
-            resp = JsonResponse({'ok': False, 'error': payload.get('error', '提交失败')}, status=400)
-        return apply_guestbook_actor_cookie(request, resp)
+            messages.error(request, payload.get('error') or '提交失败')
+        anchor = (request.POST.get('return_anchor') or 'block-contact_us').strip()
+        return redirect(f'/#{anchor}')
 
-    if ok:
-        messages.success(request, payload.get('message') or '留言已提交')
-    else:
-        messages.error(request, payload.get('error') or '提交失败')
-    anchor = (request.POST.get('return_anchor') or 'block-contact_us').strip()
-    response = redirect(f'/#{anchor}')
+    response = run_guestbook_post_idempotent(request, execute)
     return apply_guestbook_actor_cookie(request, response)
 
 

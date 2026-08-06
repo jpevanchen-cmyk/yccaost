@@ -1,5 +1,4 @@
-# 订单历程与时间线（进度 83 · 主状态机只读分支）
-# 事件发生时写入 OrderTimelineEvent；展示统一走 build_order_timeline(viewer=…)。
+# 订单历程与时间线：build_order_timeline 只读 BuyOrder / DeliveryOrder 真源字段，不写独立历程表。
 
 from __future__ import annotations
 
@@ -12,7 +11,7 @@ from django.utils import timezone
 if TYPE_CHECKING:
     from .models import BuyOrder
 
-# 历程事件代码（与 82 事件表对齐并扩展展示用）
+# 历程节点代码（展示过滤用；与 82 事件表对齐）
 TL_ORDER_CREATED = 'order_created'
 TL_PAYMENT_RECEIVED = 'payment_received'
 TL_PREP_STARTED = 'prep_started'
@@ -71,6 +70,15 @@ _ESTIMATED_READY_STATUSES = frozenset({
     'awaiting_shop_confirm',
     'awaiting_prep',
     'preparing',
+})
+
+# 已出餐/可配送里程碑：主状态须离开「仍在备制」段（避免撤回后 ready_at 残留误展示）
+_READY_MILESTONE_STATUSES = frozenset({
+    'ready_pickup',
+    'awaiting_delivery',
+    'delivering',
+    'completed',
+    'cancelled',
 })
 
 
@@ -219,78 +227,55 @@ def _viewer_codes(viewer: str) -> frozenset[str] | None:
     return _BUYER_CODES
 
 
-def record_timeline_event(
-    order: BuyOrder,
-    event_code: str,
-    label: str,
-    *,
-    occurred_at=None,
-    save_order_fields: list[str] | None = None,
-    once: bool = False,
-) -> None:
-    """写入一条历程；可选同步更新订单/配送时间戳字段。once=True 时同码不重复写入。"""
-    from .models import OrderTimelineEvent
-
-    if once and order.timeline_events.filter(event_code=event_code).exists():
-        return
-    when = occurred_at or timezone.now()
-    OrderTimelineEvent.objects.create(
-        order=order,
-        event_code=event_code,
-        label=label,
-        occurred_at=when,
-    )
-    if save_order_fields:
-        order.save(update_fields=list(dict.fromkeys([*save_order_fields, 'updated_at'])))
+def _ready_milestone_label(order: BuyOrder) -> str:
+    if order.is_basic_order():
+        return '已备货'
+    if order.is_dine_in():
+        return '已出餐'
+    if order.is_takeaway():
+        return '已备好待取'
+    return '出餐可配送'
 
 
-def record_order_created(order: BuyOrder) -> None:
-    if order.timeline_events.filter(event_code=TL_ORDER_CREATED).exists():
-        return
-    record_timeline_event(order, TL_ORDER_CREATED, '订单已生成', occurred_at=order.created_at)
+def _cancel_milestone_label(order: BuyOrder) -> str:
+    side = ''
+    if order.cancel_side == 'buyer':
+        side = '（买家）'
+    elif order.cancel_side == 'shop':
+        side = '（店家）'
+    return f'订单已取消{side}'
 
 
-def sync_timeline_from_order_fields(order: BuyOrder) -> None:
-    """把已有时间戳字段补写入历程（兼容 83 之前订单）。"""
-    from .models import OrderTimelineEvent
+def _collect_timeline_from_source(order: BuyOrder) -> list[tuple[str, str, object]]:
+    """从订单/配送单真源字段拼里程碑 (event_code, label, occurred_at)。"""
+    rows: list[tuple[str, str, object]] = []
+    if order.created_at:
+        rows.append((TL_ORDER_CREATED, '订单已生成', order.created_at))
+    if order.payment_status == 'paid' and order.payment_time:
+        rows.append((TL_PAYMENT_RECEIVED, '已支付', order.payment_time))
+    if order.preparing_at:
+        rows.append((TL_PREP_STARTED, '开始备货', order.preparing_at))
+    if order.ready_at and order.order_status in _READY_MILESTONE_STATUSES:
+        rows.append((TL_READY, _ready_milestone_label(order), order.ready_at))
+    if order.goods_delivered_at:
+        rows.append((TL_GOODS_DELIVERED, '商品已全部交付', order.goods_delivered_at))
+    if order.completed_at:
+        rows.append((TL_ORDER_COMPLETED, '订单已完成', order.completed_at))
+    if order.cancelled_at or order.order_status == 'cancelled':
+        when = order.cancelled_at or order.updated_at
+        rows.append((TL_ORDER_CANCELLED, _cancel_milestone_label(order), when))
 
-    def _ensure(code, label, dt):
-        if not dt:
-            return
-        if order.timeline_events.filter(event_code=code).exists():
-            return
-        OrderTimelineEvent.objects.create(
-            order=order, event_code=code, label=label, occurred_at=dt,
-        )
-
-    record_order_created(order)
-    _ensure(TL_PAYMENT_RECEIVED, '已支付', order.payment_time)
-    _ensure(TL_PREP_STARTED, '开始备货', order.preparing_at)
-    if order.ready_at:
-        if order.is_basic_order():
-            lbl = '已备货'
-        elif order.is_dine_in():
-            lbl = '已出餐'
-        elif order.is_takeaway():
-            lbl = '已备好待取'
-        else:
-            lbl = '出餐可配送'
-        _ensure(TL_READY, lbl, order.ready_at)
-    _ensure(TL_GOODS_DELIVERED, '商品已全部交付', order.goods_delivered_at)
-    _ensure(TL_ORDER_COMPLETED, '订单已完成', order.completed_at)
     delivery = getattr(order, 'delivery_order', None)
     if delivery:
-        _ensure(TL_DELIVERY_ACCEPTED, '骑手已接单', delivery.accepted_at)
-        _ensure(TL_DELIVERY_PICKED_UP, '骑手已取餐', delivery.picked_up_at)
-        _ensure(TL_DELIVERY_STARTED, '开始送餐', delivery.in_transit_at)
-        _ensure(TL_DELIVERY_COMPLETED, '已送达', delivery.completed_at)
-    if order.cancelled_at or order.order_status == 'cancelled':
-        side = ''
-        if order.cancel_side == 'buyer':
-            side = '（买家）'
-        elif order.cancel_side == 'shop':
-            side = '（店家）'
-        _ensure(TL_ORDER_CANCELLED, f'订单已取消{side}', order.cancelled_at)
+        if delivery.accepted_at:
+            rows.append((TL_DELIVERY_ACCEPTED, '骑手已接单', delivery.accepted_at))
+        if delivery.picked_up_at:
+            rows.append((TL_DELIVERY_PICKED_UP, '骑手已取餐', delivery.picked_up_at))
+        if delivery.in_transit_at:
+            rows.append((TL_DELIVERY_STARTED, '开始送餐', delivery.in_transit_at))
+        if delivery.completed_at:
+            rows.append((TL_DELIVERY_COMPLETED, '已送达', delivery.completed_at))
+    return rows
 
 
 def _buyer_timeline_label(order: BuyOrder, event_code: str, label: str) -> str:
@@ -301,28 +286,26 @@ def _buyer_timeline_label(order: BuyOrder, event_code: str, label: str) -> str:
 
 
 def build_order_timeline(order: BuyOrder, *, viewer: str = VIEWER_BUYER) -> list[tuple[str, object]]:
-    """按角色返回 (标签, 时间) 列表；无时间的不展示。"""
-    sync_timeline_from_order_fields(order)
+    """按角色返回 (标签, 时间) 列表；只读真源字段，不写库。"""
     allowed = _viewer_codes(viewer)
     delivery = getattr(order, 'delivery_order', None)
     rows: list[tuple[str, object]] = []
-    qs = order.timeline_events.order_by('occurred_at', 'pk')
-    for ev in qs:
-        if allowed is not None and ev.event_code not in allowed:
+    for event_code, label, occurred_at in _collect_timeline_from_source(order):
+        if allowed is not None and event_code not in allowed:
             continue
         # 外卖：骑手取餐前不展示「商品已全部交付」（避免时间线逻辑颠倒）
         if (
-            ev.event_code == TL_GOODS_DELIVERED
+            event_code == TL_GOODS_DELIVERED
             and order.fulfillment_type == 'delivery'
             and delivery
             and not delivery.picked_up_at
         ):
             continue
         rows.append((
-            _buyer_timeline_label(order, ev.event_code, ev.label)
+            _buyer_timeline_label(order, event_code, label)
             if allowed is _BUYER_CODES
-            else ev.label,
-            ev.occurred_at,
+            else label,
+            occurred_at,
         ))
 
     if _should_show_estimated_ready(order):

@@ -137,6 +137,74 @@ def render_workbench_panel_html(request: HttpRequest, panel_ctx: dict) -> str:
     return ''
 
 
+# 店铺工作台 Panel 写操作（幂等第 5 步 · 不含 cash_manage，留第 6 步）
+RIDER_PANEL_ACTIONS = (
+    'request_remittance',
+    'claim_pending',
+    'pickup',
+    'start_delivery',
+    'collect_cash',
+    'mark_cash_exception',
+    'complete',
+)
+
+CASHIER_PANEL_ACTIONS = ('collect', 'simulate_pay')
+
+WORKBENCH_PANEL_FLAG_KEYS = (
+    'mark_prepared_unit',
+    'undo_prepared_unit',
+    'mark_all_prepared',
+    'start_preparing',
+    'adjust_wait_time',
+    'dispatch_order',
+    'reassign_rider',
+    'mark_dish_unit',
+    'undo_dish_unit',
+    'mark_all_served',
+    'confirm_cash',
+    'close_uncollected',
+    'complete_pickup',
+    'order_desk_mark_processed',
+    'order_desk_undo_processed',
+    'order_desk_mark_delivered',
+    'order_desk_undo_delivered',
+    'order_desk_mark_all_processed',
+    'order_desk_mark_all_delivered',
+    'order_desk_confirm_cash',
+)
+
+
+def detect_workbench_panel_action(request) -> str | None:
+    """识别工作台 Panel 写操作；非 Panel 幂等范围返回 None。"""
+    action = (request.POST.get('action') or '').strip()
+    if action in RIDER_PANEL_ACTIONS:
+        return f'rider_{action}'
+    cashier_action = (request.POST.get('cashier_action') or '').strip()
+    if cashier_action in CASHIER_PANEL_ACTIONS:
+        return f'cashier_{cashier_action}'
+    for key in WORKBENCH_PANEL_FLAG_KEYS:
+        if key in request.POST:
+            return key
+    return None
+
+
+def run_workbench_idempotent(request, seller_id: str, work_user, action: str, execute):
+    """
+    工作台 Panel 写操作幂等（进度 80 · 幂等第 5 步）。
+    同一 scope+键只改一次数据库，重复请求返回首次 Panel JSON。
+    """
+    from .idempotency_helpers import idempotency_scope, run_idempotent
+
+    if work_user is not None:
+        actor = str(work_user.pk)
+    elif getattr(request.user, 'is_authenticated', False):
+        actor = str(request.user.pk)
+    else:
+        actor = (request.session.session_key or 'anon')[:32]
+    scope = idempotency_scope('workbench', action, seller_id, actor)
+    return run_idempotent(request, scope, execute)
+
+
 def respond_workbench_action(
     request: HttpRequest,
     redirect_to: str,

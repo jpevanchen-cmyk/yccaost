@@ -24,7 +24,8 @@ from waimai.order_desk_helpers import (
     mark_basic_item_delivered,
     mark_basic_item_processed,
 )
-from waimai.order_helpers import cart_line_key
+from waimai.order_helpers import cart_line_key, get_shop_cart
+from waimai.panel_refresh_helpers import PANEL_REQUEST_HEADER
 from waimai.order_workflow_rules import order_can_dispatch
 from waimai.payments import (
     buyer_respond_cash_shortfall,
@@ -415,7 +416,7 @@ class WorkbenchSortTests(WorkflowImprovementBase):
 
 
 class AsyncCartTests(WorkflowImprovementBase):
-    def test_add_to_cart_returns_replaceable_html_without_redirect(self):
+    def test_add_to_cart_returns_panel_html_without_redirect(self):
         self.settings.plugin_dining_enabled = False
         self.settings.save(update_fields=['plugin_dining_enabled'])
         dish = Dish.objects.create(
@@ -435,30 +436,124 @@ class AsyncCartTests(WorkflowImprovementBase):
                 'dish_id': str(dish.dish_id),
                 'price_tier': 'general',
             },
-            HTTP_X_REQUESTED_WITH='YecaoCart',
+            HTTP_X_REQUESTED_WITH=PANEL_REQUEST_HEADER,
         )
         self.assertEqual(response.status_code, 200, response.content)
         data = response.json()
         self.assertTrue(data['ok'])
-        self.assertEqual(data['cart_count'], 1)
-        self.assertIn('购物车', data['cart_shell_html'])
+        self.assertEqual(data['panel_id'], 'shop-cart-shell')
+        self.assertIn('购物车', data['html'])
+        self.assertNotIn('cart_shell_html', data)
 
         line_key = cart_line_key(dish.dish_id, 'general')
         decrease = client.post(
             f'/shop/?seller_id={self.seller.username}',
             {'action': 'decrease_from_cart', 'line_key': line_key},
-            HTTP_X_REQUESTED_WITH='YecaoCart',
+            HTTP_X_REQUESTED_WITH=PANEL_REQUEST_HEADER,
         )
         self.assertEqual(decrease.status_code, 200)
-        self.assertEqual(decrease.json()['cart_count'], 0)
+        self.assertIn('cart-item-zero', decrease.json()['html'])
 
         remove = client.post(
             f'/shop/?seller_id={self.seller.username}',
             {'action': 'remove_from_cart', 'line_key': line_key},
-            HTTP_X_REQUESTED_WITH='YecaoCart',
+            HTTP_X_REQUESTED_WITH=PANEL_REQUEST_HEADER,
         )
         self.assertEqual(remove.status_code, 200)
-        self.assertNotIn('cart-drawer', remove.json()['cart_shell_html'])
+        self.assertNotIn('cart-drawer', remove.json()['html'])
+
+    def test_cart_panel_fail_returns_message(self):
+        self.settings.plugin_dining_enabled = False
+        self.settings.save(update_fields=['plugin_dining_enabled'])
+        dish = Dish.objects.create(
+            seller_id=self.seller.username,
+            name='失败商品',
+            price=Decimal('8.00'),
+        )
+        client = Client()
+        response = client.post(
+            f'/shop/?seller_id={self.seller.username}',
+            {
+                'action': 'add_to_cart',
+                'dish_id': str(dish.dish_id),
+                'price_tier': 'general',
+            },
+            HTTP_X_REQUESTED_WITH=PANEL_REQUEST_HEADER,
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['ok'])
+        self.assertTrue(data['message'])
+
+
+class ShopChannelRepickTests(WorkflowImprovementBase):
+    def setUp(self):
+        super().setUp()
+        self.settings.plugin_dining_enabled = True
+        self.settings.delivery_channel_enabled = True
+        self.settings.takeaway_channel_enabled = True
+        self.settings.save(update_fields=[
+            'plugin_dining_enabled', 'delivery_channel_enabled', 'takeaway_channel_enabled',
+        ])
+        self.dish = Dish.objects.create(
+            seller_id=self.seller.username,
+            name='通道试验菜',
+            price=Decimal('15.00'),
+        )
+
+    def _client_with_takeaway(self):
+        client = Client()
+        session = client.session
+        session[channel_session_key(self.seller.username)] = 'takeaway'
+        session.save()
+        return client
+
+    def _add_one_to_cart(self, client):
+        return client.post(
+            f'/shop/?seller_id={self.seller.username}',
+            {
+                'action': 'add_to_cart',
+                'dish_id': str(self.dish.dish_id),
+                'price_tier': 'general',
+            },
+            HTTP_X_REQUESTED_WITH=PANEL_REQUEST_HEADER,
+        )
+
+    def test_repick_same_channel_keeps_cart(self):
+        client = self._client_with_takeaway()
+        add = self._add_one_to_cart(client)
+        self.assertEqual(add.status_code, 200)
+        line_key = cart_line_key(self.dish.dish_id, 'general')
+        self.assertEqual(get_shop_cart(client.session, self.seller.username).get(line_key), 1)
+
+        repick = client.post(
+            f'/shop/?seller_id={self.seller.username}',
+            {'action': 'start_channel_repick'},
+        )
+        self.assertEqual(repick.status_code, 302)
+
+        same = client.post(
+            f'/shop/?seller_id={self.seller.username}',
+            {'action': 'set_channel', 'channel': 'takeaway'},
+        )
+        self.assertEqual(same.status_code, 302)
+        self.assertEqual(get_shop_cart(client.session, self.seller.username).get(line_key), 1)
+
+    def test_repick_different_channel_clears_cart(self):
+        client = self._client_with_takeaway()
+        self._add_one_to_cart(client)
+        line_key = cart_line_key(self.dish.dish_id, 'general')
+
+        client.post(
+            f'/shop/?seller_id={self.seller.username}',
+            {'action': 'start_channel_repick'},
+        )
+        switch = client.post(
+            f'/shop/?seller_id={self.seller.username}',
+            {'action': 'set_channel', 'channel': 'delivery'},
+        )
+        self.assertEqual(switch.status_code, 302)
+        self.assertNotIn(line_key, get_shop_cart(client.session, self.seller.username))
 
 
 class BuyerCenterAndSingleLoginTests(TestCase):

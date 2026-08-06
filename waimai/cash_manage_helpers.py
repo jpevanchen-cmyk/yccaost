@@ -163,140 +163,124 @@ def query_pending_cash_remittances(seller_id: str, *, limit: int = 30):
 
 
 
+def _build_cash_daily_row_note(
+    *,
+    order_count: int,
+    unremitted_amount: Decimal,
+    remitted_amount: Decimal,
+    shortfall_amount: Decimal,
+    shortfall_count: int,
+) -> str:
+    """按天自动生成备注（白话，供对账扫一眼）。"""
+    if order_count <= 0:
+        return ''
+    parts: list[str] = []
+    if shortfall_count > 0:
+        parts.append(f'含{shortfall_count}笔异常减收')
+    if unremitted_amount > 0:
+        parts.append('尚有未入金')
+    elif remitted_amount > 0:
+        parts.append('当日款项已全部入店')
+    return '；'.join(parts)
+
 
 def build_cash_manage_daily_table(
-
     seller_id: str,
-
     *,
-
     year_month: str | None = None,
-
     max_rows: int = 60,
-
 ) -> dict:
-
     """
-
-    按北京日期汇总货到付款现金（表格 + 合计行）。
-
+    按北京「收款日」汇总外卖货到付款现金（表格 + 合计行）。
     year_month 形如 2026-08 时只返回该月各行。
-
     """
-
     from .models import CashRemittanceRequest
-
     from .plugins.fulfillment.rider_cash_helpers import _cod_cash_qs
-
     from .time_helpers import to_beijing
 
-
-
     bucket: dict[str, dict] = defaultdict(lambda: {
-
-        'pending_count': 0,
-
-        'pending_amount': Decimal('0'),
-
+        'order_count': 0,
+        'expected_amount': Decimal('0'),
         'remitted_amount': Decimal('0'),
-
-        'daily_total': Decimal('0'),
-
+        'unremitted_amount': Decimal('0'),
+        'shortfall_amount': Decimal('0'),
+        'shortfall_count': 0,
     })
 
-
-
     for order in _cod_cash_qs(seller_id).only(
-
-        'cash_collected_at', 'cash_remitted_at', 'cash_collected_amount',
-
+        'cash_collected_at',
+        'cash_remitted_at',
+        'cash_collected_amount',
+        'total_amount',
     ).iterator():
+        if not order.cash_collected_at:
+            continue
+        collect_day = to_beijing(order.cash_collected_at).date().isoformat()
+        collected = order.cash_collected_amount or Decimal('0')
+        expected = order.total_amount or Decimal('0')
+        shortfall = expected - collected
+        if shortfall < 0:
+            shortfall = Decimal('0')
 
-        amount = order.cash_collected_amount or Decimal('0')
-
-        if order.cash_collected_at:
-
-            collect_day = to_beijing(order.cash_collected_at).date().isoformat()
-
-            bucket[collect_day]['daily_total'] += amount
-
-            if order.cash_remitted_at is None:
-
-                bucket[collect_day]['pending_count'] += 1
-
-                bucket[collect_day]['pending_amount'] += amount
-
-        if order.cash_remitted_at:
-
-            remit_day = to_beijing(order.cash_remitted_at).date().isoformat()
-
-            bucket[remit_day]['remitted_amount'] += amount
-
-
+        day_bucket = bucket[collect_day]
+        day_bucket['order_count'] += 1
+        day_bucket['expected_amount'] += expected
+        day_bucket['shortfall_amount'] += shortfall
+        if shortfall > 0:
+            day_bucket['shortfall_count'] += 1
+        if order.cash_remitted_at is None:
+            day_bucket['unremitted_amount'] += collected
+        else:
+            day_bucket['remitted_amount'] += collected
 
     pending_req_count = CashRemittanceRequest.objects.filter(
-
         seller_id=seller_id, status='pending',
-
     ).count()
-
     pending_note = ''
-
     if pending_req_count:
-
         pending_note = f'当前有 {pending_req_count} 笔交款申请待核对'
 
-
-
     month_prefix = (year_month or '').strip()
-
     sorted_days = sorted(bucket.keys(), reverse=True)
-
     if month_prefix:
-
         sorted_days = [day for day in sorted_days if day.startswith(month_prefix)]
-
     sorted_days = sorted_days[:max_rows]
 
-
-
     rows = []
-
-    for idx, day in enumerate(sorted_days):
-
+    for day in sorted_days:
         data = bucket[day]
-
+        unremitted = _money2(data['unremitted_amount'])
+        remitted = _money2(data['remitted_amount'])
+        shortfall = _money2(data['shortfall_amount'])
         rows.append({
-
             'date': day,
-
-            'pending_count': data['pending_count'],
-
-            'pending_amount': _money2(data['pending_amount']),
-
-            'remitted_amount': _money2(data['remitted_amount']),
-
-            'daily_total': _money2(data['daily_total']),
-
-            'note': pending_note if idx == 0 and pending_note else '',
-
+            'order_count': data['order_count'],
+            'expected_amount': _money2(data['expected_amount']),
+            'remitted_amount': remitted,
+            'unremitted_amount': unremitted,
+            'shortfall_amount': shortfall,
+            'note': _build_cash_daily_row_note(
+                order_count=data['order_count'],
+                unremitted_amount=unremitted,
+                remitted_amount=remitted,
+                shortfall_amount=shortfall,
+                shortfall_count=data['shortfall_count'],
+            ),
         })
 
-
-
     totals = {
-
-        'pending_count': sum(row['pending_count'] for row in rows),
-
-        'pending_amount': _money2(sum((row['pending_amount'] for row in rows), Decimal('0'))),
-
+        'order_count': sum(row['order_count'] for row in rows),
+        'expected_amount': _money2(sum((row['expected_amount'] for row in rows), Decimal('0'))),
         'remitted_amount': _money2(sum((row['remitted_amount'] for row in rows), Decimal('0'))),
-
-        'daily_total': _money2(sum((row['daily_total'] for row in rows), Decimal('0'))),
-
+        'unremitted_amount': _money2(sum((row['unremitted_amount'] for row in rows), Decimal('0'))),
+        'shortfall_amount': _money2(sum((row['shortfall_amount'] for row in rows), Decimal('0'))),
     }
-
-    return {'rows': rows, 'totals': totals, 'year_month': month_prefix}
+    return {
+        'rows': rows,
+        'totals': totals,
+        'year_month': month_prefix,
+        'pending_remittance_hint': pending_note,
+    }
 
 
 

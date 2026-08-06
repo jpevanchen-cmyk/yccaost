@@ -130,9 +130,27 @@ def experience_preview_products(request):
     seller_id = shop.seller_id
     touch_experience_tour_session(request)
     if request.method == 'POST':
+        from .experience_write_idempotency_helpers import (
+            detect_experience_menu_write_action,
+            detect_experience_products_write_action,
+            run_experience_write_idempotent,
+        )
+
         if is_experience_product_post(request):
-            return handle_experience_product_post(request, seller_id)
-        return handle_experience_menu_post(request, seller_id)
+            action = detect_experience_products_write_action(request) or 'product_write'
+            return run_experience_write_idempotent(
+                request,
+                seller_id,
+                action,
+                lambda: handle_experience_product_post(request, seller_id),
+            )
+        action = detect_experience_menu_write_action(request) or 'menu_write'
+        return run_experience_write_idempotent(
+            request,
+            seller_id,
+            action,
+            lambda: handle_experience_menu_post(request, seller_id),
+        )
     if request.headers.get('X-Experience-Menu-Pick') == '1':
         return experience_menu_panel_json(request, seller_id)
     ctx = build_experience_products_context(request)
@@ -188,7 +206,18 @@ def experience_preview_dine(request):
     touch_experience_tour_session(request)
     if request.method == 'POST':
         if is_experience_dine_post(request):
-            return handle_experience_dine_post(request, seller_id)
+            from .experience_write_idempotency_helpers import (
+                detect_experience_dine_write_action,
+                run_experience_write_idempotent,
+            )
+
+            action = detect_experience_dine_write_action(request) or 'dine_write'
+            return run_experience_write_idempotent(
+                request,
+                seller_id,
+                action,
+                lambda: handle_experience_dine_post(request, seller_id),
+            )
         touch_experience_tour_session(request)
         ctx = build_experience_dine_context(request)
         if not ctx:

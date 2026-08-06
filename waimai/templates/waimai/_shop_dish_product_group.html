@@ -34,7 +34,7 @@
             <div class="dish-offer-row">
                 <div class="dish-offer-name">{{ opt.display_name }}</div>
                 <div class="dish-offer-price">¥{{ opt.price }}</div>
-                <form method="POST" class="dish-offer-cart-form">
+                <form method="POST" class="dish-offer-cart-form" data-yc-panel="shop-cart-shell">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="add_to_cart">
                     <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">

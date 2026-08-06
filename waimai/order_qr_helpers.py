@@ -123,6 +123,37 @@ def resolve_shop_code_for_order(order: BuyOrder) -> str:
     ).strip()
 
 
+def order_cash_code_url(order_id) -> str:
+    """现金选单后跳转的轻页订单码网址。"""
+    from django.urls import reverse
+
+    return reverse('order_cash_code', kwargs={'order_id': order_id})
+
+
+def build_order_cash_code_page_context(request, order: BuyOrder) -> dict:
+    """买家轻页订单码：只读展示 + 导航。"""
+    from django.urls import reverse
+
+    from .models import ShopProfile
+    from .order_shell_helpers import build_order_shell
+
+    shop_profile = ShopProfile.objects.filter(seller_id=order.seller_id).first()
+    shop_code = resolve_shop_code_for_order(order)
+    qr_bundle = build_order_cashier_qr_bundle(request, order, shop_code)
+    shell = build_order_shell(order)
+    cash_code_url = order_cash_code_url(order.order_id)
+    return {
+        'order': order,
+        'order_shell': shell,
+        'shop_profile': shop_profile,
+        'qr_bundle': qr_bundle,
+        'shop_url': f'/shop/?seller_id={order.seller_id}',
+        'order_detail_url': reverse('order_detail', kwargs={'order_id': order.order_id}),
+        'cash_code_print_url': reverse('order_cash_code_print', kwargs={'order_id': order.order_id}),
+        'cash_code_page_url': cash_code_url,
+    }
+
+
 def order_cashier_qr_template_context(
     request,
     order: BuyOrder,

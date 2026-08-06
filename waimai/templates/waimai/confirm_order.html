@@ -112,6 +112,7 @@
         <input type="hidden" name="fulfillment_type" value="{{ fulfillment_type }}">
         <input type="hidden" name="distance_km" value="{{ distance_km }}">
         <input type="hidden" name="delivery_address" value="{{ delivery_address }}">
+        <input type="hidden" name="idempotency_key" id="place-order-idempotency-key" value="">
         {% if shop_channel == 'dine_in' and not table_label %}
         <div class="fulfillment-block" style="margin:0 0 12px;">
             <label class="fulfillment-choice" style="width:100%;">
@@ -125,4 +126,21 @@
         <button type="submit" class="btn btn-orange">{% if is_guest_checkout %}确认下单（现场付）{% else %}确认下单{% endif %}</button>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% load static %}
+<script src="{% static 'waimai/idempotency_client.js' %}"></script>
+<script>
+(function () {
+    var form = document.getElementById('place-order-form');
+    var keyInput = document.getElementById('place-order-idempotency-key');
+    if (!form || !keyInput || !window.YcIdempotency) return;
+    keyInput.value = window.YcIdempotency.newKey();
+    form.addEventListener('submit', function () {
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+    });
+})();
+</script>
 {% endblock %}

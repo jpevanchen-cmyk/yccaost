@@ -202,6 +202,7 @@ window.YC_REMITTANCE_ALERT = {
 <script src="{% static 'waimai/order_alert.js' %}?v=10"></script>
 {% endif %}
 {% if current_view == 'kitchen' or current_view == 'waiter' or current_view == 'orders' or current_view == 'cash_manage' or current_view == 'cashier' or current_view == 'rider' %}
-<script src="{% static 'waimai/panel_refresh.js' %}?v=7"></script>
+<script src="{% static 'waimai/idempotency_client.js' %}"></script>
+<script src="{% static 'waimai/panel_refresh.js' %}?v=18"></script>
 {% endif %}
 {% endblock %}

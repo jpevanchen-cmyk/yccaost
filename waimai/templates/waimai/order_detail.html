@@ -304,6 +304,10 @@
     </div>
 </details>
 
+{% if viewer_role == 'seller' %}
+{% include 'waimai/_order_fund_ledger_block.html' %}
+{% endif %}
+
 <details class="seller-panel-fold" data-yc-tour="order-detail-timeline">
     <summary>📦 订单进度</summary>
     <div class="seller-panel-fold-body">

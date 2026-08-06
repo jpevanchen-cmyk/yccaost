@@ -47,7 +47,7 @@ def render_workbench_cash_manage_panel_html(
         'cash_month_preserve_view': 'cash_manage',
         'cash_manage_link_mode': 'workbench',
         'cash_manage_intro': (
-            '处理骑手交款与货到付款少收争议。确认收款、备货交付请在各岗位 Tab 操作。'
+            '处理骑手交款与外卖货到付款少收争议。确认收款、备货交付请在各岗位 Tab 操作。'
         ),
         'cash_panel_id': 'work-cash-manage-panel-body',
     })
@@ -131,3 +131,36 @@ def respond_cash_manage_action(
     else:
         messages.error(request, message)
     return redirect(redirect_to)
+
+
+# 现金管理 Panel 写操作（幂等第 6 步）
+CASH_MANAGE_PANEL_ACTIONS = (
+    'approve_exception',
+    'confirm_remittance',
+    'reject_remittance',
+)
+
+
+def detect_cash_manage_panel_action(request) -> str | None:
+    """识别现金管理 Panel 写操作；非幂等范围返回 None。"""
+    action = (request.POST.get('cash_manage_action') or '').strip()
+    if action in CASH_MANAGE_PANEL_ACTIONS:
+        return action
+    return None
+
+
+def run_cash_manage_idempotent(request, seller_id: str, operator, action: str, execute):
+    """
+    现金管理 Panel 写操作幂等（进度 80 · 幂等第 6 步）。
+    同一 scope+键只改一次数据库，重复请求返回首次 Panel JSON。
+    """
+    from .idempotency_helpers import idempotency_scope, run_idempotent
+
+    if operator is not None:
+        actor = str(operator.pk)
+    elif getattr(request.user, 'is_authenticated', False):
+        actor = str(request.user.pk)
+    else:
+        actor = (request.session.session_key or 'anon')[:32]
+    scope = idempotency_scope('cash_manage', action, seller_id, actor)
+    return run_idempotent(request, scope, execute)

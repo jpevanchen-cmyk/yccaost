@@ -1,4 +1,4 @@
-{# 现金管理 · 按日汇总（月份下拉 + 表格） #}
+{# 外卖现金管理 · 按日汇总（月份下拉 + 表格） #}
 {% if cash_daily_table %}
 <div class="cash-manage-month-bar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px;">
     <label for="cash-month-select" class="card-meta" style="margin:0;">汇总月份</label>
@@ -18,15 +18,21 @@
         <noscript><button type="submit" class="btn btn-sm btn-outline">切换</button></noscript>
     </form>
 </div>
+{% if cash_daily_table.pending_remittance_hint %}
+<p class="card-meta" style="margin:0 0 12px;padding:10px;background:#fff8e1;border-radius:8px;">
+    {{ cash_daily_table.pending_remittance_hint }}
+</p>
+{% endif %}
 <div class="cash-manage-daily-wrap" style="margin:0 0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
     <table class="seller-table cash-manage-daily-table">
         <thead>
             <tr>
                 <th>日期</th>
-                <th>待入金单数</th>
-                <th>待入金金额</th>
-                <th>已入金金额</th>
-                <th>今日现金总额</th>
+                <th>现金单数</th>
+                <th>应入金额</th>
+                <th>实入金额</th>
+                <th>未入金额</th>
+                <th>异常减收</th>
                 <th>备注</th>
             </tr>
         </thead>
@@ -34,15 +40,16 @@
             {% for row in cash_daily_table.rows %}
             <tr>
                 <td>{{ row.date }}</td>
-                <td>{{ row.pending_count }}</td>
-                <td>¥{{ row.pending_amount|floatformat:2 }}</td>
+                <td>{{ row.order_count }}</td>
+                <td>¥{{ row.expected_amount|floatformat:2 }}</td>
                 <td>¥{{ row.remitted_amount|floatformat:2 }}</td>
-                <td>¥{{ row.daily_total|floatformat:2 }}</td>
+                <td>¥{{ row.unremitted_amount|floatformat:2 }}</td>
+                <td>¥{{ row.shortfall_amount|floatformat:2 }}</td>
                 <td>{{ row.note }}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="6" class="card-meta">该月暂无现金记录</td>
+                <td colspan="7" class="card-meta">该月暂无现金记录</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -50,10 +57,11 @@
         <tfoot>
             <tr>
                 <th>合计</th>
-                <th>{{ cash_daily_table.totals.pending_count }}</th>
-                <th>¥{{ cash_daily_table.totals.pending_amount|floatformat:2 }}</th>
+                <th>{{ cash_daily_table.totals.order_count }}</th>
+                <th>¥{{ cash_daily_table.totals.expected_amount|floatformat:2 }}</th>
                 <th>¥{{ cash_daily_table.totals.remitted_amount|floatformat:2 }}</th>
-                <th>¥{{ cash_daily_table.totals.daily_total|floatformat:2 }}</th>
+                <th>¥{{ cash_daily_table.totals.unremitted_amount|floatformat:2 }}</th>
+                <th>¥{{ cash_daily_table.totals.shortfall_amount|floatformat:2 }}</th>
                 <th></th>
             </tr>
         </tfoot>

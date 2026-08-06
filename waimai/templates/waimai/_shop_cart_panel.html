@@ -9,7 +9,7 @@
         <div class="cart-zero-hint">当前 0 {{ product_shell.unit_label|default:"件" }}，点 + 可加回，或点删除移出购物车</div>
         {% endif %}
         <div class="cart-item-controls">
-            <form method="POST" style="display:inline;margin:0;" data-scroll-anchor="cart">
+            <form method="POST" style="display:inline;margin:0;" data-yc-panel="shop-cart-shell">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="decrease_from_cart">
                 <input type="hidden" name="line_key" value="{{ item.line_key }}">
@@ -17,7 +17,7 @@
                 <button type="submit" class="cart-qty-btn" title="减少" aria-label="减少">-</button>
             </form>
             <span style="min-width:28px;text-align:center;font-weight:600;">{{ item.quantity }}</span>
-            <form method="POST" style="display:inline;margin:0;" data-scroll-anchor="cart">
+            <form method="POST" style="display:inline;margin:0;" data-yc-panel="shop-cart-shell">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="add_to_cart">
                 <input type="hidden" name="dish_id" value="{{ item.dish.dish_id }}">
@@ -25,7 +25,7 @@
                 <input type="hidden" name="stay_in_cart" value="1">
                 <button type="submit" class="cart-qty-btn" title="增加" aria-label="增加">+</button>
             </form>
-            <form method="POST" style="display:inline;margin:0;" data-scroll-anchor="cart">
+            <form method="POST" style="display:inline;margin:0;" data-yc-panel="shop-cart-shell">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="remove_from_cart">
                 <input type="hidden" name="line_key" value="{{ item.line_key }}">
@@ -38,7 +38,7 @@
 
     <p class="cart-total-line">有效 {{ cart_count }} 件 · 应付商品 ¥{{ cart_total }}</p>
 
-    <form method="POST" class="cart-form" data-scroll-anchor="cart">
+    <form method="POST" class="cart-form">
         {% csrf_token %}
         <input type="hidden" name="action" value="checkout">
         {% if needs_delivery_fields %}

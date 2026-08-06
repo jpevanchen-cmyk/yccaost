@@ -70,6 +70,24 @@ def clear_shop_channel(session, seller_id: str) -> None:
     session.modified = True
 
 
+def channel_repick_session_key(seller_id: str) -> str:
+    """客人店页「更换通道」重选模式（会话标记，不清购物车）。"""
+    return f'shop_channel_repick_{seller_id}'
+
+
+def is_channel_repick(session, seller_id: str) -> bool:
+    return bool(session.get(channel_repick_session_key(seller_id)))
+
+
+def set_channel_repick(session, seller_id: str, active: bool) -> None:
+    key = channel_repick_session_key(seller_id)
+    if active:
+        session[key] = True
+    else:
+        session.pop(key, None)
+    session.modified = True
+
+
 def resolve_shop_channel(request, seller_id: str, table_session) -> str:
     """按店铺插件状态解析当前通道，并清掉不再有效的旧选择。"""
     if _dining_enabled(seller_id):

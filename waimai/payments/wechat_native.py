@@ -157,6 +157,15 @@ def create_native_payment(order: BuyOrder, settings: ShopPaymentSettings, client
     record.code_url = code_url
     record.save(update_fields=['code_url', 'updated_at'])
 
+    from ..fund_ledger_hooks import record_wechat_scan_initiated
+
+    record_wechat_scan_initiated(
+        order,
+        out_trade_no=record.out_trade_no,
+        source='buyer_pay_page',
+        operator=getattr(order, 'buyer_id', '') or 'buyer',
+    )
+
     order.payment_method = 'wechat'
     order.save(update_fields=['payment_method', 'updated_at'])
 
@@ -200,6 +209,14 @@ def apply_wechat_success(record: PaymentRecord, provider_trade_no: str, notify_p
     order = record.buy_order
     if order.payment_status != 'paid':
         confirm_order_paid(order, 'wechat', paid_at=record.paid_at)
+    from ..fund_ledger_hooks import record_wechat_payment_success
+
+    record_wechat_payment_success(
+        order,
+        out_trade_no=record.out_trade_no,
+        source='wechat_notify',
+        operator='system',
+    )
 
 
 def try_sync_wechat_payment(record: PaymentRecord, settings: ShopPaymentSettings) -> bool:

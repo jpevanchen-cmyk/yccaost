@@ -1,5 +1,6 @@
 import re
 import uuid
+from decimal import Decimal
 
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -632,13 +633,6 @@ class Dish(models.Model):
     price = models.DecimalField(
         max_digits=8, decimal_places=2, validators=[MinValueValidator(0.01)],
         verbose_name='通用价格（元）',
-    )
-    image_url = models.CharField(
-        max_length=500,
-        blank=True,
-        default='',
-        verbose_name='菜品图片链接（已废止）',
-        help_text='历史外链迁移后留空；运行时只认本地商品图文件夹。',
     )
     description = models.TextField(blank=True, verbose_name='普通描述')
     description_member = models.TextField(blank=True, verbose_name='会员描述')
@@ -1335,30 +1329,6 @@ class DeliveryOrder(models.Model):
         pass
 
 
-class OrderTimelineEvent(models.Model):
-    """订单历程：主状态机 / 事件发生时写入，供各端时间线只读展示。"""
-
-    order = models.ForeignKey(
-        BuyOrder,
-        on_delete=models.CASCADE,
-        related_name='timeline_events',
-        verbose_name='订单',
-    )
-    event_code = models.CharField(max_length=48, db_index=True, verbose_name='事件代码')
-    label = models.CharField(max_length=64, verbose_name='展示文案')
-    occurred_at = models.DateTimeField(db_index=True, verbose_name='发生时间')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='写入时间')
-
-    class Meta:
-        db_table = 'order_timeline_event'
-        ordering = ['occurred_at', 'pk']
-        verbose_name = '订单历程'
-        verbose_name_plural = '订单历程'
-
-    def __str__(self):
-        return f'{self.label} @ {self.occurred_at}'
-
-
 class CashRemittanceRequest(models.Model):
     """配送员交回货到付款现金的申请单。"""
 
@@ -1619,6 +1589,180 @@ class OrderMessage(models.Model):
 
     def __str__(self):
         return f'{self.order_id}:{self.author_side}:{self.body[:20]}'
+
+
+# ============================================
+# 84a · 资金总流水（§5.8.7）：权威总账 + 状态追踪（只追加）
+# ============================================
+class FundLedgerEntry(models.Model):
+    """资金总流水：每笔资金事项一行，状态类字段可更新。"""
+
+    DIRECTION_INCOME = 'income'
+    DIRECTION_EXPENSE = 'expense'
+    DIRECTION_CHOICES = [
+        (DIRECTION_INCOME, '收入'),
+        (DIRECTION_EXPENSE, '支出'),
+    ]
+
+    ENTRY_STATUS_PENDING = 'pending'
+    ENTRY_STATUS_PROCESSING = 'processing'
+    ENTRY_STATUS_SUCCESS = 'success'
+    ENTRY_STATUS_FAILED = 'failed'
+    ENTRY_STATUS_CANCELLED = 'cancelled'
+    ENTRY_STATUS_CHOICES = [
+        (ENTRY_STATUS_PENDING, '待处理'),
+        (ENTRY_STATUS_PROCESSING, '处理中'),
+        (ENTRY_STATUS_SUCCESS, '成功'),
+        (ENTRY_STATUS_FAILED, '失败'),
+        (ENTRY_STATUS_CANCELLED, '已撤销'),
+    ]
+
+    FUND_STATUS_NOT_APPLICABLE = 'not_applicable'
+    FUND_STATUS_CUSTOMER_PAID = 'customer_paid'
+    FUND_STATUS_IN_TRANSIT = 'in_transit'
+    FUND_STATUS_AT_SHOP = 'at_shop'
+    FUND_STATUS_WRITTEN_OFF = 'written_off'
+    FUND_STATUS_CHOICES = [
+        (FUND_STATUS_NOT_APPLICABLE, '不涉及真钱'),
+        (FUND_STATUS_CUSTOMER_PAID, '客人侧已付'),
+        (FUND_STATUS_IN_TRANSIT, '在途'),
+        (FUND_STATUS_AT_SHOP, '已到店铺'),
+        (FUND_STATUS_WRITTEN_OFF, '未收款结案'),
+    ]
+
+    REFUND_STATUS_PENDING = 'refund_pending'
+    REFUND_STATUS_PROCESSING = 'refund_processing'
+    REFUND_STATUS_COMPLETED = 'refund_completed'
+    REFUND_STATUS_REJECTED = 'refund_rejected'
+    REFUND_STATUS_CHOICES = [
+        (REFUND_STATUS_PENDING, '待处理'),
+        (REFUND_STATUS_PROCESSING, '处理中'),
+        (REFUND_STATUS_COMPLETED, '退款已完成'),
+        (REFUND_STATUS_REJECTED, '已驳回'),
+    ]
+
+    ledger_id = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False, verbose_name='流水ID',
+    )
+    display_no = models.CharField(max_length=32, unique=True, db_index=True, verbose_name='流水号')
+    seller_id = models.CharField(max_length=64, db_index=True, verbose_name='店铺')
+    buy_order = models.ForeignKey(
+        BuyOrder, on_delete=models.CASCADE, related_name='fund_ledger_entries', verbose_name='关联订单',
+    )
+    direction = models.CharField(max_length=8, choices=DIRECTION_CHOICES, db_index=True, verbose_name='方向')
+    amount = models.DecimalField(
+        max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))], verbose_name='金额',
+    )
+    payment_method = models.CharField(max_length=32, db_index=True, verbose_name='支付方式')
+    fund_status = models.CharField(
+        max_length=32, blank=True, default='', choices=FUND_STATUS_CHOICES, verbose_name='资金状态',
+    )
+    refund_status = models.CharField(
+        max_length=32, blank=True, default='', choices=REFUND_STATUS_CHOICES, verbose_name='退款状态',
+    )
+    business_type = models.CharField(max_length=48, db_index=True, verbose_name='业务类型')
+    source = models.CharField(max_length=64, blank=True, default='', verbose_name='来源入口')
+    entry_status = models.CharField(
+        max_length=16, choices=ENTRY_STATUS_CHOICES, default=ENTRY_STATUS_SUCCESS,
+        db_index=True, verbose_name='流水状态',
+    )
+    related_ledger = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='related_entries', verbose_name='关联流水',
+    )
+    occurred_at = models.DateTimeField(db_index=True, verbose_name='发生时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+    operator = models.CharField(max_length=128, blank=True, default='', verbose_name='操作人')
+    reference_key = models.CharField(max_length=128, blank=True, default='', verbose_name='依据编号')
+    schema_version = models.CharField(max_length=16, default='1', verbose_name='规则版本')
+    app_build = models.CharField(max_length=32, blank=True, default='', verbose_name='应用版本')
+    note = models.CharField(max_length=300, blank=True, default='', verbose_name='备注')
+
+    class Meta:
+        db_table = 'fund_ledger_entry'
+        ordering = ['-occurred_at', '-ledger_id']
+        verbose_name = '资金总流水'
+        verbose_name_plural = '资金总流水'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['seller_id', 'reference_key'],
+                condition=models.Q(reference_key__gt=''),
+                name='uniq_fund_ledger_seller_reference',
+            ),
+        ]
+
+    def __str__(self):
+        return self.display_no
+
+
+class FundLedgerStatusTrack(models.Model):
+    """状态追踪：每次状态变更一行，只追加。"""
+
+    track_id = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False, verbose_name='追踪ID',
+    )
+    ledger = models.ForeignKey(
+        FundLedgerEntry, on_delete=models.CASCADE, related_name='status_tracks', verbose_name='关联流水',
+    )
+    changed_field = models.CharField(max_length=32, verbose_name='变更字段')
+    value_before = models.CharField(max_length=64, blank=True, default='', verbose_name='变更前')
+    value_after = models.CharField(max_length=64, blank=True, default='', verbose_name='变更后')
+    changed_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='变更时间')
+    operator = models.CharField(max_length=128, blank=True, default='', verbose_name='操作人')
+    source = models.CharField(max_length=64, blank=True, default='', verbose_name='来源')
+    note = models.CharField(max_length=300, blank=True, default='', verbose_name='备注')
+
+    class Meta:
+        db_table = 'fund_ledger_status_track'
+        ordering = ['changed_at', 'track_id']
+        verbose_name = '资金流水状态追踪'
+        verbose_name_plural = '资金流水状态追踪'
+
+    def __str__(self):
+        return f'{self.ledger_id}:{self.changed_field}'
+
+
+class IdempotencyRecord(models.Model):
+    """写操作幂等记录（进度 80 · 幂等第 1 步）：同一键只执行一次副作用"""
+
+    STATE_PENDING = 'pending'
+    STATE_COMPLETED = 'completed'
+    STATE_CHOICES = [
+        (STATE_PENDING, '处理中'),
+        (STATE_COMPLETED, '已完成'),
+    ]
+
+    scope = models.CharField(
+        max_length=128, db_index=True, default='', verbose_name='作用域',
+        help_text='区分不同业务，如 shop_cart、seller_menu',
+    )
+    idempotency_key = models.CharField(max_length=128, db_index=True, verbose_name='幂等键')
+    state = models.CharField(
+        max_length=16, choices=STATE_CHOICES, default=STATE_PENDING, db_index=True,
+    )
+    response_status = models.PositiveSmallIntegerField(default=200, verbose_name='HTTP 状态码')
+    response_body = models.TextField(blank=True, default='', verbose_name='响应正文')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='创建时间')
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name='完成时间')
+    expires_at = models.DateTimeField(db_index=True, verbose_name='过期时间')
+
+    class Meta:
+        db_table = 'idempotency_record'
+        verbose_name = '幂等记录'
+        verbose_name_plural = '幂等记录'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['scope', 'idempotency_key'],
+                name='uniq_idempotency_scope_key',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.scope}:{self.idempotency_key[:16]}…'
+
+    def is_expired(self) -> bool:
+        from django.utils import timezone
+        return timezone.now() >= self.expires_at
 
 
 # 留言板（正式功能 · 表名沿用 owner_guestbook_*）

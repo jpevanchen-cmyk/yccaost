@@ -7,7 +7,7 @@
 {% endif %}
 
 {% if cash_daily_table %}
-{% include 'waimai/_yc_panel_fold.html' with fold_id='cash-manage-daily' fold_title='📊 现金日汇总' fold_open=cash_fold_daily_open fold_head_tour='cash-daily-fold' %}
+{% include 'waimai/_yc_panel_fold.html' with fold_id='cash-manage-daily' fold_title='📊 外卖现金日汇总' fold_open=cash_fold_daily_open fold_head_tour='cash-daily-fold' %}
 {% include 'waimai/_cash_manage_daily_table.html' with cash_month_form_action=cash_month_form_action cash_month_preserve_view=cash_month_preserve_view cash_month_preserve_section=cash_month_preserve_section cash_panel_id=cash_panel_id %}
 {% include 'waimai/seller/_panel_fold_end.html' %}
 {% endif %}

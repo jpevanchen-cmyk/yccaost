@@ -3,10 +3,175 @@
  * - 标记 data-yc-panel="容器 id" 的表单走 Ajax，不整页刷新
  * - 清单下拉 data-yc-panel-picker 换清单（方案甲：replaceState，不 reload）
  * - 现金月份 data-yc-cash-month-picker 换汇总（同样不 reload）
+ * - 等待逻辑：等本次 HTTP **服务器响应**（非 navigator.onLine / WiFi 恢复）
+ * - 0 秒起全屏锁；5 秒转圈；20 秒 Abort；超时后「再试一次」复用同一幂等编号（幂等第 12 步）
  * - 无脚本时原 form POST / GET 仍可用
  */
 (function () {
     var HEADER = 'YecaoPanel';
+    var SHOP_CART_PANEL_ID = 'shop-cart-shell';
+    var MENU_CATALOG_PANEL_ID = 'menu-panel-body';
+    var WORKBENCH_PANEL_IDS = [
+        'work-orders-panel-body',
+        'work-kitchen-panel-body',
+        'work-waiter-panel-body',
+        'work-rider-panel-body',
+        'work-cashier-panel-body',
+        'work-cash-manage-panel-body',
+    ];
+    var SELLER_CASH_MANAGE_PANEL_ID = 'cash-manage-panel-body';
+    var PANEL_WAIT_SPIN_MS = 5000;
+    var PANEL_TIMEOUT_MS = 20000;
+    var PANEL_TIMEOUT_MESSAGE = '服务器可能走丢了，请检查网络';
+    var loadingOverlay = null;
+    /* Panel 等待锁屏计数：并发请求时只拦一次滚动、最后一次解锁才放开 */
+    var panelWaitLockCount = 0;
+    var panelWaitScrollBlocker = null;
+    var panelWaitKeyBlocker = null;
+
+    /** 锁屏期间禁止滚轮/触摸滑动（不用 overflow:hidden，滚动条保持可见） */
+    function blockPanelWaitWheelTouch(e) {
+        e.preventDefault();
+    }
+
+    function blockPanelWaitScrollKeys(e) {
+        var k = e.key;
+        if (k === ' ' || k === 'PageUp' || k === 'PageDown' ||
+            k === 'ArrowUp' || k === 'ArrowDown' || k === 'Home' || k === 'End') {
+            e.preventDefault();
+        }
+    }
+
+    function lockPanelWaitScroll() {
+        if (panelWaitLockCount > 0) {
+            panelWaitLockCount += 1;
+            return;
+        }
+        panelWaitLockCount = 1;
+        panelWaitScrollBlocker = blockPanelWaitWheelTouch;
+        panelWaitKeyBlocker = blockPanelWaitScrollKeys;
+        document.addEventListener('wheel', panelWaitScrollBlocker, { passive: false, capture: true });
+        document.addEventListener('touchmove', panelWaitScrollBlocker, { passive: false, capture: true });
+        document.addEventListener('keydown', panelWaitKeyBlocker, true);
+        document.body.classList.add('yc-panel-wait-locked');
+    }
+
+    function unlockPanelWaitScroll() {
+        if (panelWaitLockCount <= 0) {
+            return;
+        }
+        panelWaitLockCount -= 1;
+        if (panelWaitLockCount > 0) {
+            return;
+        }
+        if (panelWaitScrollBlocker) {
+            document.removeEventListener('wheel', panelWaitScrollBlocker, { capture: true });
+            document.removeEventListener('touchmove', panelWaitScrollBlocker, { capture: true });
+            panelWaitScrollBlocker = null;
+        }
+        if (panelWaitKeyBlocker) {
+            document.removeEventListener('keydown', panelWaitKeyBlocker, true);
+            panelWaitKeyBlocker = null;
+        }
+        document.body.classList.remove('yc-panel-wait-locked');
+    }
+
+    function isShopCartPanel(panelId) {
+        return panelId === SHOP_CART_PANEL_ID;
+    }
+
+    function isMenuCatalogPanel(panelId) {
+        return panelId === MENU_CATALOG_PANEL_ID;
+    }
+
+    function isWorkbenchPanel(panelId) {
+        return WORKBENCH_PANEL_IDS.indexOf(panelId) >= 0;
+    }
+
+    function isCashManagePanel(panelId) {
+        return panelId === SELLER_CASH_MANAGE_PANEL_ID
+            || panelId === 'work-cash-manage-panel-body';
+    }
+
+    function panelNeedsIdempotency(panelId) {
+        return isShopCartPanel(panelId)
+            || isMenuCatalogPanel(panelId)
+            || isWorkbenchPanel(panelId)
+            || isCashManagePanel(panelId);
+    }
+
+    function ensureLoadingOverlay() {
+        if (loadingOverlay) return loadingOverlay;
+        loadingOverlay = document.createElement('div');
+        loadingOverlay.className = 'yc-panel-loading';
+        loadingOverlay.setAttribute('aria-live', 'polite');
+        loadingOverlay.hidden = true;
+        loadingOverlay.innerHTML = '<div class="yc-panel-loading-box">'
+            + '<div class="yc-panel-loading-spinner" aria-hidden="true"></div>'
+            + '<p class="yc-panel-loading-text">正在读取数据…</p></div>';
+        document.body.appendChild(loadingOverlay);
+        return loadingOverlay;
+    }
+
+    /** 等待服务器 HTTP 响应：0 秒起锁屏；5 秒显示转圈；20 秒 Abort（非等 WiFi/online） */
+    function beginPanelWait() {
+        var overlay = ensureLoadingOverlay();
+        var slowTimer = null;
+        var timeoutTimer = null;
+        var abortController = new AbortController();
+
+        lockPanelWaitScroll();
+        overlay.hidden = false;
+        overlay.classList.add('is-blocking');
+        overlay.classList.remove('is-visible');
+
+        slowTimer = setTimeout(function () {
+            overlay.classList.add('is-visible');
+        }, PANEL_WAIT_SPIN_MS);
+        timeoutTimer = setTimeout(function () {
+            abortController.abort();
+        }, PANEL_TIMEOUT_MS);
+        return {
+            signal: abortController.signal,
+            finish: function () {
+                clearTimeout(slowTimer);
+                clearTimeout(timeoutTimer);
+                overlay.hidden = true;
+                overlay.classList.remove('is-blocking', 'is-visible');
+                unlockPanelWaitScroll();
+            },
+            errorMessage: function (err) {
+                /* 超时/连不上：指本次请求未收到服务器响应，不是 navigator.onLine */
+                if (err && (err.name === 'AbortError' || err.message === 'Failed to fetch')) {
+                    return PANEL_TIMEOUT_MESSAGE;
+                }
+                return (err && err.message) ? err.message : '操作未成功，请稍后再试';
+            },
+        };
+    }
+
+    function panelFetch(url, options) {
+        options = options || {};
+        var wait = beginPanelWait();
+        var fetchOpts = {
+            method: options.method || 'GET',
+            credentials: 'same-origin',
+            headers: options.headers || {},
+            signal: wait.signal,
+        };
+        if (options.body) fetchOpts.body = options.body;
+        return fetch(url, fetchOpts)
+            .then(function (response) {
+                wait.finish();
+                return response;
+            })
+            .catch(function (err) {
+                wait.finish();
+                var msg = wait.errorMessage(err);
+                var wrapped = new Error(msg);
+                throw wrapped;
+            });
+    }
 
     function csrfToken(form) {
         if (form) {
@@ -122,19 +287,38 @@
         });
     }
 
-    function onFormSubmit(e) {
-        var form = e.target;
-        if (!form || !form.getAttribute('data-yc-panel')) return;
-        var panelId = form.getAttribute('data-yc-panel');
-        var panelEl = resolvePanelEl(panelId);
-        if (!panelEl) return;
+    function isPanelTimeoutMessage(text) {
+        return text === PANEL_TIMEOUT_MESSAGE;
+    }
 
-        e.preventDefault();
-        var submitter = resolveSubmitter(form, e.submitter || null);
-        lastSubmitterByForm.delete(form);
-        var submitBtn = submitter || form.querySelector('button[type="submit"], input[type="submit"]');
-        if (submitBtn && submitBtn.disabled) return;
-        if (submitBtn) submitBtn.disabled = true;
+    function showPanelTimeoutRetryNotice(message, onRetry, onDismiss) {
+        var hint = message + '\n\n若网络已恢复，可点「再试一次」；服务器若已成功处理，不会重复改数据。';
+        if (window.YcNotice && typeof window.YcNotice.show === 'function') {
+            window.YcNotice.show({
+                level: 'error',
+                text: hint,
+                mustAck: true,
+                retryLabel: '再试一次',
+                onRetry: onRetry,
+                onClose: onDismiss,
+            });
+            return;
+        }
+        if (window.confirm(hint + '\n\n是否现在再试一次？')) {
+            onRetry();
+        } else if (typeof onDismiss === 'function') {
+            onDismiss();
+        }
+    }
+
+    function submitPanelFormRequest(ctx) {
+        var form = ctx.form;
+        var panelId = ctx.panelId;
+        var panelEl = ctx.panelEl;
+        var submitter = ctx.submitter;
+        var submitBtn = ctx.submitBtn;
+        var shopCartState = ctx.shopCartState;
+        var idemKey = ctx.idemKey || '';
 
         var postUrl = form.getAttribute('action') || window.location.href;
         var headers = { 'X-Requested-With': HEADER };
@@ -144,16 +328,37 @@
         var fd = new FormData(form);
         appendFormSubmitter(fd, submitter);
 
-        fetch(postUrl, {
+        if (panelNeedsIdempotency(panelId) && window.YcIdempotency) {
+            if (!idemKey) {
+                idemKey = window.YcIdempotency.newKey();
+            }
+            headers = window.YcIdempotency.applyToHeaders(headers, idemKey);
+            fd = window.YcIdempotency.applyToFormData(fd, idemKey);
+        }
+
+        var retryCtx = {
+            form: form,
+            panelId: panelId,
+            panelEl: panelEl,
+            submitter: submitter,
+            submitBtn: submitBtn,
+            shopCartState: shopCartState,
+            idemKey: idemKey,
+        };
+
+        return panelFetch(postUrl, {
             method: 'POST',
             body: fd,
-            credentials: 'same-origin',
             headers: headers,
         })
             .then(parsePanelResponse)
             .then(function (data) {
                 applyPanelHtml(panelEl, data.html);
-                if (data.message) {
+                if (isShopCartPanel(panelId)) {
+                    if (window.YcaoShopCart && window.YcaoShopCart.afterPanelReplace && shopCartState) {
+                        window.YcaoShopCart.afterPanelReplace(shopCartState);
+                    }
+                } else if (data.message) {
                     showMessage('ok', data.message);
                 }
                 if (data.extra && data.extra.scroll_to) {
@@ -174,23 +379,80 @@
                     }
                 }
                 if (submitBtn) submitBtn.disabled = false;
+                return data;
             })
             .catch(function (err) {
                 var level = 'error';
                 var mustAck = true;
-                if (err.message && (
-                    err.message.indexOf('未结束订单') >= 0
-                    || err.message.indexOf('正在使用中') >= 0
+                var errText = err.message || '操作未成功，请稍后再试';
+                if (errText && (
+                    errText.indexOf('未结束订单') >= 0
+                    || errText.indexOf('正在使用中') >= 0
                 )) {
                     level = 'warning';
                 }
+
+                function dismissPanelError() {
+                    if (isShopCartPanel(panelId) && window.YcaoShopCart && window.YcaoShopCart.onPanelError) {
+                        window.YcaoShopCart.onPanelError(shopCartState);
+                    }
+                    if (submitBtn) submitBtn.disabled = false;
+                }
+
+                if (isPanelTimeoutMessage(errText) && panelNeedsIdempotency(panelId) && idemKey) {
+                    showPanelTimeoutRetryNotice(errText, function () {
+                        if (submitBtn) submitBtn.disabled = true;
+                        submitPanelFormRequest(retryCtx).catch(function () {
+                            /* 二次失败仍走同一套提示 */
+                        });
+                    }, dismissPanelError);
+                    return;
+                }
+
+                if (isShopCartPanel(panelId) && window.YcaoShopCart && window.YcaoShopCart.onPanelError) {
+                    window.YcaoShopCart.onPanelError(shopCartState);
+                }
                 if (window.YcNotice && typeof window.YcNotice.show === 'function') {
-                    window.YcNotice.show({ level: level, text: err.message || '操作未成功，请稍后再试', mustAck: mustAck });
+                    window.YcNotice.show({ level: level, text: errText, mustAck: mustAck });
                 } else {
-                    window.alert(err.message || '操作未成功，请稍后再试');
+                    window.alert(errText);
                 }
                 if (submitBtn) submitBtn.disabled = false;
             });
+    }
+
+    function onFormSubmit(e) {
+        var form = e.target;
+        if (!form || !form.getAttribute('data-yc-panel')) return;
+        var panelId = form.getAttribute('data-yc-panel');
+        var panelEl = resolvePanelEl(panelId);
+        if (!panelEl) return;
+
+        e.preventDefault();
+        var submitter = resolveSubmitter(form, e.submitter || null);
+        lastSubmitterByForm.delete(form);
+        var submitBtn = submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+        if (submitBtn && submitBtn.disabled) return;
+        if (submitBtn) submitBtn.disabled = true;
+
+        var shopCartState = null;
+        if (isShopCartPanel(panelId) && window.YcaoShopCart) {
+            shopCartState = {
+                checkoutValues: window.YcaoShopCart.preserveCheckoutFields
+                    ? window.YcaoShopCart.preserveCheckoutFields() : {},
+                drawerWasOpen: window.YcaoShopCart.wasDrawerOpen
+                    ? window.YcaoShopCart.wasDrawerOpen() : false,
+            };
+        }
+
+        submitPanelFormRequest({
+            form: form,
+            panelId: panelId,
+            panelEl: panelEl,
+            submitter: submitter,
+            submitBtn: submitBtn,
+            shopCartState: shopCartState,
+        });
     }
 
     /** GET 换 Panel（清单下拉、现金月份等：只换 HTML + replaceState） */
@@ -200,9 +462,8 @@
         if (!panelEl) return false;
         var urlObj = new URL(targetUrl, window.location.href);
         var fetchUrl = urlObj.pathname + (urlObj.search ? urlObj.search : '');
-        fetch(fetchUrl, {
+        panelFetch(fetchUrl, {
             method: 'GET',
-            credentials: 'same-origin',
             headers: { 'X-Requested-With': HEADER },
         })
             .then(parsePanelResponse)

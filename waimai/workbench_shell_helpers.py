@@ -17,8 +17,8 @@ def _core_shell() -> dict:
         ),
         'tab_cashier': '收银台',
         'view_cashier_title': '实体收银台',
-        'tab_cash_manage': '现金管理',
-        'view_cash_manage_title': '现金管理',
+        'tab_cash_manage': '外卖现金管理',
+        'view_cash_manage_title': '外卖现金管理',
         'cashier_empty': '今天没有待支付订单。',
         'cashier_readonly_hint': (
             '👀 当前为<strong>只读</strong>：您可查看待支付列表，'

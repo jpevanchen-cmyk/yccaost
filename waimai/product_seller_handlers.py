@@ -142,11 +142,26 @@ def _apply_new_dish_special_defaults(dish):
 
 
 def handle_upload_dish_image_ajax(request, seller_id):
-    """Ajax 单张商品图上传（试跑补丁 H）。"""
+    """Ajax 单张商品图上传（试跑补丁 H · 幂等第 9 步）。"""
     from django.http import JsonResponse
+
+    from .product_image_upload_helpers import run_product_image_upload_idempotent
 
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': '无效请求'}, status=405)
+    dish_id = (request.POST.get('dish_id') or '').strip()
+    return run_product_image_upload_idempotent(
+        request,
+        seller_id,
+        dish_id,
+        lambda: _execute_upload_dish_image_ajax(request, seller_id),
+    )
+
+
+def _execute_upload_dish_image_ajax(request, seller_id):
+    """Ajax 单张商品图上传实际逻辑（由 run_idempotent 包裹）。"""
+    from django.http import JsonResponse
+
     dish_id = request.POST.get('dish_id')
     dish = get_object_or_404(Dish, dish_id=dish_id, seller_id=seller_id)
     uploaded = request.FILES.get('dish_image')

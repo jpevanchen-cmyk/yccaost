@@ -1,0 +1,172 @@
+{% load yc_time %}
+{# 服务员看板 · 单笔订单卡片（分组折叠内复用） #}
+{% with order=row.order %}
+<div class="card delivery-card" id="waiter-order-{{ order.order_id.hex|slice:":8" }}">
+    <div class="delivery-card-head">
+        订单 {{ order.get_display_order_no }}
+        · {{ order.get_fulfillment_display_short }}
+        {% if row.unread_msg_count %}
+        <span class="msg-unread-dot" title="有未读沟通">{{ row.unread_msg_count }}</span>
+        {% endif %}
+    </div>
+    <p class="delivery-card-meta">
+        {% if workbench_shell.show_table_on_board and order.table_label %}{{ workbench_shell.table_caption }}：<strong>{{ order.table_label }}</strong><br>{% endif %}
+        {% if row.rider_id %}{{ workbench_shell.rider_role_word }}：<strong>{{ row.rider_id }}</strong>{% if row.delivery_status %} · {{ row.delivery_status }}{% endif %}<br>{% endif %}
+        金额：<strong style="color:var(--yc-orange);">¥{{ order.total_amount }}</strong>
+        · {{ order.get_payment_status_display }}
+        · {{ order.created_at|beijing:"m-d H:i" }}
+    </p>
+    <span class="delivery-status-badge delivery-status-accepted">{{ row.phase_label }}</span>
+    {% if order.should_show_estimated_ready_on_waiter_board %}
+    <span class="delivery-status-badge badge-order-prep">⏱ {{ order.get_estimated_ready_label }}</span>
+    {% endif %}
+
+    {% if order.buyer_note %}
+    <p class="msg-ok" style="margin:8px 0;font-size:14px;font-weight:bold;">备注：{{ order.buyer_note }}</p>
+    {% endif %}
+
+    <div class="detail-collapse-body" style="margin:10px 0;">
+        <p class="card-meta" style="margin-bottom:8px;"><strong>🍱 {{ workbench_shell.item_label }}（按{{ workbench_shell.unit_label }}{{ row.serve_label }}）</strong></p>
+        {% for dish in row.dish_groups %}
+        <div class="line-item" style="flex-wrap:wrap;gap:8px;padding:10px 0;border-bottom:1px solid #eee;">
+            <div style="flex:1;min-width:140px;">
+                <strong>{{ dish.name }}</strong>
+                <div class="card-meta">已{{ workbench_shell.prep_word }} {{ dish.prepared_qty }}/{{ dish.total_qty }} · 已{{ row.serve_label }} {{ dish.served_qty }}/{{ dish.total_qty }}</div>
+            </div>
+            {% if can_operate %}
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                {% if dish.served_qty < dish.total_qty %}
+                    {% if dish.served_qty < dish.prepared_qty %}
+                <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                    {% csrf_token %}
+                    <input type="hidden" name="mark_dish_unit" value="1">
+                    <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                    <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                    <button type="submit" class="btn btn-sm btn-orange">+1 {{ workbench_shell.unit_label }}{{ row.serve_label }}</button>
+                </form>
+                    {% else %}
+                <span class="card-meta">待后厨{{ workbench_shell.prep_word }}</span>
+                    {% endif %}
+                {% endif %}
+                {% if dish.served_qty > 0 %}
+                <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
+                    {% csrf_token %}
+                    <input type="hidden" name="undo_dish_unit" value="1">
+                    <input type="hidden" name="order_id" value="{{ order.order_id }}">
+                    <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
+                    <button type="submit" class="btn btn-sm btn-outline">撤回 1 {{ workbench_shell.unit_label }}</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if can_operate %}
+    <div class="delivery-action-stack" style="margin-top:12px;">
+        {% if row.can_mark_all_served %}
+        <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <input type="hidden" name="mark_all_served" value="1">
+            <button type="submit" class="btn btn-orange btn-block">一键全部{{ row.serve_label }}</button>
+        </form>
+        {% endif %}
+        {% if row.can_adjust_wait_time %}
+        <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="adjust_wait_time" value="1">
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <label>
+                从现在起约
+                <input type="number" name="wait_minutes" min="1" max="240" value="20" required style="width:78px;">
+                分钟完成
+            </label>
+            <button type="submit" class="btn btn-sm btn-outline">修改本单时间</button>
+        </form>
+        {% endif %}
+        {% if row.can_dispatch %}
+        <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="dispatch_order" value="1">
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <select name="rider_id" class="seller-select">
+                <option value="">自动派单（按当前上班{{ workbench_shell.rider_role_word }}分配）</option>
+                {% for r in dispatch_riders %}
+                <option value="{{ r.username }}">{{ r.username }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-green">手动派单</button>
+        </form>
+        {% elif row.can_reassign %}
+        <p class="card-meta">当前{{ workbench_shell.rider_role_word }}：{{ row.rider_id }}</p>
+        <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="reassign_rider" value="1">
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <select name="rider_id" class="seller-select">
+                {% for r in dispatch_riders %}
+                <option value="{{ r.username }}" {% if r.username == row.rider_id %}selected{% endif %}>{{ r.username }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline">改派{{ workbench_shell.rider_role_word }}</button>
+        </form>
+        {% endif %}
+        {% if row.can_collect %}
+        <a class="btn btn-green btn-block" href="{% url 'waiter_pay_order' order.order_id %}">💳 协助收款 / 选支付方式</a>
+        {% elif row.can_confirm_cash %}
+        <form method="POST" class="seller-inline-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="confirm_cash" value="1">
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <button type="submit" class="btn btn-green btn-block">确认已收现金</button>
+        </form>
+        {% elif order.payment_status == 'paid' %}
+        <p class="card-meta">已收款（{{ order.get_payment_method_display|default:"—" }}）</p>
+        {% endif %}
+        {% if row.can_close_uncollected %}
+        <p class="seller-cash-hint">须先处理收款才能结束：已收钱点「确认已收款」；确实没收到请填写原因后结单。</p>
+        <form method="POST" class="seller-inline-form seller-uncollected-form"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="close_uncollected" value="1">
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <label for="uncollected-reason-{{ order.order_id.hex|slice:":8" }}">无法收款原因（必填）</label>
+            <textarea id="uncollected-reason-{{ order.order_id.hex|slice:":8" }}" name="cash_uncollected_reason" class="seller-uncollected-note" rows="2" placeholder="例如：客人拒付、逃单…" required minlength="2"></textarea>
+            <button type="submit" class="btn btn-sm seller-btn-reassign">无法收款 · 结单</button>
+        </form>
+        {% endif %}
+        {% if row.can_complete_in_store %}
+        <form method="POST" class="seller-inline-form" data-yc-panel="work-waiter-panel-body"{% if form_action %} action="{{ form_action }}"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="complete_pickup" value="1">
+            <input type="hidden" name="order_id" value="{{ order.order_id }}">
+            <button type="submit" class="btn btn-sm btn-green btn-block">
+                {% if order.is_dine_in %}{{ workbench_shell.complete_dine_in }}{% else %}{{ workbench_shell.complete_takeaway }}{% endif %}
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if row.log_lines %}
+    <details class="seller-panel-fold" style="margin-top:10px;">
+        <summary>📝 服务记录</summary>
+        <div class="seller-panel-fold-body">
+            {% for line in row.log_lines %}
+            <div class="card-meta" style="margin-bottom:6px;">{{ line }}</div>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+
+    <p style="margin:10px 0 0;">
+        <a class="btn btn-outline btn-sm" href="{% url 'shop_work_order' shop_work_code order.order_id %}">
+            联系 / 沟通{% if work_user.role == 'seller' or work_user.perm_cancel_order %} / 取消{% endif %}
+            {% if row.unread_msg_count %}
+            <span class="msg-unread-dot" title="有未读沟通">{{ row.unread_msg_count }}</span>
+            {% endif %}
+        </a>
+    </p>
+</div>
+{% endwith %}

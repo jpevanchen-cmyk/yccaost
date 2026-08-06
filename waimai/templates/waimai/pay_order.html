@@ -22,8 +22,9 @@
     {% else %}
     <p class="pay-hint">请选择支付方式。正式上线店铺请关闭「演示支付」，仅保留真微信或现金等。</p>
 
-    <form method="POST" class="pay-method-form">
+    <form method="POST" class="pay-method-form" id="pay-order-form">
         {% csrf_token %}
+        <input type="hidden" name="idempotency_key" id="pay-order-idempotency-key" value="">
         <ul class="pay-method-list">
             {% for opt in pay_options %}
             <li class="pay-method-item {% if opt.coming_soon %}pay-method-soon{% elif not opt.enabled %}pay-method-disabled{% endif %}">
@@ -60,4 +61,21 @@
         <a href="{% url 'order_history' %}">返回我的订单</a>
     </p>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% load static %}
+<script src="{% static 'waimai/idempotency_client.js' %}"></script>
+<script>
+(function () {
+    var form = document.getElementById('pay-order-form');
+    var keyInput = document.getElementById('pay-order-idempotency-key');
+    if (!form || !keyInput || !window.YcIdempotency) return;
+    keyInput.value = window.YcIdempotency.newKey();
+    form.addEventListener('submit', function () {
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+    });
+})();
+</script>
 {% endblock %}

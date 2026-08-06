@@ -143,7 +143,7 @@ def get_waiter_phase_label(order: BuyOrder) -> str:
     return order.get_order_status_display()
 
 
-def query_waiter_active_orders(seller_id: str, *, sort_mode: str = 'newest'):
+def query_waiter_active_orders(seller_id: str):
     """
     服务员可见订单：下单后直至完结。
     外卖单在骑手取餐后从列表消失。
@@ -160,9 +160,7 @@ def query_waiter_active_orders(seller_id: str, *, sort_mode: str = 'newest'):
         fulfillment_type='delivery',
         delivery_order__delivery_status__in=WAITER_HIDE_DELIVERY_STATUSES,
     )
-    from .workbench_sort_helpers import order_queryset_by_created
-
-    return order_queryset_by_created(qs, sort_mode)
+    return qs
 
 
 def _serve_blocked_message(order: BuyOrder) -> str:

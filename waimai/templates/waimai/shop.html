@@ -19,13 +19,13 @@
     </div>
     {% endif %}
 </div>
-{% elif shop_channel_label %}
+{% elif shop_channel_label and not channel_repick_mode %}
 <div class="msg-ok" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
     <span>当前通道：<strong>{{ shop_channel_label }}</strong></span>
     {% if can_switch_shop_channel %}
     <form method="post" style="margin:0;">
         {% csrf_token %}
-        <input type="hidden" name="action" value="clear_channel">
+        <input type="hidden" name="action" value="start_channel_repick">
         <button type="submit" class="btn btn-sm btn-outline">更换通道</button>
     </form>
     {% endif %}
@@ -41,13 +41,26 @@
 </p>
 {% endif %}
 
-{% if need_channel_pick %}
+{% if show_channel_pick %}
 <div class="card channel-pick-card" style="padding:16px;margin-bottom:14px;">
+    {% if channel_repick_mode %}
+    <h2 style="margin:0 0 8px;font-size:18px;">更换下单方式</h2>
+    <p class="card-meta" style="margin:0 0 12px;">选<strong>与当前相同</strong>的通道 = 不更换，购物车保留；选<strong>不同</strong>通道会清空购物车。也可以点「不换了」直接回去继续点菜。</p>
+    {% if shop_channel_label %}
+    <p class="card-meta" style="margin:0 0 12px;">当前：<strong>{{ shop_channel_label }}</strong></p>
+    {% endif %}
+    <form method="post" style="margin:0 0 12px;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="cancel_channel_repick">
+        <button type="submit" class="btn btn-sm btn-outline">不换了，返回点菜</button>
+    </form>
+    {% else %}
     <h2 style="margin:0 0 8px;font-size:18px;">请先选择下单方式</h2>
     {% if dining_plugin_enabled %}
     <p class="card-meta" style="margin:0 0 12px;">堂食请扫桌上二维码进入；此处可选外卖配送或打包自取。</p>
     {% else %}
     <p class="card-meta" style="margin:0 0 12px;">当前店铺未启用饮食插件，可使用主体提供的基础「下单」通道。</p>
+    {% endif %}
     {% endif %}
     <div class="channel-pick-grid" style="display:flex;flex-wrap:wrap;gap:10px;">
         {% for opt in channel_options %}
@@ -56,8 +69,9 @@
             <input type="hidden" name="action" value="set_channel">
             <input type="hidden" name="channel" value="{{ opt.code }}">
             <button type="submit" class="btn btn-block {% if opt.available %}btn-orange{% else %}btn-outline{% endif %}"
-                {% if not opt.available %}disabled title="{{ opt.reason }}"{% endif %}>
-                {{ opt.label }}
+                {% if not opt.available %}disabled title="{{ opt.reason }}"{% endif %}
+                {% if channel_repick_mode and shop_channel == opt.code %}data-current-channel="1"{% endif %}>
+                {{ opt.label }}{% if channel_repick_mode and shop_channel == opt.code %}（当前）{% endif %}
             </button>
             {% if not opt.available %}<p class="card-meta" style="margin:6px 0 0;font-size:12px;">{{ opt.reason }}</p>{% endif %}
         </form>
@@ -77,7 +91,7 @@
         {% endfor %}
     </div>
 
-    <div id="shop-cart-shell" style="display:contents;">
+    <div id="shop-cart-shell" data-yc-panel-id="shop-cart-shell" style="display:contents;">
         {% include 'waimai/_shop_cart_shell.html' %}
     </div>
 </div>
@@ -95,6 +109,13 @@ window.YC_DINE_HINT = {
 </script>
 <script src="{% static 'waimai/plugins/dining/dine_timeout_hint.js' %}?v=2"></script>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if not show_channel_pick %}
+<script src="{% static 'waimai/idempotency_client.js' %}"></script>
+<script src="{% static 'waimai/panel_refresh.js' %}?v=18"></script>
 <script src="{% static 'waimai/dish_gallery.js' %}?v=2"></script>
 <script src="{% static 'waimai/shop_dish.js' %}?v=2"></script>
+{% endif %}
 {% endblock %}

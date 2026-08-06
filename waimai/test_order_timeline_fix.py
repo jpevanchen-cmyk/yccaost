@@ -7,15 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from waimai.models import BuyOrder, DeliveryOrder, User
-from waimai.order_timeline_helpers import (
-    TL_DELIVERY_COMPLETED,
-    TL_DELIVERY_PICKED_UP,
-    TL_GOODS_DELIVERED,
-    TL_PAYMENT_RECEIVED,
-    TL_PREP_STARTED,
-    build_order_timeline,
-    record_timeline_event,
-)
+from waimai.order_timeline_helpers import build_order_timeline
 
 
 class OrderTimelineFixTests(TestCase):
@@ -23,9 +15,6 @@ class OrderTimelineFixTests(TestCase):
         self.seller = User.objects.create_user(
             username='tl_seller', password='x', role='seller',
         )
-
-    def _add_event(self, order, code, label, at):
-        record_timeline_event(order, event_code=code, label=label, occurred_at=at)
 
     def test_cod_completed_hides_estimated_ready_at_bottom(self):
         """货到付款完成后，不应再把「预计出餐」插到时间线末尾。"""
@@ -40,8 +29,11 @@ class OrderTimelineFixTests(TestCase):
             fulfillment_type='delivery',
             payment_method='cash',
             estimated_ready_at=base - timedelta(minutes=7),
+            preparing_at=base,
+            payment_time=base + timedelta(minutes=21),
+            completed_at=base + timedelta(minutes=30),
         )
-        delivery = DeliveryOrder.objects.create(
+        DeliveryOrder.objects.create(
             buy_order=order,
             delivery_fee=Decimal('3'),
             distance_km=Decimal('1.0'),
@@ -49,11 +41,9 @@ class OrderTimelineFixTests(TestCase):
             delivery_address='客',
             delivery_status='completed',
             estimated_delivery_time=base + timedelta(minutes=20),
+            picked_up_at=base + timedelta(minutes=15),
+            completed_at=base + timedelta(minutes=25),
         )
-        self._add_event(order, TL_PREP_STARTED, '开始备货', base)
-        self._add_event(order, TL_DELIVERY_PICKED_UP, '骑手已取餐', base + timedelta(minutes=15))
-        self._add_event(order, TL_DELIVERY_COMPLETED, '骑手已送达', base + timedelta(minutes=25))
-        self._add_event(order, TL_PAYMENT_RECEIVED, '已支付', base + timedelta(minutes=21))
 
         rows = build_order_timeline(order, viewer='buyer')
         labels = [lbl for lbl, _ in rows]
@@ -77,6 +67,7 @@ class OrderTimelineFixTests(TestCase):
             order_status='preparing',
             fulfillment_type='delivery',
             estimated_ready_at=now + timedelta(minutes=10),
+            goods_delivered_at=now + timedelta(minutes=5),
         )
         DeliveryOrder.objects.create(
             buy_order=order,
@@ -87,7 +78,6 @@ class OrderTimelineFixTests(TestCase):
             delivery_status='accepted',
             estimated_delivery_time=now + timedelta(minutes=30),
         )
-        self._add_event(order, TL_GOODS_DELIVERED, '商品已全部交付', now + timedelta(minutes=5))
 
         labels = [lbl for lbl, _ in build_order_timeline(order, viewer='work')]
         self.assertNotIn('商品已全部交付', labels)
@@ -109,8 +99,8 @@ class OrderTimelineFixTests(TestCase):
             order_status='preparing',
             fulfillment_type='delivery',
             estimated_ready_at=now + timedelta(minutes=8),
+            preparing_at=now,
         )
-        self._add_event(order, TL_PREP_STARTED, '开始备货', now)
 
         rows = build_order_timeline(order, viewer='seller')
         labels = [lbl for lbl, _ in rows]

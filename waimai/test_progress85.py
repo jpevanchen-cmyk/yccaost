@@ -14,12 +14,7 @@ from waimai.order_status_event_helpers import (
     EVENT_MANUAL_COMPLETE,
     handle_order_status_event,
 )
-from waimai.order_timeline_helpers import (
-    TL_GOODS_DELIVERED,
-    TL_READY,
-    build_order_timeline,
-    record_timeline_event,
-)
+from waimai.order_timeline_helpers import build_order_timeline
 from waimai.waiter_helpers import sync_waiter_service_status
 
 
@@ -158,7 +153,7 @@ class Progress85IntegrationTests(TestCase):
         self.assertEqual(order.order_status, 'completed')
         self.assertEqual(session.status, 'closed')
 
-    def test_goods_delivered_timeline_deduped_on_repeated_sync(self):
+    def test_goods_delivered_timeline_single_from_source_field(self):
         order = BuyOrder.objects.create(
             buyer_id='p85_buyer2',
             seller_id=self.seller.username,
@@ -175,8 +170,9 @@ class Progress85IntegrationTests(TestCase):
             if fields:
                 order.save(update_fields=list(dict.fromkeys(fields)))
             order.refresh_from_db()
-        count = order.timeline_events.filter(event_code=TL_GOODS_DELIVERED).count()
-        self.assertEqual(count, 1)
+        labels = [lbl for lbl, _ in build_order_timeline(order, viewer='work')]
+        self.assertEqual(labels.count('商品已全部交付'), 1)
+        self.assertIsNotNone(order.goods_delivered_at)
 
     def test_buyer_timeline_hides_goods_delivered(self):
         order = BuyOrder.objects.create(
@@ -187,9 +183,7 @@ class Progress85IntegrationTests(TestCase):
             fulfillment_type='takeaway',
             payment_status='paid',
             order_status='preparing',
-        )
-        record_timeline_event(
-            order, TL_GOODS_DELIVERED, '商品已全部交付', once=False,
+            goods_delivered_at=timezone.now(),
         )
         labels = [lbl for lbl, _ in build_order_timeline(order, viewer='buyer')]
         self.assertNotIn('商品已全部交付', labels)
@@ -205,10 +199,9 @@ class Progress85IntegrationTests(TestCase):
             dish_items=[],
             fulfillment_type='dine_in',
             payment_status='paid',
-            order_status='preparing',
+            order_status='ready_pickup',
             ready_at=now,
         )
-        record_timeline_event(order, TL_READY, '已出餐', occurred_at=now)
         labels = [lbl for lbl, _ in build_order_timeline(order, viewer='buyer')]
         self.assertIn('就餐中', labels)
         self.assertNotIn('已出餐', labels)

@@ -2,6 +2,7 @@
  * 全站折叠卡片（§5.13）：卖家后台、工作台、订单详情等
  * 1）根据网址锚点自动展开对应区块
  * 2）手风琴：同层只开一块；嵌套组（data-yc-fold-group）内互不影响外层
+ * 3）多开区（data-yc-fold-multi）：区内卡片可同时展开，互不自动收起
  */
 (function () {
     function allFolds() {
@@ -13,10 +14,16 @@
         return fold.closest('[data-yc-fold-group]');
     }
 
+    function isMultiFold(fold) {
+        return !!(fold && fold.closest('[data-yc-fold-multi]'));
+    }
+
     function closeOtherFolds(keep) {
+        if (isMultiFold(keep)) return;
         var keepGroup = foldGroup(keep);
         allFolds().forEach(function (other) {
             if (other === keep || !other.open) return;
+            if (isMultiFold(other)) return;
             var otherGroup = foldGroup(other);
             if (keepGroup) {
                 if (otherGroup === keepGroup) {
@@ -50,7 +57,9 @@
                 : target.closest('.seller-panel-fold');
             if (fold && fold.tagName === 'DETAILS') {
                 openAncestorFolds(fold);
-                closeOtherFolds(fold);
+                if (!isMultiFold(fold)) {
+                    closeOtherFolds(fold);
+                }
                 fold.open = true;
             }
             return;
@@ -71,6 +80,7 @@
             fold.dataset.ycFoldAccordionBound = '1';
             fold.addEventListener('toggle', function () {
                 if (!fold.open) return;
+                if (isMultiFold(fold)) return;
                 closeOtherFolds(fold);
             });
         });

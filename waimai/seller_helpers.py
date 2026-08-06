@@ -65,7 +65,7 @@ def handle_seller_post(request, seller_id, section):
         return _seller_panel_redirect('payment', 'payment-settings-form')
 
     if 'confirm_rider_remit' in request.POST and section == 'payment':
-        messages.info(request, '配送员入金确认已移至「现金管理」分区，请在那里操作。')
+        messages.info(request, '配送员入金确认已移至「外卖现金管理」分区，请在那里操作。')
         return _seller_panel_redirect('cash_manage', 'cash-manage-card', request=request)
 
     if section == 'cash_manage':
@@ -85,21 +85,38 @@ def handle_seller_post(request, seller_id, section):
         if 'cash_manage_action' in request.POST:
             from .plugins.fulfillment.ownership import fulfillment_plugin_enabled
             from .cash_manage_handlers import handle_cash_management_post
-            from .cash_manage_panel_helpers import attach_seller_cash_manage_panel_ctx
+            from .cash_manage_panel_helpers import (
+                attach_seller_cash_manage_panel_ctx,
+                detect_cash_manage_panel_action,
+                run_cash_manage_idempotent,
+            )
 
             if not fulfillment_plugin_enabled(seller_id):
-                messages.error(request, '履约配送插件未启用，无法处理现金管理')
+                messages.error(request, '履约配送插件未启用，无法处理外卖现金管理')
                 return _seller_panel_redirect('cash_manage', request=request)
             redirect_to = reverse('seller_panel_section', kwargs={'section': 'cash_manage'})
-            attach_seller_cash_manage_panel_ctx(
-                request, seller_id, redirect_to=redirect_to,
-            )
-            return handle_cash_management_post(
-                request, seller_id, operator=request.user, redirect_to=redirect_to,
-            )
+            cash_action = detect_cash_manage_panel_action(request)
+
+            def _execute_seller_cash_manage():
+                attach_seller_cash_manage_panel_ctx(
+                    request, seller_id, redirect_to=redirect_to,
+                )
+                return handle_cash_management_post(
+                    request, seller_id, operator=request.user, redirect_to=redirect_to,
+                )
+
+            if cash_action:
+                return run_cash_manage_idempotent(
+                    request,
+                    seller_id,
+                    request.user,
+                    cash_action,
+                    _execute_seller_cash_manage,
+                )
+            return _execute_seller_cash_manage()
 
     if 'save_boss_remittance_notify' in request.POST and section == 'payment':
-        messages.info(request, '入金申请邮件设置已移至「现金管理」分区。')
+        messages.info(request, '入金申请邮件设置已移至「外卖现金管理」分区。')
         return _seller_panel_redirect('cash_manage', 'boss-remittance-notify', request=request)
 
     if 'save_boss_order_notify' in request.POST and section == 'orders':

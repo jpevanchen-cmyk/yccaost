@@ -142,6 +142,43 @@
         var m = document.cookie.match(/csrftoken=([^;]+)/);
         return m ? decodeURIComponent(m[1]) : '';
     }
+
+    /** 每次体验引导写操作生成唯一编号（幂等第 11 步） */
+    function newExperienceIdempotencyKey() {
+        if (window.YcIdempotency && typeof window.YcIdempotency.newKey === 'function') {
+            return window.YcIdempotency.newKey();
+        }
+        return '';
+    }
+
+    function applyExperienceIdempotency(fd, headers) {
+        var key = newExperienceIdempotencyKey();
+        headers = headers || {};
+        if (!key) return headers;
+        if (window.YcIdempotency && typeof window.YcIdempotency.applyToFormData === 'function') {
+            window.YcIdempotency.applyToFormData(fd, key);
+        }
+        if (window.YcIdempotency && typeof window.YcIdempotency.applyToHeaders === 'function') {
+            headers = window.YcIdempotency.applyToHeaders(headers, key);
+        }
+        return headers;
+    }
+
+    /** 整页表单提交（如批量建桌）写入 hidden 幂等键 */
+    function ensureFormIdempotencyKey(form) {
+        if (!form || !window.YcIdempotency) return;
+        var key = newExperienceIdempotencyKey();
+        if (!key) return;
+        var field = window.YcIdempotency.FIELD || 'idempotency_key';
+        var inp = form.querySelector('input[name="' + field + '"]');
+        if (!inp) {
+            inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = field;
+            form.appendChild(inp);
+        }
+        inp.value = key;
+    }
     function requestDemoCleanup(onDone) {
         if (!boot || !boot.cleanupUrl) {
             if (typeof onDone === 'function') onDone();
@@ -258,15 +295,16 @@
         var postUrl = window.location.pathname;
         var qs = window.location.search;
         if (qs) postUrl += qs.split('#')[0];
+        var headers = applyExperienceIdempotency(fd, {
+            'X-Experience-Product-Ajax': '1',
+            'X-CSRFToken': token,
+            'X-Requested-With': 'XMLHttpRequest',
+        });
         fetch(postUrl, {
             method: 'POST',
             body: fd,
             credentials: 'same-origin',
-            headers: {
-                'X-Experience-Product-Ajax': '1',
-                'X-CSRFToken': token,
-                'X-Requested-With': 'XMLHttpRequest',
-            },
+            headers: headers,
         }).then(function (resp) { return resp.json(); })
             .then(function (data) {
                 productAjaxPending = false;
@@ -468,15 +506,16 @@
         var postUrl = window.location.pathname;
         var qs = window.location.search;
         if (qs) postUrl += qs.split('#')[0];
+        var headers = applyExperienceIdempotency(fd, {
+            'X-Experience-Menu-Ajax': '1',
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        });
         fetch(postUrl, {
             method: 'POST',
             body: fd,
             credentials: 'same-origin',
-            headers: {
-                'X-Experience-Menu-Ajax': '1',
-                'X-CSRFToken': getCsrfToken(),
-                'X-Requested-With': 'XMLHttpRequest',
-            },
+            headers: headers,
         }).then(function (resp) { return resp.json(); })
             .then(function (data) {
                 menuAjaxPending = false;
@@ -527,15 +566,16 @@
         var postUrl = window.location.pathname;
         var qs = window.location.search;
         if (qs) postUrl += qs.split('#')[0];
+        var headers = applyExperienceIdempotency(fd, {
+            'X-Experience-Product-Ajax': '1',
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        });
         fetch(postUrl, {
             method: 'POST',
             body: fd,
             credentials: 'same-origin',
-            headers: {
-                'X-Experience-Product-Ajax': '1',
-                'X-CSRFToken': getCsrfToken(),
-                'X-Requested-With': 'XMLHttpRequest',
-            },
+            headers: headers,
         }).then(function (resp) { return resp.json(); })
             .then(function (data) {
                 productAjaxPending = false;
@@ -750,6 +790,7 @@
             bumpMicroForNextStep();
             saveSession();
             ensureExpHiddenFieldsInForm(form);
+            ensureFormIdempotencyKey(form);
             if (window.ycSellerUnsavedGuard &&
                 typeof window.ycSellerUnsavedGuard.allowNextUnload === 'function') {
                 window.ycSellerUnsavedGuard.allowNextUnload();

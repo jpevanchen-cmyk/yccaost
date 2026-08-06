@@ -122,12 +122,6 @@ def cancel_order_by_buyer(order: BuyOrder, user) -> tuple[bool, str]:
 
     release_catalog_sales_for_order(order)
     _cancel_delivery_if_any(order)
-    from .order_timeline_helpers import record_timeline_event, TL_ORDER_CANCELLED
-
-    side = '（买家）'
-    record_timeline_event(
-        order, TL_ORDER_CANCELLED, f'订单已取消{side}', occurred_at=order.cancelled_at,
-    )
 
     from .audit_helpers import write_audit_log
 
@@ -170,13 +164,6 @@ def cancel_order_by_shop(order: BuyOrder, user, note: str = '') -> tuple[bool, s
 
     release_catalog_sales_for_order(order)
     _cancel_delivery_if_any(order)
-
-    from .order_timeline_helpers import record_timeline_event, TL_ORDER_CANCELLED
-
-    side = '（店家）'
-    record_timeline_event(
-        order, TL_ORDER_CANCELLED, f'订单已取消{side}', occurred_at=order.cancelled_at,
-    )
 
     from .audit_helpers import write_audit_log
 
