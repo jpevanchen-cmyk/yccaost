@@ -7,11 +7,12 @@
     <summary class="seller-panel-fold-head" data-yc-tour="dine-rules-head"><span class="seller-panel-fold-title">⚠ 桌码主单硬规则（必读）</span></summary>
     <div class="seller-panel-fold-body" data-yc-tour="dine-rules-content">
         <div class="hard-rule-block">
-            <p><strong>硬规则 1 · 桌码主单</strong></p>
+            <p><strong>硬规则 1 · 桌码主单（V1）</strong></p>
             <ul>
-                <li>每桌有且仅有一份由客人扫实体桌码产生的主订单。</li>
-                <li>客人可在这一份主订单上多次加点。</li>
-                <li>须满足堂食接单条件方可新开主单或加点；非营业、堂食关、打烊或暂停时不能新开主单。</li>
+                <li>每桌有且仅有一份由客人扫<strong>实体桌码</strong>产生的主订单（桌态：<strong>空闲 → 启用中</strong>）。</li>
+                <li>桌已启用中时，<strong>不能再扫物理桌码开第二单</strong>；同桌客人须用<strong>专属加点码</strong>加入本桌主单。</li>
+                <li>开台后会生成<strong>一次性加点码</strong>，可分享给同桌；翻台后作废。</li>
+                <li>须满足堂食接单条件方可新开主单或加点。</li>
             </ul>
         </div>
         {% if operating.share_table_enabled and operating.share_table_mode == 'waiter' %}
@@ -259,11 +260,16 @@
         {% if tables %}
         <div class="code-chip-grid" id="table-chip-grid" data-yc-tour="table-chip-grid">
             {% for t in tables %}
-            <button type="button" class="code-chip {% if not t.is_active %}is-disabled{% endif %}"
+            <button type="button" class="code-chip {% if not t.is_active %}is-disabled{% elif t.is_busy %} is-busy{% endif %}"
                 data-id="{{ t.table_id }}" data-label="{{ t.table_number }}" data-scan="{{ t.scan_path }}"
+                {% if t.addon_scan_path %}data-addon-scan="{{ t.addon_scan_path }}"{% endif %}
                 data-yc-tour="table-chip-{{ t.table_number }}">
                 <span class="code-chip-num">{{ t.table_number }}</span>
-                <span class="code-chip-state">{% if t.is_active %}启用{% else %}停用{% endif %}</span>
+                <span class="code-chip-state">
+                    {% if not t.is_active %}停用
+                    {% elif t.is_busy %}启用中
+                    {% else %}空闲{% endif %}
+                </span>
             </button>
             {% endfor %}
         </div>
@@ -358,5 +364,5 @@
 </details>
 {% endif %}
 
-<script src="{% static 'waimai/plugins/dining/seller_dine_grid.js' %}?v=5"></script>
+<script src="{% static 'waimai/plugins/dining/seller_dine_grid.js' %}?v=6"></script>
 {% endblock %}

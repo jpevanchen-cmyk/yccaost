@@ -1,0 +1,8 @@
+{% if operation_lock_enabled %}
+<form method="post" action="{% url 'operation_lock_manual' %}" class="operation-lock-bar" style="margin:0 0 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.path }}">
+    <span class="card-meta">操作锁已启用</span>
+    <button type="submit" class="btn btn-sm btn-outline">立即锁定</button>
+</form>
+{% endif %}

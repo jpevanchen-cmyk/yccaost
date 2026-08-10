@@ -121,7 +121,7 @@
                         </div>
                     </div>
                     <div class="seller-order-compact-line2" data-yc-tour="{% if forloop.first %}orders-sample-meta{% endif %}">
-                        <span class="seller-order-compact-time">{{ order.created_at|beijing:"m-d H:i" }}</span>
+                        <span class="seller-order-compact-time">{{ order.created_at|local:"m-d H:i" }}</span>
                         <span class="seller-order-compact-buyer">买家：<strong>{{ order.get_buyer_display_name }}</strong>{% if order.is_guest_order %} <span class="card-meta">（游客）</span>{% endif %}</span>
                     </div>
                 </div>

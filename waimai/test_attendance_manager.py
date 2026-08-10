@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from waimai.models import StaffAttendanceLog, User
+from waimai.time_helpers import to_local, now_local_wall
 from waimai.staff_account_helpers import (
     STAFF_WORK_BREAK,
     STAFF_WORK_ON_DUTY,
@@ -37,7 +38,7 @@ class AttendanceManagerFixTest(TestCase):
         self.client.login(username='att_seller', password='pass12345')
 
     def test_manager_off_duty_with_custom_time(self):
-        when = timezone.now() - timedelta(hours=2)
+        when = now_local_wall() - timedelta(hours=2)
         resp = self.client.post(
             reverse('seller_panel_section', kwargs={'section': 'workbench'}),
             {
@@ -53,13 +54,13 @@ class AttendanceManagerFixTest(TestCase):
         self.assertIsNotNone(log)
         self.assertEqual(log.action, STAFF_WORK_OFF_DUTY)
         self.assertEqual(
-            timezone.localtime(log.changed_at).replace(second=0, microsecond=0),
-            timezone.localtime(when).replace(second=0, microsecond=0),
+            to_local(log.changed_at).replace(second=0, microsecond=0),
+            to_local(when).replace(second=0, microsecond=0),
         )
 
     def test_manager_break_creates_period_logs(self):
-        start = timezone.now() - timedelta(hours=3)
-        end = timezone.now() - timedelta(hours=2)
+        start = now_local_wall() - timedelta(hours=3)
+        end = now_local_wall() - timedelta(hours=2)
         resp = self.client.post(
             reverse('seller_panel_section', kwargs={'section': 'workbench'}),
             {
@@ -77,7 +78,7 @@ class AttendanceManagerFixTest(TestCase):
         self.assertEqual(logs[1].action, STAFF_WORK_ON_DUTY)
 
     def test_workbench_attendance_defaults_today(self):
-        old = timezone.now() - timedelta(days=3)
+        old = now_local_wall() - timedelta(days=3)
         StaffAttendanceLog.objects.create(
             user=self.staff,
             seller_id='att_seller',
@@ -98,7 +99,7 @@ class AttendanceManagerFixTest(TestCase):
         )
         self.assertEqual(ctx['attendance_logs_page'].paginator.count, 0)
 
-        today_log_time = timezone.now()
+        today_log_time = now_local_wall()
         StaffAttendanceLog.objects.create(
             user=self.staff,
             seller_id='att_seller',
@@ -119,9 +120,17 @@ class AttendanceManagerFixTest(TestCase):
         self.assertEqual(ctx['attendance_logs_page'].paginator.count, 1)
 
     def test_parse_local_datetime_input(self):
+        from django.conf import settings
+
         parsed = parse_local_datetime_input('2026-07-29T15:30')
         self.assertIsNotNone(parsed)
-        self.assertTrue(timezone.is_aware(parsed))
+        # USE_TZ=False 时写库须无时区本地墙钟；True 时才带时区
+        if settings.USE_TZ:
+            self.assertTrue(timezone.is_aware(parsed))
+        else:
+            self.assertTrue(timezone.is_naive(parsed))
+            self.assertEqual(parsed.hour, 15)
+            self.assertEqual(parsed.minute, 30)
 
     def test_attendance_full_page_ok(self):
         resp = self.client.get(reverse('seller_panel_attendance_logs'))

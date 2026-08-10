@@ -1,6 +1,8 @@
 野草系统（YecaoST）
 Copyright (c) 2026 YecaoST Contributors
 
+项目主页（介绍与正式试跑）：https://yichbo.com/
+
 本程序为自由软件：可依自由软件基金会发布的 GNU Affero 通用公共许可证第 3 版
 （或你选择的任何后续版本）重新发布及/或修改。
 
@@ -13,7 +15,8 @@ Copyright (c) 2026 YecaoST Contributors
 （经正式插件接口加载的插件，不强制与主程序同为 AGPL。）
 
 自愿认证名录（非 AGPL 条文）：见同目录文件 CERTIFIED_DIRECTORY.md
-（正本以本仓库该文件为准；与 AGPL 软件许可分离。）
+（正本以本仓库该文件为准；与 AGPL 软件许可分离。
+ 本地营业安装包可不附带该名录文件；名录正本仍以仓库与项目主页说明为准。）
 ------------------------------------------------------------------
 
 以下为 GNU Affero General Public License version 3 全文：

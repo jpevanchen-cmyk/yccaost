@@ -203,6 +203,9 @@
         if (window.ycRebindSellerPanelFold) {
             window.ycRebindSellerPanelFold(panelEl);
         }
+        if (window.ycRebindWaiterTableBoard) {
+            window.ycRebindWaiterTableBoard(panelEl);
+        }
         if (window.ycSellerUnsavedGuard && window.ycSellerUnsavedGuard.registerForm) {
             panelEl.querySelectorAll('form[data-unsaved-guard]').forEach(function (form) {
                 window.ycSellerUnsavedGuard.registerForm(form);
@@ -539,6 +542,7 @@
         switchProfile: switchProfile,
         switchPanelGet: switchPanelGet,
         tryNavigateProfileSwitch: tryNavigateProfileSwitch,
+        panelFetch: panelFetch,
     };
 
     if (document.readyState === 'loading') {

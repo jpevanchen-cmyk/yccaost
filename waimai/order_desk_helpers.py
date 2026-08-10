@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from .models import BuyOrder
 from .order_status_transition_helpers import (
@@ -402,7 +403,7 @@ def start_basic_order(order: BuyOrder, *, actor) -> tuple[bool, str]:
     """待备货 → 处理中。"""
     if not basic_order_can_start(order):
         return False, '当前订单不能开始处理'
-    now = timezone.now()
+    now = now_local_wall()
     transition_order_status(
         order, 'preparing', source='order_desk_helpers.start_basic_order',
     )
@@ -425,7 +426,7 @@ def mark_basic_order_ready(order: BuyOrder, *, actor) -> tuple[bool, str]:
     transition_order_status(
         order, 'ready_pickup', source='order_desk_helpers.mark_basic_order_ready',
     )
-    order.ready_at = timezone.now()
+    order.ready_at = now_local_wall()
     order.save(update_fields=['order_status', 'ready_at', 'updated_at'])
     from .audit_helpers import audit_order_status
 

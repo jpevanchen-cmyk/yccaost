@@ -8,8 +8,8 @@ from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-from .time_helpers import format_beijing_time
-from .time_helpers import to_beijing
+from .time_helpers import format_local_time, now_local_wall
+from .time_helpers import to_local
 
 
 def validate_compliance_icon_size(uploaded_file):
@@ -226,6 +226,58 @@ class ServerSiteSettings(models.Model):
     )
     show_powered_by = models.BooleanField(
         default=True, verbose_name='页脚显示「由野草系统提供支持」',
+    )
+    install_mode = models.CharField(
+        max_length=16,
+        choices=[
+            ('standard', '标准（完整功能）'),
+            ('v1_local', '本地营业内测版 V1.0'),
+        ],
+        default='standard',
+        db_index=True,
+        verbose_name='安装模式',
+    )
+    v1_setup_completed = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='V1 首次向导已完成',
+    )
+    v1_listen_port = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        verbose_name='V1 监听端口',
+    )
+    v1_lan_base_url = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        verbose_name='V1 本机局域网访问地址',
+    )
+    v1_backup_dir = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name='V1 备份目录',
+    )
+    operation_lock_enabled = models.BooleanField(
+        default=False,
+        verbose_name='启用操作锁（店主后台+服务器设置）',
+    )
+    operation_lock_idle_seconds = models.PositiveIntegerField(
+        default=300,
+        verbose_name='操作锁空闲自动锁定时长（秒）',
+    )
+    operation_lock_pin_salt = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name='操作锁 PIN 盐',
+    )
+    operation_lock_pin_hash = models.CharField(
+        max_length=128,
+        blank=True,
+        default='',
+        verbose_name='操作锁 PIN 哈希',
     )
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
@@ -453,7 +505,7 @@ class StaffAttendanceLog(models.Model):
     source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default='self', verbose_name='操作来源')
     operator_username = models.CharField(max_length=128, blank=True, default='', verbose_name='操作人账号')
     note = models.CharField(max_length=200, blank=True, default='', verbose_name='备注')
-    changed_at = models.DateTimeField(default=timezone.now, db_index=True, verbose_name='发生时间')
+    changed_at = models.DateTimeField(default=now_local_wall, db_index=True, verbose_name='发生时间')
 
     class Meta:
         db_table = 'staff_attendance_log'
@@ -800,6 +852,7 @@ class BuyOrder(models.Model):
     PAYMENT_STATUS_CHOICES = [
         ('pending_payment', '待支付'),
         ('paid', '已支付'),
+        ('refunded', '已退款'),
         ('uncollected', '未收款结案'),
         ('cancelled', '已取消'),
     ]
@@ -998,7 +1051,7 @@ class BuyOrder(models.Model):
 
     def get_order_date_code(self) -> str:
         """给人看的日期码：北京时间 YYYYMMDD。"""
-        local_dt = to_beijing(self.created_at)
+        local_dt = to_local(self.created_at)
         if not local_dt:
             return ''
         return local_dt.strftime('%Y%m%d')
@@ -1155,7 +1208,7 @@ class BuyOrder(models.Model):
             return '打包订单已提交，店家将为您备货并告知预计可取餐时间；取餐时到店付现金即可。有事可在订单沟通里留言。'
         if self.is_cash_receipt_pending():
             if self.estimated_ready_at:
-                t = format_beijing_time(self.estimated_ready_at)
+                t = format_local_time(self.estimated_ready_at)
                 if self.order_status == 'awaiting_prep':
                     if self.is_dine_in():
                         return f'订单已进入备餐队列，预计 {t} 可出餐。请在店内付款。'
@@ -1194,7 +1247,7 @@ class BuyOrder(models.Model):
         """预计完成/出餐/取餐时间的展示文案（北京时间）"""
         if not self.estimated_ready_at:
             return ''
-        t = format_beijing_time(self.estimated_ready_at)
+        t = format_local_time(self.estimated_ready_at)
         if self.is_basic_order():
             return f'预计 {t} 可完成'
         if self.is_dine_in():
@@ -1216,6 +1269,14 @@ class ShopPaymentSettings(models.Model):
     wechat_mch_id = models.CharField(max_length=32, blank=True, default='', verbose_name='微信商户号')
     wechat_app_id = models.CharField(max_length=32, blank=True, default='', verbose_name='微信 AppID')
     wechat_api_key = models.CharField(max_length=64, blank=True, default='', verbose_name='微信 APIv2 密钥')
+    wechat_apiclient_cert_path = models.CharField(
+        max_length=512, blank=True, default='', verbose_name='微信退款证书路径',
+        help_text='apiclient_cert.pem 在本机的完整路径；退款接口必填',
+    )
+    wechat_apiclient_key_path = models.CharField(
+        max_length=512, blank=True, default='', verbose_name='微信退款私钥路径',
+        help_text='apiclient_key.pem 在本机的完整路径；退款接口必填',
+    )
     public_site_url = models.CharField(
         max_length=255, blank=True, default='',
         verbose_name='店铺公网网址',
@@ -1243,6 +1304,21 @@ class ShopPaymentSettings(models.Model):
             and self.wechat_app_id.strip()
             and self.wechat_api_key.strip()
         )
+
+    def wechat_refund_config_ready(self):
+        """微信退款证书是否已配置且文件可读（退款接口必填）"""
+        if not self.wechat_config_ready():
+            return False
+        from pathlib import Path
+
+        cert = (self.wechat_apiclient_cert_path or '').strip()
+        key = (self.wechat_apiclient_key_path or '').strip()
+        if not cert or not key:
+            return False
+        try:
+            return Path(cert).is_file() and Path(key).is_file()
+        except OSError:
+            return False
 
 
 # ============================================
@@ -1272,6 +1348,23 @@ class PaymentRecord(models.Model):
     )
     notify_payload = models.JSONField(blank=True, null=True, verbose_name='回调原始数据')
     paid_at = models.DateTimeField(blank=True, null=True, verbose_name='支付成功时间')
+    out_refund_no = models.CharField(
+        max_length=64, blank=True, default='', db_index=True, verbose_name='商户退款单号',
+    )
+    refund_id = models.CharField(
+        max_length=64, blank=True, default='', verbose_name='微信退款单号',
+    )
+    REFUND_STATUS_CHOICES = [
+        ('', '未退款'),
+        ('processing', '退款处理中'),
+        ('success', '退款成功'),
+        ('failed', '退款失败'),
+    ]
+    refund_status = models.CharField(
+        max_length=16, blank=True, default='', db_index=True, verbose_name='退款状态',
+    )
+    refunded_at = models.DateTimeField(blank=True, null=True, verbose_name='退款完成时间')
+    refund_payload = models.JSONField(blank=True, null=True, verbose_name='退款查询/回调原始数据')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
@@ -1507,11 +1600,16 @@ class OperationAuditLog(models.Model):
         ('login', '登录'),
         ('logout', '退出'),
         ('login_failed', '登录失败'),
+        ('login_locked', '登录暂锁'),
         ('order_place', '下单'),
         ('order_status', '订单状态变更'),
         ('operating', '营业/渠道设置'),
         ('menu_switch', '切换菜单清单'),
         ('payment_settings', '支付设置'),
+        ('operation_lock', '操作锁'),
+        ('staff_account', '员工账号'),
+        ('waiter_open_table', '服务员代客开台'),
+        ('waiter_close_table', '服务员翻台关桌'),
         ('view_audit', '查看操作审计'),
         ('view_tech_log', '查看技术日志'),
         ('other', '其他'),
@@ -1550,6 +1648,30 @@ class OperationAuditLog(models.Model):
 
     def __str__(self):
         return f'{self.actor_username} {self.action_label or self.action_code}'
+
+
+class LoginGuardState(models.Model):
+    """登录防试密码：连续失败暂锁（V1 第 8 项）"""
+
+    scope = models.CharField(max_length=32, db_index=True, verbose_name='登录口')
+    guard_key = models.CharField(max_length=128, verbose_name='锁定键')
+    fail_count = models.PositiveIntegerField(default=0, verbose_name='连续失败次数')
+    locked_until = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name='暂锁至')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'login_guard_state'
+        verbose_name = '登录防试状态'
+        verbose_name_plural = '登录防试状态'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['scope', 'guard_key'],
+                name='login_guard_scope_key_uniq',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.scope}:{self.guard_key}'
 
 
 # A.11 堂食相关模型（营业、桌台、菜单清单）
@@ -1618,12 +1740,14 @@ class FundLedgerEntry(models.Model):
     ]
 
     FUND_STATUS_NOT_APPLICABLE = 'not_applicable'
+    FUND_STATUS_PENDING_ARRIVAL = 'pending_arrival'
     FUND_STATUS_CUSTOMER_PAID = 'customer_paid'
     FUND_STATUS_IN_TRANSIT = 'in_transit'
     FUND_STATUS_AT_SHOP = 'at_shop'
     FUND_STATUS_WRITTEN_OFF = 'written_off'
     FUND_STATUS_CHOICES = [
         (FUND_STATUS_NOT_APPLICABLE, '不涉及真钱'),
+        (FUND_STATUS_PENDING_ARRIVAL, '待到账'),
         (FUND_STATUS_CUSTOMER_PAID, '客人侧已付'),
         (FUND_STATUS_IN_TRANSIT, '在途'),
         (FUND_STATUS_AT_SHOP, '已到店铺'),
@@ -1762,7 +1886,7 @@ class IdempotencyRecord(models.Model):
 
     def is_expired(self) -> bool:
         from django.utils import timezone
-        return timezone.now() >= self.expires_at
+        return now_local_wall() >= self.expires_at
 
 
 # 留言板（正式功能 · 表名沿用 owner_guestbook_*）

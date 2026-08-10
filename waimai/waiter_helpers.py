@@ -17,7 +17,7 @@ from .order_progress_helpers import (
     norm_dish_id,
     normalize_dish_items as normalize_dish_items_base,
 )
-from .time_helpers import format_beijing_time
+from .time_helpers import format_local_time
 
 WAITER_STATUS_PENDING = 'pending_serve'
 WAITER_STATUS_SERVED = 'served'
@@ -433,7 +433,7 @@ def recent_waiter_activity_logs(order: BuyOrder, limit: int = 8) -> list[str]:
     dish_logs = order.waiter_dish_serve_logs.order_by('-changed_at')[:limit]
     for log in dish_logs:
         action = '标记' if log.action == OrderWaiterDishServeLog.ACTION_MARK else '撤回'
-        ts = format_beijing_time(log.changed_at, '%H:%M')
+        ts = format_local_time(log.changed_at, '%H:%M')
         lines.append(
             f'{ts} · {log.changed_by} · {action}「{log.dish_name}」'
             f'（{log.served_after}/{log.total_qty}）'
@@ -442,7 +442,7 @@ def recent_waiter_activity_logs(order: BuyOrder, limit: int = 8) -> list[str]:
         status_logs = order.waiter_status_logs.order_by('-changed_at')[: limit - len(lines)]
         labels = dict(WAITER_SERVICE_STATUS_CHOICES)
         for log in status_logs:
-            ts = format_beijing_time(log.changed_at, '%H:%M')
+            ts = format_local_time(log.changed_at, '%H:%M')
             old_l = labels.get(log.from_status, '—') if log.from_status else '—'
             new_l = labels.get(log.to_status, log.to_status)
             lines.append(f'{ts} · {log.changed_by} · {old_l} → {new_l}')

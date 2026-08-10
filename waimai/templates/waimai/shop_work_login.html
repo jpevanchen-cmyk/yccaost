@@ -11,7 +11,7 @@
 <h1 class="page-title">🏪 店铺工作台</h1>
 {% if shop_profile %}
 <p class="page-desc">{{ shop_profile.shop_name }} · 店码 <strong>{{ shop_profile.shop_code }}</strong></p>
-<p class="card-meta" data-yc-tour="work-login-intro">请输入名字和密码开始上班；店主也可用本店账号进入管理视角（买家请去店铺点菜页，不要在此登录）。</p>
+<p class="card-meta" data-yc-tour="work-login-intro">请输入<strong>工牌名字和密码</strong>开始上班。默认「店主工牌」与开店账号同名同密，仅用于工作台，<strong>不能</strong>进店铺管理后台。买家请去店铺点菜页，不要在此登录。</p>
 {% else %}
 <p class="page-desc">店码无效，请向店长索取正确二维码。</p>
 {% endif %}
@@ -43,7 +43,7 @@
     <a class="btn btn-outline" href="{{ experience_work_hub_url }}" data-yc-tour="work-login-demo-enter">进入演示工作台（已模拟登录）</a>
 </p>
 {% endif %}
-<p class="card-meta" style="margin-top:12px;">员工只需记本店名字和密码；下班时请点页面里的「下班」。</p>
+<p class="card-meta" style="margin-top:12px;">只需记工牌名字和密码；下班时请在本页点「下班」，或点 Tab 栏「退出工作台」。</p>
 {% endif %}
 {% if onboarding_readonly %}
 {% include 'waimai/onboarding/_readonly_guard.html' %}

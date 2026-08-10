@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.models import BuyOrder, DeliveryOrder, User
 from waimai.order_timeline_helpers import build_order_timeline
@@ -18,7 +19,7 @@ class OrderTimelineFixTests(TestCase):
 
     def test_cod_completed_hides_estimated_ready_at_bottom(self):
         """货到付款完成后，不应再把「预计出餐」插到时间线末尾。"""
-        base = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+        base = now_local_wall().replace(hour=9, minute=0, second=0, microsecond=0)
         order = BuyOrder.objects.create(
             buyer_id='buyer1',
             seller_id=self.seller.username,
@@ -57,7 +58,7 @@ class OrderTimelineFixTests(TestCase):
 
     def test_delivery_hides_goods_delivered_before_pickup(self):
         """外卖：骑手取餐前不展示「商品已全部交付」。"""
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='buyer2',
             seller_id=self.seller.username,
@@ -89,7 +90,7 @@ class OrderTimelineFixTests(TestCase):
 
     def test_preparing_shows_estimated_ready_sorted(self):
         """备餐中仍显示预计出餐，且按时间排序。"""
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='buyer3',
             seller_id=self.seller.username,
@@ -111,7 +112,7 @@ class OrderTimelineFixTests(TestCase):
 
     def test_delivering_hides_estimated_ready_label(self):
         """配送中不再展示「预计出餐」类标签。"""
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='buyer4',
             seller_id=self.seller.username,
@@ -128,7 +129,7 @@ class OrderTimelineFixTests(TestCase):
         """买家订单列表：配送中不显示预计出餐徽章。"""
         from django.template.loader import render_to_string
 
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='hist_deliver',
             seller_id=self.seller.username,
@@ -152,7 +153,7 @@ class OrderTimelineFixTests(TestCase):
         """工作台订单页：配送中不显示预计出餐。"""
         from django.template.loader import render_to_string
 
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='work_buyer',
             seller_id=self.seller.username,
@@ -177,7 +178,7 @@ class OrderTimelineFixTests(TestCase):
         from waimai.kitchen_helpers import build_kitchen_dish_rows
         from waimai.workbench_shell_helpers import build_workbench_shell
 
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='kit_buyer',
             seller_id=self.seller.username,
@@ -227,7 +228,7 @@ class OrderTimelineFixTests(TestCase):
         from waimai.order_progress_helpers import build_dual_progress_groups
         from waimai.workbench_shell_helpers import build_workbench_shell
 
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='wait_buyer',
             seller_id=self.seller.username,
@@ -305,7 +306,7 @@ class OrderTimelineFixTests(TestCase):
         from django.template.loader import render_to_string
         from waimai.workbench_shell_helpers import build_workbench_shell
 
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='sub_buyer',
             seller_id=self.seller.username,

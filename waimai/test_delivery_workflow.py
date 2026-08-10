@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.models import BuyOrder, DeliveryOrder, User
 from waimai.operating_helpers import get_operating_settings
@@ -126,7 +127,7 @@ class DeliveryWorkflowTests(TestCase):
         settings.save(update_fields=['delivery_default_wait_minutes'])
 
         delivery = self._delivery_order(delivery_status='picked_up', order_status='awaiting_delivery')
-        before = timezone.now()
+        before = now_local_wall()
         ok, _ = apply_rider_start_delivery(delivery)
         self.assertTrue(ok)
         delivery.refresh_from_db()
@@ -138,7 +139,7 @@ class DeliveryWorkflowTests(TestCase):
 
     def test_sync_delivery_overtime_from_in_transit(self):
         """过了预计送达仍在送 → 配送线记 overtime。"""
-        now = timezone.now()
+        now = now_local_wall()
         delivery = self._delivery_order(delivery_status='in_transit', order_status='delivering')
         delivery.in_transit_at = now - timedelta(minutes=40)
         delivery.estimated_delivery_time = now - timedelta(minutes=5)
@@ -149,7 +150,7 @@ class DeliveryWorkflowTests(TestCase):
         self.assertEqual(delivery.delivery_status, 'overtime')
 
     def test_compute_wait_display_countdown_and_overdue(self):
-        now = timezone.now()
+        now = now_local_wall()
         future = compute_wait_display(now + timedelta(minutes=10), now=now)
         self.assertFalse(future['is_overdue'])
         self.assertIn('还剩', future['text'])
@@ -161,7 +162,7 @@ class DeliveryWorkflowTests(TestCase):
         self.assertEqual(past['css_class'], 'wait-overdue')
 
     def test_rider_pickup_and_delivery_wait_displays(self):
-        now = timezone.now()
+        now = now_local_wall()
         delivery = self._delivery_order()
         delivery.buy_order.estimated_ready_at = now + timedelta(minutes=8)
         delivery.buy_order.save(update_fields=['estimated_ready_at'])

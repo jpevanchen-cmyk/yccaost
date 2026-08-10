@@ -14,7 +14,7 @@
         {% if row.rider_id %}{{ workbench_shell.rider_role_word }}：<strong>{{ row.rider_id }}</strong>{% if row.delivery_status %} · {{ row.delivery_status }}{% endif %}<br>{% endif %}
         金额：<strong style="color:var(--yc-orange);">¥{{ order.total_amount }}</strong>
         · {{ order.get_payment_status_display }}
-        · {{ order.created_at|beijing:"m-d H:i" }}
+        · {{ order.created_at|local:"m-d H:i" }}
     </p>
     <span class="delivery-status-badge delivery-status-accepted">{{ row.phase_label }}</span>
     {% if order.should_show_estimated_ready_on_waiter_board %}

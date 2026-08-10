@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from .forms import CreateKitchenForm
 from .models import BuyOrder
@@ -86,7 +87,7 @@ def handle_kitchen_board_post(request, seller_id: str, *, redirect_to=None):
         transition_order_status(
             order, 'preparing', source='kitchen_handlers.start_preparing',
         )
-        order.preparing_at = timezone.now()
+        order.preparing_at = now_local_wall()
         update_fields = ['order_status', 'preparing_at', 'updated_at']
         if not order.estimated_ready_at:
             from .wait_time_helpers import assign_default_wait_time

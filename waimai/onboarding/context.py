@@ -10,6 +10,14 @@ from .official_shop import OFFICIAL_SHOP_NAME, official_shop_ready
 
 def experience_boot(request):
     """在 ?exp=1、/experience/ 或服务器主页下注入新版 boot"""
+    from waimai.v1_local_helpers import v1_local_mode_enabled
+
+    if v1_local_mode_enabled():
+        return {
+            'experience_boot_json': '',
+            'experience_enabled': False,
+            'official_shop_name': '',
+        }
     if not should_inject_experience_boot(request):
         return {
             'experience_boot_json': '',
@@ -32,6 +40,15 @@ def experience_boot(request):
 
 def enrich_server_home_onboarding(context: dict) -> dict:
     """服务器主页追加新版体验引导上下文"""
+    from waimai.v1_local_helpers import v1_local_mode_enabled
+
+    if v1_local_mode_enabled():
+        context['experience_enabled'] = False
+        context['experience_boot_json'] = ''
+        context['official_shop_name'] = ''
+        context['onboarding_enabled'] = False
+        context['onboarding_boot_json'] = ''
+        return context
     if not official_shop_ready():
         context['experience_enabled'] = False
         context['experience_boot_json'] = ''

@@ -202,7 +202,8 @@ class OperationAuditLogAdmin(admin.ModelAdmin):
 
 @admin.register(ServerSiteSettings)
 class ServerSiteSettingsAdmin(admin.ModelAdmin):
-    list_display = ['site_name', 'nav_brand_label', 'show_powered_by', 'updated_at']
+    list_display = ['site_name', 'nav_brand_label', 'install_mode', 'show_powered_by', 'updated_at']
+    readonly_fields = ['updated_at']
 
 
 @admin.register(ServerHomePage)

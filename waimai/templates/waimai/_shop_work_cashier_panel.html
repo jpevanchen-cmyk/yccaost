@@ -46,7 +46,7 @@
         · {{ row.fulfillment_label }}
         · ¥{{ order.total_amount }}
         <div class="card-meta" style="margin-top:4px;">
-            {{ order.created_at|beijing:"H:i" }} 下单
+            {{ order.created_at|local:"H:i" }} 下单
             {% if order.buyer_id %} · 买家 {{ order.buyer_id }}{% endif %}
             {% if order.table_label %} · {{ workbench_shell.table_caption }} {{ order.table_label }}{% endif %}
         </div>

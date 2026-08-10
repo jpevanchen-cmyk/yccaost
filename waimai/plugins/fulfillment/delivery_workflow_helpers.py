@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
+from waimai.time_helpers import now_local_wall
 
 from waimai.models import DeliveryOrder
 from waimai.order_status_transition_helpers import check_order_status_transition
@@ -51,11 +52,11 @@ def sync_delivery_overtime(delivery: DeliveryOrder) -> bool:
         return False
     if not delivery.estimated_delivery_time:
         return False
-    now = timezone.now()
+    now = now_local_wall()
     deadline = delivery.estimated_delivery_time
-    if timezone.is_naive(deadline):
-        deadline = timezone.make_aware(deadline, timezone.get_current_timezone())
-    if now <= deadline:
+    from waimai.datetime_storage_helpers import ensure_comparable
+
+    if ensure_comparable(now) <= ensure_comparable(deadline):
         return False
     delivery.delivery_status = 'overtime'
     delivery.save(update_fields=['delivery_status', 'updated_at'])
@@ -106,7 +107,7 @@ def apply_rider_pickup(delivery: DeliveryOrder) -> tuple[bool, str]:
         return False, violation_hint('invalid_transition')
 
     delivery.delivery_status = 'picked_up'
-    delivery.picked_up_at = timezone.now()
+    delivery.picked_up_at = now_local_wall()
     delivery.save(update_fields=['delivery_status', 'picked_up_at', 'updated_at'])
     buy.save(update_fields=list(dict.fromkeys(fields)) or ['order_status', 'updated_at'])
     return True, '已确认取餐'
@@ -145,7 +146,7 @@ def apply_rider_start_delivery(delivery: DeliveryOrder) -> tuple[bool, str]:
 
     from waimai.plugins.dining.wait_time_helpers import resolve_wait_minutes
 
-    now = timezone.now()
+    now = now_local_wall()
     minutes = resolve_wait_minutes(buy.seller_id, 'delivery', at=now)
     delivery.delivery_status = 'in_transit'
     delivery.in_transit_at = now
@@ -180,7 +181,7 @@ def apply_rider_complete_delivery(delivery: DeliveryOrder) -> tuple[bool, str]:
     if buy.order_status != 'completed':
         return False, '订单尚不能标记为已完成（请确认已收款）'
 
-    now = timezone.now()
+    now = now_local_wall()
     delivery.delivery_status = 'completed'
     delivery.completed_at = now
     delivery.save(update_fields=['delivery_status', 'completed_at', 'updated_at'])

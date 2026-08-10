@@ -1,6 +1,7 @@
 # 订单双方沟通：留言、未读、打开详情时记已读
 
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from .models import BuyOrder, OrderMessage
 from .shop_work_helpers import SHOP_STAFF_ROLES
@@ -42,7 +43,7 @@ def unread_count_for_viewer(order: BuyOrder, user) -> int:
 
 def mark_order_messages_read(order: BuyOrder, user) -> None:
     """打开详情时记为已读。"""
-    now = timezone.now()
+    now = now_local_wall()
     if getattr(user, 'role', None) == 'buyer' and order.buyer_id == user.username:
         BuyOrder.objects.filter(pk=order.pk).update(buyer_msg_read_at=now)
         order.buyer_msg_read_at = now

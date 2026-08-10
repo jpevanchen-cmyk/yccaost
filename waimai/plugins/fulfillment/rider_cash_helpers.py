@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Count, Sum
 from django.utils import timezone
+from waimai.time_helpers import now_local_wall
 
 from waimai.models import (
     BuyOrder,
@@ -154,7 +155,7 @@ def review_cash_remittance_request(
         return False, '这张交款申请已经处理，不能重复操作'
 
     review_note = (note or '').strip()
-    now = timezone.now()
+    now = now_local_wall()
     if not approve:
         if len(review_note) < 2:
             return False, '退回时请填写原因（至少两个字）'

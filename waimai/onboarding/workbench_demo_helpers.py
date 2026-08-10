@@ -8,6 +8,7 @@ from typing import Any
 from django.http import QueryDict
 from django.utils import timezone
 
+from waimai.time_helpers import as_storage_datetime, local_today, now_local_wall
 from waimai.models import StaffAttendanceLog, User
 from waimai.staff_account_helpers import (
     ATTENDANCE_LOG_PAGE_SIZES,
@@ -24,16 +25,14 @@ from waimai.staff_account_helpers import (
 
 
 def _demo_changed_at(hour: int, minute: int):
-    """把今天的某时刻转成本机时区的发生时间"""
-    today = timezone.localdate()
-    naive = datetime.combine(today, time(hour, minute))
-    tz = timezone.get_current_timezone()
-    return timezone.make_aware(naive, tz)
+    """把今天的某时刻转成可写库形态的发生时间"""
+    naive = datetime.combine(local_today(), time(hour, minute))
+    return as_storage_datetime(naive)
 
 
 def build_experience_workbench_demo_staff(seller_id: str) -> list[User]:
     """演示用子账号（内存对象，不写入数据库）"""
-    now = timezone.now()
+    now = now_local_wall()
     manager = User(
         username=f'{seller_id}::演示经理',
         role='manager',
@@ -96,7 +95,7 @@ def build_experience_workbench_attendance_context(
     demo_logs: list[StaffAttendanceLog],
 ) -> dict[str, Any]:
     """体验页考勤区：默认筛今天 + 演示流水"""
-    today = timezone.localdate().isoformat()
+    today = local_today().isoformat()
     get_params = request.GET.copy() if request.GET else QueryDict(mutable=True)
     if not request.GET.get('date_from') and not request.GET.get('date_to'):
         get_params['date_from'] = today

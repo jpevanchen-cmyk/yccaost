@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.dine_models import ShopTable, TableSession
 from waimai.models import BuyOrder, ShopProfile, User
@@ -183,7 +184,7 @@ class Progress85IntegrationTests(TestCase):
             fulfillment_type='takeaway',
             payment_status='paid',
             order_status='preparing',
-            goods_delivered_at=timezone.now(),
+            goods_delivered_at=now_local_wall(),
         )
         labels = [lbl for lbl, _ in build_order_timeline(order, viewer='buyer')]
         self.assertNotIn('商品已全部交付', labels)
@@ -191,7 +192,7 @@ class Progress85IntegrationTests(TestCase):
         self.assertIn('商品已全部交付', work_labels)
 
     def test_buyer_dine_in_ready_shows_can_start_eating(self):
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='p85_buyer4',
             seller_id=self.seller.username,

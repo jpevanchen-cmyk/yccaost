@@ -75,9 +75,16 @@ def set_plugin_enabled(plugin_id: str, seller_id: str, enabled: bool) -> tuple[b
 
 def collect_seller_nav_items(seller_id: str) -> list[SellerNavItem]:
     """核心导航 + 已启用插件贡献的导航，按 order 排序。"""
+    from ..v1_local_helpers import V1_HIDDEN_SELLER_SECTIONS, v1_local_mode_enabled
+    from ..operation_lock_helpers import site_operation_lock_enabled
+
     items = list(_CORE_SELLER_NAV)
+    if v1_local_mode_enabled():
+        items = [item for item in items if item.section not in V1_HIDDEN_SELLER_SECTIONS]
     if not is_plugin_enabled('fulfillment', seller_id):
         items = [item for item in items if item.section != 'cash_manage']
+    if v1_local_mode_enabled() or site_operation_lock_enabled():
+        items.append(SellerNavItem('operation_lock', '操作锁', '🔒', '操作锁', order=190))
     for plugin in list_plugins():
         if not is_plugin_enabled(plugin.id, seller_id):
             continue

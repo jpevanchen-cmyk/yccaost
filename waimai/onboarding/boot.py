@@ -111,6 +111,10 @@ def build_experience_boot_json() -> str:
 
 def should_inject_experience_boot(request) -> bool:
     """换页引导（?exp=1）、新版入口页、服务器主页需要注入启动数据"""
+    from waimai.v1_local_helpers import v1_local_mode_enabled
+
+    if v1_local_mode_enabled():
+        return False
     path = request.path or ''
     if path.startswith('/experience/'):
         return True

@@ -63,7 +63,9 @@ def resolve_tier_price(dish: Dish, tier: str) -> Decimal | None:
 
 
 def _today_start():
-    return timezone.localtime(timezone.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+    from .time_helpers import local_day_start
+
+    return local_day_start()
 
 
 def _iter_order_tier_lines(buyer_id, seller_id, dish_id=None, tier=None, today_only=False):

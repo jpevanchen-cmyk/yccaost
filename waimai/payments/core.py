@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from django.utils import timezone
+from waimai.time_helpers import now_local_wall
 
 from ..models import ShopPaymentSettings
 from .base import PayMethodOption
@@ -49,7 +50,7 @@ def mark_payment_received(order, payment_method: str, paid_at=None) -> bool:
         return False
     order.payment_status = 'paid'
     order.payment_method = payment_method
-    order.payment_time = paid_at or timezone.now()
+    order.payment_time = paid_at or now_local_wall()
     order.save(update_fields=[
         'payment_status', 'payment_method', 'payment_time', 'updated_at',
     ])

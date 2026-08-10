@@ -222,3 +222,48 @@ def server_settings_email(request):
         'rate_stats': email_rate_limit_status(),
         'section': 'email',
     })
+
+
+@_manager_required
+def server_settings_operation_lock(request):
+    """操作锁设置已迁至店铺管理；旧链接兼容跳转。"""
+    return redirect('seller_panel_section', section='operation_lock')
+
+
+@_manager_required
+def server_settings_tech_logs(request):
+    """系统排错日志：仅供服务器维护人员，不在卖家后台展示。"""
+    from .audit_helpers import (
+        AUDIT_VIEW_TECH_ERROR,
+        AUDIT_VIEW_TECH_RUNTIME,
+        build_tech_log_querystring,
+        parse_tech_log_view_params,
+        read_tech_log_filtered,
+    )
+
+    params = parse_tech_log_view_params(request.GET)
+    view = params['view']
+    keyword = params['q']
+    ctx = {
+        'section': 'tech_logs',
+        'tech_view': view,
+        'tech_q': keyword,
+        'tech_query_runtime': build_tech_log_querystring(
+            view=AUDIT_VIEW_TECH_RUNTIME, q=keyword,
+        ),
+        'tech_query_error': build_tech_log_querystring(
+            view=AUDIT_VIEW_TECH_ERROR, q=keyword,
+        ),
+        'runtime_log_lines': [],
+        'error_payment_log_lines': [],
+    }
+    if view == AUDIT_VIEW_TECH_RUNTIME:
+        ctx['runtime_log_lines'] = read_tech_log_filtered(
+            'runtime.log', keyword, 300,
+        )
+    else:
+        ctx['error_payment_log_lines'] = read_tech_log_filtered(
+            'error_payment.log', keyword, 300,
+        )
+    return render(request, 'waimai/owner/tech_logs.html', ctx)
+

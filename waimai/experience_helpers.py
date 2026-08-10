@@ -8,7 +8,8 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.cache import cache
 from django.core.mail import send_mail
-from django.utils import timezone
+
+from .time_helpers import now_local_wall
 
 logger = logging.getLogger('waimai')
 
@@ -38,18 +39,17 @@ def notify_email() -> str:
     return (getattr(settings, 'YECAO_EXPERIENCE_NOTIFY_EMAIL', '') or '').strip()
 
 
-def beijing_today_range():
-    """当天北京时间 0 点～次日 0 点（用本地时区感知）"""
-    now = timezone.localtime()
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    end = start + timedelta(days=1)
-    return start, end
+def local_today_range():
+    """当天系统本地 0 点～次日 0 点。"""
+    from .time_helpers import local_day_bounds_for_query
+
+    return local_day_bounds_for_query()
 
 
 def count_today_experience_accounts() -> int:
     from .models import User
 
-    start, end = beijing_today_range()
+    start, end = local_today_range()
     return User.objects.filter(
         is_experience=True,
         is_permanent=False,
@@ -61,7 +61,7 @@ def count_today_experience_accounts() -> int:
 def count_today_experience_shops() -> int:
     from .models import ShopProfile
 
-    start, end = beijing_today_range()
+    start, end = local_today_range()
     # 官方小店不计入；当日注册的非官方店都算体验名额
     return ShopProfile.objects.filter(
         is_official=False,
@@ -127,7 +127,7 @@ def user_exempt_from_online_limit(user) -> bool:
 def count_online() -> int:
     # 扫描在线集合并清理过期
     raw = cache.get(ONLINE_SET_KEY) or {}
-    now = timezone.now().timestamp()
+    now = now_local_wall().timestamp()
     alive = {str(uid): ts for uid, ts in raw.items() if now - float(ts) < ONLINE_TTL_SECONDS}
     cache.set(ONLINE_SET_KEY, alive, timeout=ONLINE_TTL_SECONDS * 3)
     return len(alive)
@@ -137,8 +137,8 @@ def touch_online_user(user) -> None:
     if not experience_site_enabled() or not user or not getattr(user, 'pk', None):
         return
     raw = cache.get(ONLINE_SET_KEY) or {}
-    raw[str(user.pk)] = timezone.now().timestamp()
-    now = timezone.now().timestamp()
+    raw[str(user.pk)] = now_local_wall().timestamp()
+    now = now_local_wall().timestamp()
     raw = {uid: ts for uid, ts in raw.items() if now - float(ts) < ONLINE_TTL_SECONDS}
     cache.set(ONLINE_SET_KEY, raw, timeout=ONLINE_TTL_SECONDS * 3)
 
@@ -150,7 +150,7 @@ def can_accept_online(user) -> tuple[bool, str]:
     if user_exempt_from_online_limit(user):
         return True, ''
     raw = cache.get(ONLINE_SET_KEY) or {}
-    now = timezone.now().timestamp()
+    now = now_local_wall().timestamp()
     raw = {uid: ts for uid, ts in raw.items() if now - float(ts) < ONLINE_TTL_SECONDS}
     uid = str(getattr(user, 'pk', ''))
     if uid and uid in raw:

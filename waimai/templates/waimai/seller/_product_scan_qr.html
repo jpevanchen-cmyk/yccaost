@@ -17,4 +17,9 @@
         {% endfor %}
     </div>
 </div>
+{% elif dish and scan_qr_missing_lan %}
+<div class="product-scan-qr-block">
+    <h4 class="product-image-manage-title">分档扫码加购二维码</h4>
+    <p class="msg-err">还没有可用的店内局域网地址，不能生成给手机扫的商品码（也不会用 127.0.0.1 凑数）。请先在「堂食营业」填写局域网地址，或重跑首次向导时填好后再来。</p>
+</div>
 {% endif %}

@@ -3,6 +3,7 @@
 # 正本规则：E 盘开发方案 §5.6。
 
 from __future__ import annotations
+from .time_helpers import now_local_wall
 
 import logging
 from typing import TYPE_CHECKING
@@ -126,7 +127,7 @@ def try_complete_order(
 
     if getattr(order, 'pk', None):
         if not getattr(order, 'completed_at', None):
-            order.completed_at = timezone.now()
+            order.completed_at = now_local_wall()
             extra.append('completed_at')
 
     if order.is_dine_in():
@@ -165,7 +166,7 @@ def apply_prep_progress_event(order: BuyOrder, *, source: str) -> list[str]:
         )
         update_fields.extend(extra)
         if not order.preparing_at:
-            order.preparing_at = timezone.now()
+            order.preparing_at = now_local_wall()
             update_fields.append('preparing_at')
 
     if prepared >= total and order.order_status in ('awaiting_prep', 'preparing'):
@@ -174,7 +175,7 @@ def apply_prep_progress_event(order: BuyOrder, *, source: str) -> list[str]:
         )
         update_fields.extend(extra)
         if 'order_status' in extra:
-            order.ready_at = timezone.now()
+            order.ready_at = now_local_wall()
             update_fields.append('ready_at')
 
     if prepared < total and order.order_status == 'ready_pickup':
@@ -234,7 +235,7 @@ def handle_order_status_event(
         from django.utils import timezone
 
         if _all_goods_served(order) and not getattr(order, 'goods_delivered_at', None):
-            order.goods_delivered_at = timezone.now()
+            order.goods_delivered_at = now_local_wall()
             update_fields.append('goods_delivered_at')
         update_fields.extend(
             apply_goods_delivered_side_effects(order, source=source),

@@ -4,18 +4,34 @@
 {% block body_class %}shop-page{% if cart_has_lines %} has-cart-bar{% endif %}{% endblock %}
 
 {% block page_back %}
+{% if waiter_table_order_mode %}
+<a href="{{ waiter_return_url }}" class="page-back-btn">← 返回服务员看板</a>
+{% else %}
 {% include 'waimai/_page_back.html' with back_url="/directory/" back_label="返回店铺名录" %}
+{% endif %}
 {% endblock %}
 
 {% block content %}
+{% if waiter_table_order_mode %}
+<p class="onboarding-preview-badge card-meta" style="margin-bottom:8px;background:#fff8e1;padding:8px 10px;border-radius:8px;">
+    👔 <strong>服务员代客点菜</strong> · {{ waiter_table_number }}号桌 · 堂食主单（代下）
+</p>
+{% endif %}
 <h1 class="page-title">🍱 {% if shop_profile %}{{ shop_profile.shop_name }}{% else %}卖家 {{ seller_id }} 的店铺{% endif %}</h1>
 {% if shop_profile %}<p class="page-desc">{{ shop_profile.address }}</p>{% endif %}
 
 {% if table_label %}
-<div class="msg-ok">🪑 当前桌台：<strong>{{ table_label }}</strong>（扫桌码 · 堂食通道，加点将计入本桌主单）
+<div class="msg-ok">🪑 当前桌台：<strong>{{ table_label }}</strong>（堂食通道，加点计入本桌主单）
     {% if table_open_order %}
     <div style="margin-top:8px;">
         <a class="btn btn-sm btn-outline" href="{% url 'order_detail' table_open_order.order_id %}">查看本桌当前订单 · {{ table_open_order.get_display_order_no }}</a>
+    </div>
+    {% endif %}
+    {% if table_addon_scan_path %}
+    <div style="margin-top:8px;">
+        <span class="card-meta">专属加点码（可分享给同桌）：</span>
+        <code id="yc-table-addon-path">{{ table_addon_scan_path }}</code>
+        <button type="button" class="btn btn-sm btn-outline" id="yc-copy-addon-path">复制链接</button>
     </div>
     {% endif %}
 </div>
@@ -107,7 +123,27 @@ window.YC_DINE_HINT = {
     needChannelPick: {% if need_channel_pick %}true{% else %}false{% endif %}
 };
 </script>
-<script src="{% static 'waimai/plugins/dining/dine_timeout_hint.js' %}?v=2"></script>
+<script src="{% static 'waimai/plugins/dining/dine_timeout_hint.js' %}?v=3"></script>
+{% if table_addon_scan_path %}
+<script>
+(function () {
+    var btn = document.getElementById('yc-copy-addon-path');
+    var code = document.getElementById('yc-table-addon-path');
+    if (!btn || !code) return;
+    btn.addEventListener('click', function () {
+        var path = (code.textContent || '').trim();
+        var url = path.indexOf('http') === 0 ? path : (window.location.origin + path);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function () {
+                btn.textContent = '已复制';
+            });
+        } else {
+            window.prompt('请复制加点链接', url);
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endif %}
 {% endblock %}
 

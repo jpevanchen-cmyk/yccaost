@@ -1,0 +1,78 @@
+{% extends 'waimai/v1_setup/base.html' %}
+{% block setup_content %}
+<h1 class="page-title">第 6 步 · 备份目录</h1>
+<p class="page-desc">
+    这里设置<strong>自动备份</strong>保存位置（每天 0 点、正常退出、营业中整点等会写到这里）。
+    装好后若要临时拷一份到 U 盘：用托盘「立刻备份到所选文件夹…」。
+</p>
+<form method="post" class="auth-form" style="max-width:520px;" id="v1-backup-form">
+    {% csrf_token %}
+    <p>
+        <label for="id_backup_dir">{{ form.backup_dir.label }}</label><br>
+        {{ form.backup_dir }}
+        <button type="button" class="btn btn-outline" id="v1-pick-backup-dir" style="margin-top:8px;">选择文件夹…</button>
+        {% if form.backup_dir.help_text %}<br><span class="card-meta">{{ form.backup_dir.help_text }}</span>{% endif %}
+        {% for err in form.backup_dir.errors %}<br><span class="msg-err">{{ err }}</span>{% endfor %}
+    </p>
+    <p id="v1-pick-backup-msg" class="card-meta" style="display:none;"></p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <a href="{% url 'v1_setup_step' 'payment' %}" class="btn btn-outline">上一步</a>
+        <button type="submit" class="btn btn-green">下一步</button>
+    </div>
+</form>
+<script>
+(function () {
+    var btn = document.getElementById('v1-pick-backup-dir');
+    var input = document.getElementById('id_backup_dir');
+    var msg = document.getElementById('v1-pick-backup-msg');
+    var form = document.getElementById('v1-backup-form');
+    if (!btn || !input || !form) return;
+    function csrfToken() {
+        var el = form.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+    function showMsg(text, isErr) {
+        if (!msg) return;
+        msg.style.display = 'block';
+        msg.textContent = text || '';
+        msg.className = isErr ? 'msg-err' : 'card-meta';
+    }
+    btn.addEventListener('click', function () {
+        btn.disabled = true;
+        showMsg('请在弹出的窗口里选择文件夹…', false);
+        var body = new URLSearchParams();
+        body.append('csrfmiddlewaretoken', csrfToken());
+        body.append('initial_dir', input.value || '');
+        fetch('{% url "v1_setup_pick_backup_dir" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: body,
+            credentials: 'same-origin'
+        }).then(function (res) {
+            return res.json().then(function (data) {
+                return { okHttp: res.ok, data: data };
+            });
+        }).then(function (pack) {
+            var data = pack.data || {};
+            if (data.ok && data.path) {
+                input.value = data.path;
+                showMsg('已选：' + data.path, false);
+                return;
+            }
+            if (data.cancelled) {
+                showMsg('已取消选择。', false);
+                return;
+            }
+            showMsg((data && data.error) || '选择失败，请重试或手动确认路径。', true);
+        }).catch(function () {
+            showMsg('选择失败，请重试。', true);
+        }).finally(function () {
+            btn.disabled = false;
+        });
+    });
+})();
+</script>
+{% endblock %}

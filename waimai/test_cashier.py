@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.test import Client, TestCase
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.cashier_helpers import (
     cashier_can_start_wechat,
@@ -96,7 +97,7 @@ class CashierHelperTests(CashierBase):
         today_order = self.make_pending_order()
         old_order = self.make_pending_order()
         BuyOrder.objects.filter(pk=old_order.pk).update(
-            created_at=timezone.now() - timezone.timedelta(days=2),
+            created_at=now_local_wall() - timezone.timedelta(days=2),
         )
         paid_order = self.make_pending_order(payment_status='paid', order_status='awaiting_prep')
 

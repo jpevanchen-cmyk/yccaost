@@ -84,12 +84,12 @@ _READY_MILESTONE_STATUSES = frozenset({
 
 def _timeline_sort_key(row: tuple[str, object]):
     """按发生时间排序；无时间的排最后。"""
+    from .time_helpers import ensure_local_aware
+
     _lbl, dt = row
     if dt is None:
         return (1, datetime.max.replace(tzinfo=timezone.utc), _lbl)
-    if timezone.is_naive(dt):
-        dt = timezone.make_aware(dt, timezone.get_current_timezone())
-    return (0, dt, _lbl)
+    return (0, ensure_local_aware(dt), _lbl)
 
 
 def _estimated_ready_label(order: BuyOrder) -> str:
@@ -159,13 +159,12 @@ def _should_show_estimated_delivery(order: BuyOrder, delivery) -> bool:
 
 def compute_wait_display(deadline, *, now=None) -> dict | None:
     """工作台倒计时/超时正计时（§5.6.7 · A.15.9）：未过点黑字「还剩 xx 分」，过后红字「已超时 xx 分」。"""
+    from .time_helpers import ensure_local_aware, now_local_wall
+
     if not deadline:
         return None
-    moment = now or timezone.now()
-    if timezone.is_naive(deadline):
-        deadline = timezone.make_aware(deadline, timezone.get_current_timezone())
-    if timezone.is_naive(moment):
-        moment = timezone.make_aware(moment, timezone.get_current_timezone())
+    moment = ensure_local_aware(now if now is not None else now_local_wall())
+    deadline = ensure_local_aware(deadline)
     total_seconds = int((deadline - moment).total_seconds())
     minutes = abs(total_seconds) // 60
     if total_seconds >= 0:

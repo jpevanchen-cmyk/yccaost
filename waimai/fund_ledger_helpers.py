@@ -10,6 +10,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .models import BuyOrder, FundLedgerEntry, FundLedgerStatusTrack
+from .time_helpers import format_local, now_local_wall
 
 LEDGER_SCHEMA_VERSION = '1'
 
@@ -20,6 +21,9 @@ BUSINESS_TYPE_LABELS: dict[str, str] = {
     'wechat_scan_initiated': '发起微信扫码',
     'wechat_payment_success': '微信到账',
     'wechat_payment_closed': '微信关闭',
+    'wechat_refund_processing': '微信退款处理中',
+    'wechat_refund_success': '微信退款完成',
+    'shop_order_cancelled': '店家取消订单',
     'demo_payment_success': '演示支付到账',
     'rider_cash_collected': '骑手送达收款',
     'cash_remittance_confirmed': '入金确认',
@@ -51,8 +55,8 @@ def _money2(value) -> Decimal:
 
 def _generate_display_no() -> str:
     """生成对外展示的流水号。"""
-    now = timezone.localtime(timezone.now())
-    return f'FL-{now:%Y%m%d}-{uuid.uuid4().hex[:8].upper()}'
+    now = now_local_wall()
+    return f'FL-{format_local(now, "%Y%m%d")}-{uuid.uuid4().hex[:8].upper()}'
 
 
 def _label_for(field: str, code: str) -> str:
@@ -69,6 +73,23 @@ def _label_for(field: str, code: str) -> str:
         'refund_status': dict(FundLedgerEntry.REFUND_STATUS_CHOICES),
     }
     return choices_map.get(field, {}).get(code, code)
+
+
+def fund_status_display(code: str, *, business_type: str = '') -> str:
+    """资金状态中文；微信扫码等待阶段旧数据兼容显示为「待到账」。"""
+    if not code:
+        return '—'
+    if code == FundLedgerEntry.FUND_STATUS_PENDING_ARRIVAL:
+        return '待到账'
+    if code == FundLedgerEntry.FUND_STATUS_NOT_APPLICABLE and business_type == 'wechat_scan_initiated':
+        return '待到账'
+    return _label_for('fund_status', code)
+
+
+def _track_value_label(field: str, code: str, *, business_type: str = '') -> str:
+    if field == 'fund_status':
+        return fund_status_display(code, business_type=business_type)
+    return _label_for(field, code)
 
 
 def compact_ledger_display_no(display_no: str) -> str:
@@ -104,13 +125,13 @@ def entry_display_row(entry: FundLedgerEntry) -> dict[str, str]:
         'payment_method': _label_for('payment_method', entry.payment_method),
         'business_type': _label_for('business_type', entry.business_type),
         'entry_status': _label_for('entry_status', entry.entry_status),
-        'fund_status': _label_for('fund_status', entry.fund_status),
+        'fund_status': fund_status_display(entry.fund_status, business_type=entry.business_type),
         'refund_status': _label_for('refund_status', entry.refund_status),
         'operator': entry.operator or '系统',
         'source': entry.source or '—',
         'reference_key': entry.reference_key or '—',
         'note': entry.note or '',
-        'occurred_at': timezone.localtime(entry.occurred_at).strftime('%Y-%m-%d %H:%M'),
+        'occurred_at': format_local(entry.occurred_at, '%Y-%m-%d %H:%M'),
     }
 
 
@@ -178,7 +199,7 @@ def create_fund_ledger_entry(
         source=source or '',
         entry_status=entry_status,
         related_ledger=related_ledger,
-        occurred_at=occurred_at or timezone.now(),
+        occurred_at=occurred_at or now_local_wall(),
         operator=operator or '',
         reference_key=(reference_key or '').strip(),
         schema_version=LEDGER_SCHEMA_VERSION,
@@ -258,9 +279,13 @@ def list_order_fund_ledger_entries(order: BuyOrder) -> list[dict]:
         tracks = [
             {
                 'field': track.changed_field,
-                'before': _label_for(track.changed_field, track.value_before),
-                'after': _label_for(track.changed_field, track.value_after),
-                'at': timezone.localtime(track.changed_at).strftime('%m-%d %H:%M'),
+                'before': _track_value_label(
+                    track.changed_field, track.value_before, business_type=entry.business_type,
+                ),
+                'after': _track_value_label(
+                    track.changed_field, track.value_after, business_type=entry.business_type,
+                ),
+                'at': format_local(track.changed_at, '%m-%d %H:%M'),
                 'operator': track.operator or '系统',
             }
             for track in entry.status_tracks.all()
@@ -282,9 +307,13 @@ def build_ledger_entry_drawer_context(entry: FundLedgerEntry) -> dict:
     tracks = [
         {
             'field': TRACK_FIELD_LABELS.get(track.changed_field, track.changed_field),
-            'before': _label_for(track.changed_field, track.value_before),
-            'after': _label_for(track.changed_field, track.value_after),
-            'at': timezone.localtime(track.changed_at).strftime('%Y-%m-%d %H:%M'),
+            'before': _track_value_label(
+                track.changed_field, track.value_before, business_type=entry.business_type,
+            ),
+            'after': _track_value_label(
+                track.changed_field, track.value_after, business_type=entry.business_type,
+            ),
+            'at': format_local(track.changed_at, '%Y-%m-%d %H:%M'),
             'operator': track.operator or '系统',
             'note': track.note or '',
         }

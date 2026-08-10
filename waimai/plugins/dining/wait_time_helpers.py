@@ -3,11 +3,11 @@
 from datetime import timedelta
 
 from django.db import transaction
-from django.utils import timezone
 from django.utils.dateparse import parse_time
 
 from waimai.models import BuyOrder, ShopWaitTimeRule
 from waimai.operating_helpers import get_operating_settings
+from waimai.time_helpers import now_local_wall, to_local
 
 
 WAIT_CHANNELS = ('dine_in', 'takeaway', 'delivery')
@@ -39,7 +39,8 @@ def resolve_wait_minutes(seller_id: str, channel: str, *, at=None) -> int:
     settings = get_operating_settings(seller_id)
     field_name = DEFAULT_FIELD_BY_CHANNEL.get(channel, 'dine_default_wait_minutes')
     default_minutes = _clamp_minutes(getattr(settings, field_name, 20))
-    moment = timezone.localtime(at or timezone.now())
+
+    moment = to_local(at) if at is not None else to_local(now_local_wall())
     now_t = moment.time()
     for rule in settings.wait_time_rules.filter(channel=channel):
         if _time_in_window(now_t, rule.start_time, rule.end_time):
@@ -49,7 +50,7 @@ def resolve_wait_minutes(seller_id: str, channel: str, *, at=None) -> int:
 
 def assign_default_wait_time(order: BuyOrder, *, at=None, save: bool = True) -> int:
     """订单进入店铺处理队列时，自动写入预计完成时间。"""
-    moment = at or timezone.now()
+    moment = at or now_local_wall()
     minutes = resolve_wait_minutes(order.seller_id, order.fulfillment_type, at=moment)
     order.estimated_ready_at = moment + timedelta(minutes=minutes)
     if save:
@@ -77,7 +78,7 @@ def adjust_order_wait_time(order: BuyOrder, raw_minutes) -> tuple[bool, str, int
         return False, '请输入正确的分钟数', 0
     if minutes < 1 or minutes > 240:
         return False, '等待时间须填写 1～240 分钟', 0
-    order.estimated_ready_at = timezone.now() + timedelta(minutes=minutes)
+    order.estimated_ready_at = now_local_wall() + timedelta(minutes=minutes)
     order.save(update_fields=['estimated_ready_at', 'updated_at'])
     return True, f'预计时间已改为从现在起约 {minutes} 分钟', minutes
 

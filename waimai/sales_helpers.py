@@ -2,9 +2,8 @@
 
 from datetime import timedelta
 
-from django.utils import timezone
-
 from .models import BuyOrder
+from .time_helpers import local_day_start, now_local_wall
 
 
 def _aggregate_dish_sales(orders) -> list[dict]:
@@ -34,9 +33,8 @@ def get_dish_sales_rankings(seller_id: str) -> dict:
     日 = 今天 0 点起；周 = 近 7 天；月 = 近 30 天。
     只统计已完成订单。
     """
-    now = timezone.now()
-    local_now = timezone.localtime(now)
-    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    now = now_local_wall()
+    today_start = local_day_start(now)
     week_start = now - timedelta(days=7)
     month_start = now - timedelta(days=30)
 
@@ -49,7 +47,7 @@ def get_dish_sales_rankings(seller_id: str) -> dict:
         'day': _aggregate_dish_sales(base.filter(created_at__gte=today_start)),
         'week': _aggregate_dish_sales(base.filter(created_at__gte=week_start)),
         'month': _aggregate_dish_sales(base.filter(created_at__gte=month_start)),
-        'day_label': f'今日（{local_now.strftime("%m月%d日")}）',
+        'day_label': f'今日（{now.strftime("%m月%d日")}）',
         'week_label': '近 7 天',
         'month_label': '近 30 天',
     }

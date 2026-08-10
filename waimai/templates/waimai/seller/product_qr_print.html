@@ -18,7 +18,9 @@
             <button type="button" class="btn btn-green" onclick="window.print()" data-yc-tour="print-qr-btn">打印本页</button>
             <a href="{% if experience_products_url %}{{ experience_products_url }}{% else %}{% url 'seller_panel_section' 'products' %}{% endif %}" class="btn btn-outline" data-unsaved-skip>返回商品管理</a>
         </div>
-        {% if not print_cards %}
+        {% if print_qr_missing_lan %}
+        <p class="msg-err">还没有可用的店内局域网地址，不能生成给手机扫的商品码（也不会用 127.0.0.1 凑数）。请先在「堂食营业」填写局域网地址，或重跑首次向导时填好后再来。</p>
+        {% elif not print_cards %}
         <p class="msg-warn">当前使用中清单里没有可打印的商品（须有展示编号且至少一个档位可售）。</p>
         {% endif %}
     </div>

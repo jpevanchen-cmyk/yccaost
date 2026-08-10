@@ -1,4 +1,5 @@
 {% extends 'waimai/base.html' %}
+{% load static %}
 {% block title %}收银台 · 微信扫码 - 野草系统{% endblock %}
 
 {% block page_back %}
@@ -25,7 +26,7 @@
     </p>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="{% static 'waimai/qrcode.min.js' %}"></script>
 <script>
 (function () {
     var codeUrl = "{{ code_url|escapejs }}";

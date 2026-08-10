@@ -24,6 +24,8 @@
         allFolds().forEach(function (other) {
             if (other === keep || !other.open) return;
             if (isMultiFold(other)) return;
+            // 嵌套：不要关掉祖先或后代（避免点子卡片收起大标题）
+            if (other.contains(keep) || keep.contains(other)) return;
             var otherGroup = foldGroup(other);
             if (keepGroup) {
                 if (otherGroup === keepGroup) {

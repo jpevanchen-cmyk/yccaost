@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.models import BuyOrder
 from waimai.panel_refresh_helpers import PANEL_REQUEST_HEADER
@@ -32,7 +33,7 @@ class CashManageIdempotencyTests(TestCase):
             employer_seller_id=self.seller.username,
             staff_permissions=[PERM_FULFILLMENT_CASH_MANAGE],
         )
-        now = timezone.now()
+        now = now_local_wall()
         BuyOrder.objects.create(
             buyer_id='buyer_remit',
             seller_id=self.seller.username,
@@ -57,7 +58,7 @@ class CashManageIdempotencyTests(TestCase):
 
     def _make_pending_remit(self, rider_id: str, buyer_id: str):
         """再建一笔可交款订单并生成待确认入金申请。"""
-        now = timezone.now()
+        now = now_local_wall()
         BuyOrder.objects.create(
             buyer_id=buyer_id,
             seller_id=self.seller.username,

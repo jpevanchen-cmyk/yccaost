@@ -6,6 +6,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 MAX_BODY = 1000
 MAX_NAME = 80
@@ -93,7 +94,7 @@ def _find_recent_duplicate_thread(actor_key: str, body: str, email: str):
         return None
 
     email_norm = (email or '').strip().lower()
-    since = timezone.now() - timedelta(seconds=DEDUPE_WINDOW_SECONDS)
+    since = now_local_wall() - timedelta(seconds=DEDUPE_WINDOW_SECONDS)
     candidates = GuestbookThread.objects.filter(
         guest_actor_key=key,
         created_at__gte=since,
@@ -356,7 +357,7 @@ def guest_reply_thread(
         author_label=label,
         body=text,
     )
-    thread.last_activity_at = timezone.now()
+    thread.last_activity_at = now_local_wall()
     thread.owner_read_at = None
     thread.save(update_fields=['last_activity_at', 'owner_read_at'])
     notify_manager_new_guestbook(thread, msg)
@@ -380,7 +381,7 @@ def owner_reply_thread(thread, *, body: str, manager_user) -> tuple[bool, str]:
         author_label=label[:MAX_NAME],
         body=text,
     )
-    thread.last_activity_at = timezone.now()
+    thread.last_activity_at = now_local_wall()
     thread.save(update_fields=['last_activity_at'])
     notify_guest_on_owner_reply(thread, msg)
     return True, '回复已发送'

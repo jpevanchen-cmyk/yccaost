@@ -1,0 +1,34 @@
+{% extends 'waimai/v1_setup/base.html' %}
+{% block setup_content %}
+<h1 class="page-title">第 7 步 · 完成</h1>
+{% if summary %}
+<p class="page-desc">配置已保存，你已自动登录。请保存下面信息。</p>
+<div class="card" style="padding:16px;margin:16px 0;">
+    <p><strong>店铺</strong>：{{ summary.shop_name }}（店码 {{ summary.shop_code }}）</p>
+    <p><strong>老板登录名</strong>：{{ summary.username }}</p>
+    <p><strong>店内访问地址</strong>：{{ summary.lan_base_url }}</p>
+    <p><strong>工作台入口</strong>：{{ summary.workbench_hint }}</p>
+    <p><strong>备份目录</strong>：{{ summary.backup_dir }}</p>
+    <p><strong>饮食插件</strong>：已开启</p>
+    <p><strong>履约插件</strong>：{% if summary.fulfillment_enabled %}已开启{% else %}未开启（默认）{% endif %}</p>
+    <p class="card-meta" style="margin-top:12px;">正式营业前请将文件 <code>{{ summary.env_hint_file }}</code> 中的内容合并进 <code>.env</code>（关闭调试、使用正式密钥）。</p>
+</div>
+<a href="{% url 'seller_panel' %}" class="btn btn-green">进入店铺管理</a>
+{% else %}
+<p class="page-desc">请确认下列摘要，点击按钮后将创建店铺并进入 V1 模式。</p>
+<ul class="card-meta" style="line-height:1.8;">
+    <li>店名：{{ draft.shop_name }}</li>
+    <li>老板：{{ draft.username }}</li>
+    <li>本机地址：{{ draft.lan_base_url|default:draft.listen_port }}</li>
+    <li>饮食插件：开 · 履约：{% if draft.fulfillment_enabled %}开{% else %}关{% endif %}</li>
+    <li>备份：{{ draft.backup_dir }}</li>
+</ul>
+<form method="post" style="margin-top:16px;">
+    {% csrf_token %}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="{% url 'v1_setup_step' 'backup' %}" class="btn btn-outline">上一步</a>
+        <button type="submit" class="btn btn-green">完成并进入系统</button>
+    </div>
+</form>
+{% endif %}
+{% endblock %}

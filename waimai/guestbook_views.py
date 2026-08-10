@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods, require_POST
+from .time_helpers import now_local_wall
 
 from waimai.owner_helpers import user_is_server_manager
 
@@ -210,7 +211,7 @@ def server_settings_guestbook_thread(request, public_code: str):
         messages.success(request, '邮箱标记已更新')
         return redirect('server_settings_guestbook_thread', public_code=thread.public_code)
 
-    thread.owner_read_at = timezone.now()
+    thread.owner_read_at = now_local_wall()
     thread.save(update_fields=['owner_read_at'])
     messages_list = list(GuestbookMessage.objects.filter(thread=thread).order_by('created_at'))
     return render(request, 'waimai/owner/guestbook_thread.html', {

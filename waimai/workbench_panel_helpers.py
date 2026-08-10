@@ -91,6 +91,8 @@ def render_workbench_panel_html(request: HttpRequest, panel_ctx: dict) -> str:
             seller_id,
             allow_dispatch=operator_can_manual_dispatch(work_user, seller_id, 'waiter'),
             sort_mode=sort_mode,
+            request=request,
+            shop_code=panel_ctx['shop_code'],
         )
         ctx.update(base)
         ctx['can_operate'] = bool(panel_ctx.get('can_operate_waiter'))
@@ -151,6 +153,8 @@ RIDER_PANEL_ACTIONS = (
 CASHIER_PANEL_ACTIONS = ('collect', 'simulate_pay')
 
 WORKBENCH_PANEL_FLAG_KEYS = (
+    'waiter_open_table',
+    'waiter_close_table',
     'mark_prepared_unit',
     'undo_prepared_unit',
     'mark_all_prepared',

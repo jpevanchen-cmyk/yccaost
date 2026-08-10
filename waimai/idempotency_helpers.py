@@ -12,6 +12,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from .models import IdempotencyRecord
 
@@ -44,7 +45,7 @@ def idempotency_scope(*parts: str) -> str:
 
 
 def _default_expires_at():
-    return timezone.now() + DEFAULT_TTL
+    return now_local_wall() + DEFAULT_TTL
 
 
 def _is_redirect_response(response: HttpResponse) -> bool:
@@ -86,7 +87,7 @@ def _store_response(record: IdempotencyRecord, response: HttpResponse) -> None:
         record.response_body = response.content.decode(charset, errors='replace')
     record.state = IdempotencyRecord.STATE_COMPLETED
     record.response_status = response.status_code
-    record.completed_at = timezone.now()
+    record.completed_at = now_local_wall()
     record.save(update_fields=[
         'state', 'response_status', 'response_body', 'completed_at',
     ])
@@ -113,7 +114,7 @@ def run_idempotent(
         return execute()
 
     scope = (scope or '').strip()[:128]
-    now = timezone.now()
+    now = now_local_wall()
 
     with transaction.atomic():
         try:

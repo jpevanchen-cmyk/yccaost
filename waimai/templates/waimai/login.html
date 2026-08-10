@@ -3,7 +3,11 @@
 {% block title %}登录 - 野草系统{% endblock %}
 
 {% block page_back %}
+{% if v1_local_mode %}
+{% include 'waimai/_page_back.html' with back_url="/accounts/login/" back_label="返回登录" %}
+{% else %}
 {% include 'waimai/_page_back.html' with back_url="/directory/" back_label="返回名录" %}
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -32,7 +36,9 @@
     </p>
     <button type="submit" class="btn btn-green btn-block">登录</button>
 </form>
+{% if v1_public_register_enabled %}
 <p class="card-meta">没有账户？<a href="/register/">买家注册</a> · <a href="/shop-register/">店铺开通</a></p>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

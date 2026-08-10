@@ -34,8 +34,11 @@ from .menu_helpers import (
 )
 from .operating_helpers import check_order_admission, get_operating_settings
 from waimai.plugins.dining.table_helpers import (
+    build_addon_scan_path,
     build_table_scan_path,
     build_virtual_scan_path,
+    ensure_addon_token,
+    get_open_main_session_for_table,
     get_open_order_for_session,
     virtual_code_is_busy,
 )
@@ -94,6 +97,29 @@ class CustomLoginView(LoginView):
         from .ecosystem_auth import EcosystemAuthenticationForm
         return EcosystemAuthenticationForm
 
+    def post(self, request, *args, **kwargs):
+        from .login_guard_helpers import (
+            SCOPE_ECOSYSTEM,
+            audit_login_locked,
+            check_login_allowed,
+        )
+
+        username = (request.POST.get('username') or '').strip()
+        allowed, lock_msg = check_login_allowed(
+            request, SCOPE_ECOSYSTEM, username=username,
+        )
+        if not allowed:
+            audit_login_locked(
+                request,
+                scope=SCOPE_ECOSYSTEM,
+                username=username,
+                portal_label='野草生态',
+            )
+            form = self.get_form()
+            form.add_error(None, lock_msg)
+            return self.render_to_response(self.get_context_data(form=form))
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         from .experience_helpers import can_accept_online, touch_online_user
 
@@ -101,14 +127,17 @@ class CustomLoginView(LoginView):
         ok, msg = can_accept_online(user)
         if not ok:
             form.add_error(None, msg)
-            return self.form_invalid(form)
+            return self.render_to_response(self.get_context_data(form=form))
 
         response = super().form_valid(form)
         from .single_login_helpers import claim_single_login
         claim_single_login(self.request, self.request.user)
         from .audit_helpers import write_audit_log
+        from .login_guard_helpers import SCOPE_ECOSYSTEM, clear_login_guard
 
         user = self.request.user
+        username = (self.request.POST.get('username') or '').strip()
+        clear_login_guard(self.request, SCOPE_ECOSYSTEM, username=username)
         touch_online_user(user)
         write_audit_log(
             action_code='login',
@@ -119,17 +148,19 @@ class CustomLoginView(LoginView):
         return response
 
     def form_invalid(self, form):
-        from .audit_helpers import write_audit_log
+        from .login_guard_helpers import SCOPE_ECOSYSTEM, handle_failed_login_attempt
 
         username = (self.request.POST.get('username') or '').strip()
-        write_audit_log(
-            action_code='login_failed',
-            summary=f'野草生态登录失败：{username or "（未填用户名）"}',
-            actor_username=username,
-            result='fail',
-            request=self.request,
+        msg = handle_failed_login_attempt(
+            self.request,
+            SCOPE_ECOSYSTEM,
+            username=username,
+            portal_label='野草生态',
+            failed_summary=f'野草生态登录失败：{username or "（未填用户名）"}',
         )
-        return super().form_invalid(form)
+        display_form = self.get_form()
+        display_form.add_error(None, msg)
+        return self.render_to_response(self.get_context_data(form=display_form))
 
     def get_success_url(self):
         redirect_to = self.get_redirect_url()
@@ -557,6 +588,8 @@ def shop_work(request, shop_code):
                 seller_id,
                 allow_dispatch=operator_can_manual_dispatch(work_user, seller_id, 'waiter'),
                 sort_mode=work_order_sort,
+                request=request,
+                shop_code=code,
             ))
         elif current_view == 'kitchen':
             from .dispatch_helpers import operator_can_manual_dispatch
@@ -582,10 +615,40 @@ def shop_work(request, shop_code):
             context.update(build_workbench_cash_manage_context(
                 seller_id, work_user=work_user, request=request,
             ))
+        if (
+            request.method == 'GET'
+            and current_view == 'waiter'
+            and (request.GET.get('yc_table_board') or '').strip() == '1'
+        ):
+            from .panel_refresh_helpers import is_panel_refresh, panel_refresh_ok
+            from waimai.plugins.dining.waiter_table_helpers import (
+                render_waiter_table_board_inner_html,
+            )
+
+            if is_panel_refresh(request):
+                html = render_waiter_table_board_inner_html(
+                    request,
+                    seller_id=seller_id,
+                    shop_code=code,
+                    can_operate=bool(perms.get('waiter')),
+                    form_action=form_action,
+                )
+                return panel_refresh_ok(
+                    html=html,
+                    panel_id='waiter-table-board-body',
+                    message='',
+                )
         return render(request, 'waimai/shop_work_hub.html', context)
 
     if request.method == 'POST':
         from .audit_helpers import write_audit_log
+        from .login_guard_helpers import (
+            SCOPE_SHOP_WORK,
+            audit_login_locked,
+            check_login_allowed,
+            clear_login_guard,
+            handle_failed_login_attempt,
+        )
         from .staff_account_helpers import (
             activate_staff_on_login,
             authenticate_shop_work_user,
@@ -594,6 +657,23 @@ def shop_work(request, shop_code):
 
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
+        allowed, lock_msg = check_login_allowed(
+            request,
+            SCOPE_SHOP_WORK,
+            username=username,
+            seller_id=seller_id,
+        )
+        if not allowed:
+            audit_login_locked(
+                request,
+                scope=SCOPE_SHOP_WORK,
+                username=username,
+                seller_id=seller_id,
+                portal_label='店铺工作台',
+            )
+            messages.error(request, lock_msg)
+            return render(request, 'waimai/shop_work_login.html', {'shop_profile': shop_profile})
+
         user = authenticate_shop_work_user(request, seller_id, username, password)
         if user is not None:
             from .experience_helpers import can_accept_online, touch_online_user
@@ -608,6 +688,12 @@ def shop_work(request, shop_code):
             from .single_login_helpers import claim_single_login
             claim_single_login(request, user)
             touch_online_user(user)
+            clear_login_guard(
+                request,
+                SCOPE_SHOP_WORK,
+                username=username,
+                seller_id=seller_id,
+            )
             write_audit_log(
                 action_code='login',
                 summary='店铺工作台登录成功',
@@ -616,15 +702,15 @@ def shop_work(request, shop_code):
                 request=request,
             )
             return redirect(build_shop_work_path(code, view=default_work_view(user)))
-        write_audit_log(
-            action_code='login_failed',
-            summary=f'店铺工作台登录失败：{username or "（未填用户名）"}',
+        err = handle_failed_login_attempt(
+            request,
+            SCOPE_SHOP_WORK,
+            username=username,
             seller_id=seller_id,
-            actor_username=username,
-            result='fail',
-            request=request,
+            portal_label='店铺工作台',
+            failed_summary=f'店铺工作台登录失败：{username or "（未填用户名）"}',
         )
-        messages.error(request, '用户名或密码错误')
+        messages.error(request, err)
 
     return render(request, 'waimai/shop_work_login.html', {'shop_profile': shop_profile})
 
@@ -787,6 +873,13 @@ def shop_work_order(request, shop_code, order_id):
     if can_chat:
         mark_order_messages_read(order, work_user)
 
+    from .payments import poll_wechat_refund
+    from .payments.wechat_refund_helpers import shop_cancel_refund_hint
+
+    if order.order_status == 'cancelled' or order.payment_status == 'paid':
+        poll_wechat_refund(order)
+        order.refresh_from_db()
+
     from .workbench_shell_helpers import build_workbench_shell
     from .order_qr_helpers import order_cashier_qr_template_context
 
@@ -811,12 +904,60 @@ def shop_work_order(request, shop_code, order_id):
         'show_contact_guest': show_contact,
         'can_shop_cancel': can_shop_cancel,
         'shop_has_chat_history': shop_has_cancel_communication(order),
+        'shop_cancel_refund_hint': shop_cancel_refund_hint(order),
         'back_url': build_shop_work_path(code, view='orders'),
         'shop_work_logout_url': reverse('shop_work_logout', kwargs={'shop_code': code}),
         'workbench_shell': build_workbench_shell(seller_id),
         'timeline': build_order_timeline(order, viewer=VIEWER_WORK),
         **qr_ctx,
     })
+
+
+def _rewrite_waiter_shop_redirect(response, request, seller_id: str):
+    """服务员代客点菜：把店铺页跳转改回工作台点菜页。"""
+    from waimai.plugins.dining.waiter_table_order_helpers import get_waiter_table_order_page_url
+
+    if response.status_code not in (301, 302):
+        return response
+    custom = get_waiter_table_order_page_url(request, seller_id)
+    if not custom:
+        return response
+    location = response.get('Location', '')
+    if location.startswith('/shop/') or 'seller_id=' in location:
+        response['Location'] = custom
+    return response
+
+
+def shop_work_waiter_table_order(request, shop_code, table_id):
+    """服务员代客点菜：绑桌堂食，复用店铺菜单与购物车。"""
+    from .order_helpers import get_shop_cart
+    from .shop_work_auth import get_shop_work_user
+    from .shop_work_helpers import get_shop_profile_by_code
+    from .waiter_table_order_handlers import prepare_waiter_table_order_page
+
+    work_user = get_shop_work_user(request)
+    extra, err_redirect = prepare_waiter_table_order_page(
+        request,
+        shop_code=shop_code,
+        table_id=table_id,
+        work_user=work_user,
+        auto_open_if_idle=True,
+    )
+    if err_redirect:
+        return err_redirect
+
+    shop_profile = get_shop_profile_by_code(shop_code)
+    seller_id = shop_profile.seller_id
+
+    if request.method == 'POST':
+        mutable_get = request.GET.copy()
+        mutable_get['seller_id'] = seller_id
+        request.GET = mutable_get
+        response = shop_page(request)
+        return _rewrite_waiter_shop_redirect(response, request, seller_id)
+
+    cart = get_shop_cart(request.session, seller_id)
+    return _shop_render(request, seller_id, cart, shop_profile, extra=extra)
 
 
 def _shop_work_cashier_auth(request, shop_code: str):
@@ -1082,9 +1223,17 @@ def waiter_pay_order_status(request, order_id):
 from .scroll_helpers import dish_scroll_anchor, redirect_with_anchor
 
 
-def _shop_cart_redirect(seller_id, keep_cart_open=False, dish_id=None, price_tier=None):
-    """加减购物车后跳回店铺；可打开购物车抽屉或定位到某菜品档位卡片"""
+def _shop_cart_redirect(
+    seller_id, keep_cart_open=False, dish_id=None, price_tier=None, *, request=None,
+):
+    """加减购物车后跳回店铺；服务员代客点菜时跳回工作台点菜页。"""
     url = f'/shop/?seller_id={seller_id}'
+    if request is not None:
+        from waimai.plugins.dining.waiter_table_order_helpers import get_waiter_table_order_page_url
+
+        custom = get_waiter_table_order_page_url(request, seller_id)
+        if custom:
+            url = custom
     if keep_cart_open:
         return redirect_with_anchor(url, 'cart')
     anchor = dish_scroll_anchor(dish_id, price_tier) if dish_id else None
@@ -1181,8 +1330,8 @@ def _execute_shop_cart_add_to_cart(request, seller_id, shop_profile):
     if is_panel_refresh(request):
         return _shop_cart_panel_ok(request, cart, seller_id, shop_profile)
     if request.POST.get('stay_in_cart'):
-        return _shop_cart_redirect(seller_id, keep_cart_open=True)
-    return _shop_cart_redirect(seller_id, dish_id=dish_id, price_tier=tier)
+        return _shop_cart_redirect(seller_id, keep_cart_open=True, request=request)
+    return _shop_cart_redirect(seller_id, dish_id=dish_id, price_tier=tier, request=request)
 
 
 def _execute_shop_cart_decrease_from_cart(request, seller_id, shop_profile):
@@ -1201,7 +1350,7 @@ def _execute_shop_cart_decrease_from_cart(request, seller_id, shop_profile):
     set_shop_cart(request.session, seller_id, cart)
     if is_panel_refresh(request):
         return _shop_cart_panel_ok(request, cart, seller_id, shop_profile)
-    return _shop_cart_redirect(seller_id, keep_cart_open=True)
+    return _shop_cart_redirect(seller_id, keep_cart_open=True, request=request)
 
 
 def _execute_shop_cart_remove_from_cart(request, seller_id, shop_profile):
@@ -1217,7 +1366,7 @@ def _execute_shop_cart_remove_from_cart(request, seller_id, shop_profile):
     set_shop_cart(request.session, seller_id, cart)
     if is_panel_refresh(request):
         return _shop_cart_panel_ok(request, cart, seller_id, shop_profile)
-    return _shop_cart_redirect(seller_id, keep_cart_open=True)
+    return _shop_cart_redirect(seller_id, keep_cart_open=True, request=request)
 
 
 def _execute_shop_cart_update_cart(request, seller_id, shop_profile):
@@ -1236,7 +1385,7 @@ def _execute_shop_cart_update_cart(request, seller_id, shop_profile):
     set_shop_cart(request.session, seller_id, cart)
     if is_panel_refresh(request):
         return _shop_cart_panel_ok(request, cart, seller_id, shop_profile)
-    return _shop_cart_redirect(seller_id, keep_cart_open=True)
+    return _shop_cart_redirect(seller_id, keep_cart_open=True, request=request)
 
 
 def _shop_page_dishes(seller_id):
@@ -1292,11 +1441,21 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
     table_session = get_buyer_table_session(request, seller_id)
     auto_pick_single_homepage_channel(request, seller_id, table_session)
     shop_channel = resolve_shop_channel(request, seller_id, table_session)
+    table_session_expired = bool(getattr(request, 'yc_table_session_expired', False))
     channel_repick_mode = (not table_session) and is_channel_repick(request.session, seller_id)
-    need_channel_pick = (not table_session) and (not shop_channel)
+    need_channel_pick = (
+        (not table_session)
+        and (not shop_channel)
+        and not table_session_expired
+    )
     show_channel_pick = need_channel_pick or channel_repick_mode
     # 本桌进行中的订单：游客/买家回店后可一点打开详情（结账翻台后不再显示）
     table_open_order = get_open_order_for_session(table_session) if table_session else None
+    table_addon_scan_path = ''
+    if table_session and table_session.session_type == 'main' and table_session.status == 'open':
+        addon_token = ensure_addon_token(table_session)
+        if addon_token:
+            table_addon_scan_path = build_addon_scan_path(seller_id, addon_token)
 
     dish_rows = []
     if shop_channel and not channel_repick_mode:
@@ -1325,6 +1484,7 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         'table_session': table_session,
         'table_label': table_session.display_label() if table_session else '',
         'table_open_order': table_open_order,
+        'table_addon_scan_path': table_addon_scan_path,
         'need_channel_pick': need_channel_pick,
         'channel_repick_mode': channel_repick_mode,
         'show_channel_pick': show_channel_pick,
@@ -1333,7 +1493,10 @@ def _shop_render(request, seller_id, cart, shop_profile, error='', extra=None):
         'can_switch_shop_channel': (
             (not table_session) and homepage_channel_switch_enabled(seller_id)
         ),
-        'error': error or request.GET.get('error', ''),
+        'error': error or request.GET.get('error', '') or (
+            '本桌已翻台或会话已失效，请重新扫描专属加点码进入。'
+            if table_session_expired else ''
+        ),
         **channel_template_flags(shop_channel),
         **_shop_cart_context(cart, seller_id),
     }
@@ -1533,12 +1696,17 @@ def shop_page(request):
         if action == 'checkout':
             from .channel_helpers import CHANNEL_DINE_IN
             from .guest_order_helpers import normalize_guest_nickname
+            from waimai.plugins.dining.waiter_table_order_helpers import (
+                get_waiter_table_order_page_url,
+                is_waiter_table_order_active,
+            )
 
             is_logged_buyer = (
                 request.user.is_authenticated and request.user.role == 'buyer'
             )
-            # 堂食 + 有效桌台会话：游客也可结算；外卖/打包仍须登录买家
-            is_guest_dine = bool(table_sess and not is_logged_buyer)
+            waiter_dine = is_waiter_table_order_active(request, seller_id)
+            # 堂食 + 有效桌台会话：游客或服务员代点可结算
+            is_guest_dine = bool(table_sess and (not is_logged_buyer or waiter_dine))
             if not is_logged_buyer and not is_guest_dine:
                 return _shop_render(
                     request, seller_id, cart, shop_profile,
@@ -1596,7 +1764,7 @@ def shop_page(request):
             cart_removed_notice = ''
             if removed_notes:
                 cart_removed_notice = '；'.join(dict.fromkeys(removed_notes))
-            return render(request, 'waimai/confirm_order.html', {
+            confirm_ctx = {
                 'cart_items': cart_items,
                 'subtotal': subtotal,
                 'delivery_fee': delivery_fee,
@@ -1618,7 +1786,18 @@ def shop_page(request):
                 ),
                 'cart_removed_notice': cart_removed_notice,
                 **channel_template_flags(fulfillment_type),
-            })
+            }
+            if waiter_dine:
+                from .shop_work_auth import SESSION_SHOP_WORK_CODE
+                from .shop_work_helpers import build_shop_work_path
+
+                code = (request.session.get(SESSION_SHOP_WORK_CODE) or '').strip()
+                confirm_ctx.update({
+                    'waiter_table_order_mode': True,
+                    'waiter_table_order_url': get_waiter_table_order_page_url(request, seller_id),
+                    'waiter_return_url': build_shop_work_path(code, view='waiter') if code else '',
+                })
+            return render(request, 'waimai/confirm_order.html', confirm_ctx)
 
     return _shop_render(request, seller_id, cart, shop_profile, extra={
         'success': request.GET.get('success', False),
@@ -1681,7 +1860,15 @@ def rider_delivery_history(request):
 
 def register(request):
     """买家注册（仅买家）"""
+    from django.contrib import messages
+    from django.shortcuts import redirect
+
     from .experience_helpers import experience_hint_context, touch_online_user
+    from .v1_local_helpers import v1_local_block_message, v1_local_mode_enabled
+
+    if v1_local_mode_enabled():
+        messages.info(request, v1_local_block_message())
+        return redirect('login')
 
     if request.method == 'POST':
         form = BuyerRegistrationForm(request.POST)
@@ -1700,7 +1887,15 @@ def register(request):
 
 def shop_register(request):
     """店铺注册服务器：创建卖家账号并进入名录"""
+    from django.contrib import messages
+    from django.shortcuts import redirect
+
     from .experience_helpers import experience_hint_context, touch_online_user
+    from .v1_local_helpers import v1_local_block_message, v1_local_mode_enabled
+
+    if v1_local_mode_enabled():
+        messages.info(request, v1_local_block_message())
+        return redirect('login')
 
     if request.method == 'POST':
         form = ShopRegistrationForm(request.POST)
@@ -1830,13 +2025,16 @@ def seller_product_qr_print(request):
 
     seller_id = request.user.username
     from .menu_helpers import get_active_menu_profile
+    from .operating_helpers import resolve_shop_access_base_url
     from .product_qr_print_helpers import build_catalog_qr_print_cards
 
+    missing_lan = not bool(resolve_shop_access_base_url(request, seller_id))
     return render(
         request,
         'waimai/seller/product_qr_print.html',
         {
-            'print_cards': build_catalog_qr_print_cards(request, seller_id),
+            'print_cards': [] if missing_lan else build_catalog_qr_print_cards(request, seller_id),
+            'print_qr_missing_lan': missing_lan,
             'active_profile': get_active_menu_profile(seller_id),
             'shop_profile': ShopProfile.objects.filter(seller_id=seller_id).first(),
         },
@@ -1902,8 +2100,17 @@ def seller_panel_section(request, section):
     valid = (
         'orders', 'products', 'operating', 'dine', 'workbench', 'delivery',
         'payment', 'cash_manage', 'fund_ledger', 'audit', 'homepage', 'plugins',
+        'operation_lock',
     )
     if section not in valid:
+        return redirect('seller_panel_section', section='orders')
+
+    from .v1_local_helpers import seller_section_hidden_in_v1, v1_local_block_message
+
+    if seller_section_hidden_in_v1(section):
+        from django.contrib import messages
+
+        messages.info(request, v1_local_block_message())
         return redirect('seller_panel_section', section='orders')
 
     seller_id = request.user.username
@@ -1956,6 +2163,12 @@ def seller_panel_section(request, section):
             return panel_refresh_ok(html=html, panel_id='cash-manage-panel-body', message='')
 
     if request.method == 'POST':
+        if section == 'operation_lock':
+            from .operation_lock_settings_helpers import handle_operation_lock_settings_post
+
+            response = handle_operation_lock_settings_post(request)
+            if response:
+                return response
         response = None
         if section == 'operating':
             response = handle_operating_post(request, seller_id)
@@ -2104,11 +2317,17 @@ def seller_panel_section(request, section):
         context['edit_dish_id'] = request.GET.get('edit', '').strip()
         edit_pick = context['edit_dish_id']
         if edit_pick:
-            from .product_scan_helpers import build_product_scan_qr_rows
+            from .product_scan_helpers import (
+                build_product_scan_qr_rows,
+                product_scan_qr_missing_lan,
+            )
 
             for dish in dishes:
                 if dish.dish_id.hex[:8] == edit_pick:
                     context['edit_scan_qr_rows'] = build_product_scan_qr_rows(
+                        request, dish, seller_id,
+                    )
+                    context['edit_scan_qr_missing_lan'] = product_scan_qr_missing_lan(
                         request, dish, seller_id,
                     )
                     break
@@ -2129,6 +2348,13 @@ def seller_panel_section(request, section):
         tables = sort_shop_tables(list(ShopTable.objects.filter(seller_id=seller_id)))
         for t in tables:
             t.scan_path = build_table_scan_path(seller_id, t.qr_token)
+            open_sess = get_open_main_session_for_table(t)
+            t.is_busy = open_sess is not None
+            if open_sess:
+                token = ensure_addon_token(open_sess)
+                t.addon_scan_path = build_addon_scan_path(seller_id, token) if token else ''
+            else:
+                t.addon_scan_path = ''
         context['tables'] = tables
         if operating.share_table_enabled and operating.share_table_mode == 'virtual':
             vcodes = sort_virtual_codes(list(VirtualTableCode.objects.filter(seller_id=seller_id)))
@@ -2209,14 +2435,27 @@ def seller_panel_section(request, section):
         )
         work_login_url = ''
         work_qr_data_url = ''
+        work_qr_missing_lan = False
         if shop_profile and (shop_profile.shop_code or '').strip():
-            work_login_url = request.build_absolute_uri(
-                reverse('shop_work', kwargs={'shop_code': shop_profile.shop_code.strip()}),
+            from .operating_helpers import resolve_shop_access_base_url
+
+            work_path = reverse(
+                'shop_work',
+                kwargs={'shop_code': shop_profile.shop_code.strip()},
             )
-            png = build_work_login_qr_png(work_login_url)
-            work_qr_data_url = 'data:image/png;base64,' + base64.b64encode(png).decode('ascii')
+            base = resolve_shop_access_base_url(request, seller_id)
+            if base:
+                work_login_url = base.rstrip('/') + work_path
+                png = build_work_login_qr_png(work_login_url)
+                work_qr_data_url = (
+                    'data:image/png;base64,' + base64.b64encode(png).decode('ascii')
+                )
+            else:
+                # 禁止用 127.0.0.1 生成给手机扫的码
+                work_qr_missing_lan = True
         context['work_login_url'] = work_login_url
         context['work_qr_data_url'] = work_qr_data_url
+        context['work_qr_missing_lan'] = work_qr_missing_lan
     elif section == 'delivery':
         from .plugins.fulfillment.ownership import fulfillment_plugin_enabled
         if not fulfillment_plugin_enabled(seller_id):
@@ -2240,6 +2479,11 @@ def seller_panel_section(request, section):
         context['payment_form'] = payment_form
         context['experience_block_wechat'] = seller_blocked_from_real_wechat(seller_id)
         context['experience_site'] = experience_site_enabled()
+        from .payment_cert_helpers import build_wechat_cert_display, wechat_cert_status_label
+
+        pay_settings = get_payment_settings(seller_id)
+        context['wechat_cert_status'] = wechat_cert_status_label(pay_settings)
+        context['wechat_cert_display'] = build_wechat_cert_display(pay_settings)
     elif section == 'cash_manage':
         from .cash_manage_helpers import build_seller_cash_manage_context
 
@@ -2255,42 +2499,36 @@ def seller_panel_section(request, section):
         return render(request, 'waimai/seller/fund_ledger.html', context)
     elif section == 'audit':
         from .audit_helpers import (
-            can_view_tech_logs,
+            build_seller_audit_querystring,
+            parse_audit_view_params,
             query_audit_logs,
-            read_tech_log_tail,
             write_audit_log,
         )
 
-        scope = (request.GET.get('scope') or 'all').strip()
-        show_tech = (request.GET.get('tech') or '').strip() == '1'
-        only_me = scope == 'mine'
+        params = parse_audit_view_params(request.GET)
+        only_me = params['scope'] == 'mine'
+        keyword = params['q']
         write_audit_log(
             action_code='view_audit',
-            summary='查看操作审计' + ('（仅本人）' if only_me else '（本店全部）'),
+            summary='查看操作留痕' + ('（仅本人）' if only_me else '（本店全部）'),
             seller_id=seller_id,
             actor=request.user,
             request=request,
         )
+        context['audit_scope'] = params['scope']
+        context['audit_q'] = keyword
+        context['audit_query_scope_all'] = build_seller_audit_querystring(
+            scope='all', q=keyword,
+        )
+        context['audit_query_scope_mine'] = build_seller_audit_querystring(
+            scope='mine', q=keyword,
+        )
         context['audit_logs'] = list(query_audit_logs(
             seller_id=seller_id,
             only_username=request.user.username if only_me else None,
+            keyword=keyword,
             limit=100,
         ))
-        context['audit_scope'] = 'mine' if only_me else 'all'
-        context['show_tech'] = False
-        context['runtime_log_lines'] = []
-        context['error_payment_log_lines'] = []
-        if show_tech and can_view_tech_logs(request.user):
-            write_audit_log(
-                action_code='view_tech_log',
-                summary='查看技术运行日志摘要',
-                seller_id=seller_id,
-                actor=request.user,
-                request=request,
-            )
-            context['show_tech'] = True
-            context['runtime_log_lines'] = read_tech_log_tail('runtime.log', 150)
-            context['error_payment_log_lines'] = read_tech_log_tail('error_payment.log', 150)
     elif section == 'homepage':
         from .home_page_helpers import (
             MAX_SHOP_CUSTOM_BLOCKS,
@@ -2331,6 +2569,10 @@ def seller_panel_section(request, section):
                 'nav_labels': [i.label for i in p.seller_nav_items()],
             })
         context['plugin_rows'] = plugin_rows
+    elif section == 'operation_lock':
+        from .operation_lock_settings_helpers import operation_lock_settings_context
+
+        context.update(operation_lock_settings_context())
 
     return render(request, f'waimai/seller/{section}.html', context)
 
@@ -2360,15 +2602,23 @@ def _execute_place_order(request):
         normalize_guest_nickname,
         resolve_order_buyer_id,
     )
+    from waimai.plugins.dining.waiter_table_order_helpers import (
+        get_waiter_table_order_meta,
+        is_waiter_table_order_active,
+    )
 
+    seller_id = (request.POST.get('seller_id') or 'seller_001').strip()
     is_logged_buyer = (
         request.user.is_authenticated and request.user.role == 'buyer'
     )
-    if request.user.is_authenticated and not is_logged_buyer:
-        # 店主/员工等非买家账号不能走买家下单口
+    waiter_dine = is_waiter_table_order_active(request, seller_id)
+    if waiter_dine and get_buyer_table_session(request, seller_id):
+        is_logged_buyer = False
+    if request.user.is_authenticated and not is_logged_buyer and not waiter_dine:
+        # 店主/员工等非买家账号不能走买家下单口（服务员代客点菜除外）
+        if seller_id:
+            return redirect(f'/shop/?seller_id={seller_id}&error=请用买家账号或扫桌码免登录下单')
         return redirect('shop')
-
-    seller_id = request.POST.get('seller_id', 'seller_001')
     cart = get_shop_cart(request.session, seller_id)
     if not cart:
         return redirect(f'/shop/?seller_id={seller_id}')
@@ -2529,11 +2779,24 @@ def _execute_place_order(request):
 
     set_shop_cart(request.session, seller_id, {})
     from .audit_helpers import write_audit_log
+    from .shop_work_auth import get_shop_work_user
+
+    waiter_meta = get_waiter_table_order_meta(request, seller_id) if waiter_dine else None
+    work_user = get_shop_work_user(request) if waiter_meta else None
+    if waiter_meta:
+        actor_label = f'服务员代下（{waiter_meta.get("operator") or "工作台"}）'
+        audit_actor = work_user
+    elif is_guest:
+        actor_label = '游客'
+        audit_actor = None
+    else:
+        actor_label = '买家'
+        audit_actor = request.user if is_logged_buyer else None
     write_audit_log(
         action_code='order_place',
-        summary=f'{"游客" if is_guest else "买家"}下单 {order.get_display_order_no()} · ¥{order.total_amount}',
+        summary=f'{actor_label}下单 {order.get_display_order_no()} · ¥{order.total_amount}',
         seller_id=seller_id,
-        actor=request.user if is_logged_buyer else None,
+        actor=audit_actor,
         target_type='order',
         target_id=str(order.order_id),
         request=request,
@@ -2979,6 +3242,13 @@ def order_detail(request, order_id):
     if can_chat and user:
         mark_order_messages_read(order, user)
 
+    from .payments import poll_wechat_refund
+    from .payments.wechat_refund_helpers import shop_cancel_refund_hint
+
+    if user and getattr(user, 'role', '') == 'seller' and order.seller_id == user.username:
+        poll_wechat_refund(order)
+        order.refresh_from_db()
+
     shop_profile = ShopProfile.objects.filter(seller_id=order.seller_id).first()
     fee_detail = order.delivery_fee_detail
     if not fee_detail:
@@ -3051,6 +3321,7 @@ def order_detail(request, order_id):
         'buyer_cancel_blocked_hint': BUYER_BLOCKED_HINT,
         'can_shop_cancel': can_shop_cancel,
         'shop_has_chat_history': shop_has_cancel_communication(order) if user else False,
+        'shop_cancel_refund_hint': shop_cancel_refund_hint(order) if user else '',
         'shop_work_code': '',
         'shop_work_back_url': '',
         'guest_shop_back_url': f'/shop/?seller_id={order.seller_id}' if viewer_role == 'guest' else '',

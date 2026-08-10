@@ -1,0 +1,24 @@
+野草 V1 · 安装包怎么打（白话）
+
+一、本机要有什么
+1. 已能跑起来的项目（含 .venv，且装过 requirements.txt）
+2. Inno Setup 6（官网或 winget install --id JRSoftware.InnoSetup -e）
+
+二、怎么打
+方式 A：双击 build_installer.bat（自动准备目录 + 编译）
+方式 B：
+  1）双击 prepare_dist.bat
+  2）用 Inno Setup 打开 yecao_v1.iss → 编译
+
+三、产物在哪
+installer\output\野草本地营业_V1_安装包.exe
+
+四、装包里有什么
+- 程序代码
+- 内嵌 .venv（含 requirements 依赖，安装时不用再联网下依赖）
+- 启动野草.bat / 本机忘记密码重置.bat / 使用说明.txt
+- 默认 .env：关闭调试、待完成首次向导标记
+
+五、注意
+- 不要把开发机的 db.sqlite3、backup 打进去（脚本已排除）
+- staging、output 体积大，不必提交 Git

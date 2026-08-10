@@ -3,7 +3,13 @@
 {% block body_class %}page-with-sticky-foot{% endblock %}
 
 {% block page_back %}
+{% if waiter_table_order_mode and waiter_table_order_url %}
+<a href="{{ waiter_table_order_url }}" class="page-back-btn">← 返回代客点菜</a>
+{% elif waiter_table_order_mode and waiter_return_url %}
+<a href="{{ waiter_return_url }}" class="page-back-btn">← 返回服务员看板</a>
+{% else %}
 <a href="{% url 'shop' %}?seller_id={{ seller_id }}" class="page-back-btn">← 返回店铺修改</a>
+{% endif %}
 {% endblock %}
 
 {% block content %}

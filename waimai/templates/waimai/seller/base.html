@@ -6,8 +6,6 @@
 {% block page_back %}
 {% if onboarding_preview %}
 {% include 'waimai/_page_back.html' with back_url=home_url back_label="返回服务器主页" %}
-{% else %}
-{% include 'waimai/_page_back.html' with back_url="/" back_label="返回主页" %}
 {% endif %}
 {% endblock %}
 
@@ -24,6 +22,9 @@
 <div class="seller-header">
     <h1 class="page-title">📦 店铺管理{% if onboarding_preview %}（演示）{% endif %}</h1>
     <p class="page-desc">店铺ID：<strong>{{ seller_id }}</strong>{% if shop_profile %} · {{ shop_profile.shop_name }}{% endif %}</p>
+    {% if not onboarding_preview and operation_lock_enabled and not operation_lock_engaged %}
+    {% include 'waimai/_operation_lock_bar.html' %}
+    {% endif %}
 </div>
 
 {# 电脑：顶部 Tab（由核心 + 已启用插件拼装） #}
@@ -63,10 +64,26 @@
 {% if onboarding_readonly %}
 {% include 'waimai/onboarding/_readonly_guard.html' %}
 {% endif %}
+{% if operation_lock_engaged and not onboarding_preview %}
+{% include 'waimai/_operation_lock_overlay.html' %}
+{% endif %}
 {% endblock %}
 
 {% block pre_mobile_js %}
 {{ block.super }}
+{% if operation_lock_enabled and not operation_lock_engaged and not onboarding_preview %}
+<script>
+window.YC_OPERATION_LOCK = {
+    enabled: true,
+    touchUrl: "{% url 'operation_lock_touch' %}",
+    csrfToken: "{{ csrf_token }}"
+};
+</script>
+<script src="{% static 'waimai/operation_lock.js' %}?v=2"></script>
+{% endif %}
+{% if operation_lock_engaged and not onboarding_preview %}
+<script src="{% static 'waimai/operation_lock_overlay.js' %}?v=1"></script>
+{% endif %}
 <script src="{% static 'waimai/idempotency_client.js' %}"></script>
 <script src="{% static 'waimai/panel_refresh.js' %}?v=18"></script>
 {% if not onboarding_readonly %}

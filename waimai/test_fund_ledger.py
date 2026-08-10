@@ -5,15 +5,17 @@ from decimal import Decimal
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.fund_ledger_helpers import (
     build_seller_fund_ledger_context,
     compact_ledger_display_no,
     compact_order_display_no,
+    fund_status_display,
     record_fund_ledger_if_absent,
     transition_fund_ledger_entry,
 )
-from waimai.fund_ledger_hooks import record_order_payment_received
+from waimai.fund_ledger_hooks import record_order_payment_received, record_wechat_scan_initiated
 from waimai.models import BuyOrder, FundLedgerEntry, FundLedgerStatusTrack, ShopProfile, User
 
 
@@ -39,7 +41,7 @@ class FundLedgerModelTests(TestCase):
             dish_items=[],
             payment_status='paid',
             payment_method='wechat_simulate',
-            payment_time=timezone.now(),
+            payment_time=now_local_wall(),
             order_status='awaiting_prep',
             fulfillment_type='takeaway',
         )
@@ -122,6 +124,26 @@ class FundLedgerModelTests(TestCase):
         self.assertEqual(compact_ledger_display_no('FL-20260806-34E5F05F'), 'FL-34E5F05F')
         self.assertEqual(compact_order_display_no(self.order), self.order.get_order_short_code())
 
+    def test_wechat_scan_pending_arrival_label(self):
+        record_wechat_scan_initiated(
+            self.order,
+            out_trade_no='WXSCAN001',
+            source='test',
+        )
+        entry = FundLedgerEntry.objects.get(reference_key='wechat_init:WXSCAN001')
+        self.assertEqual(entry.fund_status, FundLedgerEntry.FUND_STATUS_PENDING_ARRIVAL)
+        self.assertEqual(
+            fund_status_display(entry.fund_status, business_type=entry.business_type),
+            '待到账',
+        )
+        self.assertEqual(
+            fund_status_display(
+                FundLedgerEntry.FUND_STATUS_NOT_APPLICABLE,
+                business_type='wechat_scan_initiated',
+            ),
+            '待到账',
+        )
+
 
 class FundLedgerPageTests(TestCase):
     def setUp(self):
@@ -145,7 +167,7 @@ class FundLedgerPageTests(TestCase):
             dish_items=[],
             payment_status='paid',
             payment_method='cash',
-            payment_time=timezone.now(),
+            payment_time=now_local_wall(),
             order_status='completed',
             fulfillment_type='delivery',
         )

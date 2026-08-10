@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta, timezone as dt_timezone
-from zoneinfo import ZoneInfo
+from datetime import timedelta
 
 from django.conf import settings
-from django.utils import timezone
+
+from .time_helpers import now_local_wall
 
 logger = logging.getLogger('waimai')
-
-BEIJING = ZoneInfo('Asia/Shanghai')
 
 # 通知类型（写入发信记录，便于统计）
 KIND_NEW_ORDER = 'new_order'
@@ -19,6 +17,7 @@ KIND_REMITTANCE_REQUEST = 'remittance_request'
 KIND_BUYER_ORDER_MSG = 'buyer_order_msg'
 KIND_BUYER_CASH_SHORTFALL = 'buyer_cash_shortfall'
 KIND_GUESTBOOK_REPLY = 'guestbook_reply'
+KIND_LOGIN_LOCKED = 'login_locked'
 KIND_TEST = 'test_email'
 
 
@@ -38,11 +37,19 @@ def _dedupe_cooldown_seconds() -> int:
     return int(getattr(settings, 'YECAO_EMAIL_DEDUPE_COOLDOWN_SECONDS', 600))
 
 
-def _beijing_day_start():
-    """北京时间当天 0 点（转 UTC 存库对比）"""
-    local_now = timezone.now().astimezone(BEIJING)
-    local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return local_midnight.astimezone(dt_timezone.utc)
+def _dedupe_cooldown_seconds_for_kind(kind: str) -> int:
+    """登录暂锁通知：同账号 1 小时内最多 1 封"""
+    if kind == KIND_LOGIN_LOCKED:
+        return 3600
+    return _dedupe_cooldown_seconds()
+
+
+def _local_day_start():
+    """系统本地当天 0 点（查询用；USE_TZ=False 时必须是 naive）"""
+    from .time_helpers import local_day_bounds_for_query
+
+    start, _end = local_day_bounds_for_query()
+    return start
 
 
 def _normalize_email(email: str) -> str:
@@ -65,9 +72,11 @@ def recipient_send_block_reason(
     if not addr:
         return 'invalid'
 
-    day_start = _beijing_day_start()
-    hour_ago = timezone.now() - timedelta(hours=1)
-    cooldown_since = timezone.now() - timedelta(seconds=_dedupe_cooldown_seconds())
+    day_start = _local_day_start()
+    hour_ago = now_local_wall() - timedelta(hours=1)
+    cooldown_since = now_local_wall() - timedelta(
+        seconds=_dedupe_cooldown_seconds_for_kind(kind),
+    )
 
     server_today = EmailSendLog.objects.filter(sent_at__gte=day_start).count()
     if server_today >= _daily_server_max():
@@ -141,7 +150,7 @@ def record_email_sent(
         EmailSendLog.objects.bulk_create(rows)
 
     # 顺带清理 7 天前的旧记录，避免表无限长大
-    cutoff = timezone.now() - timedelta(days=7)
+    cutoff = now_local_wall() - timedelta(days=7)
     EmailSendLog.objects.filter(sent_at__lt=cutoff).delete()
 
 
@@ -149,7 +158,7 @@ def email_send_stats() -> dict:
     """今日发信统计（供服务器设置页展示）"""
     from .models import EmailSendLog
 
-    day_start = _beijing_day_start()
+    day_start = _local_day_start()
     today_count = EmailSendLog.objects.filter(sent_at__gte=day_start).count()
     return {
         'server_daily_max': _daily_server_max(),

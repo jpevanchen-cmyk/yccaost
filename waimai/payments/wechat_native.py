@@ -8,6 +8,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from django.utils import timezone
+from waimai.time_helpers import now_local_wall
 
 from ..models import BuyOrder, PaymentRecord, ShopPaymentSettings
 from .base import PaymentInitResult
@@ -203,7 +204,7 @@ def apply_wechat_success(record: PaymentRecord, provider_trade_no: str, notify_p
     record.provider_trade_no = provider_trade_no or ''
     if notify_payload:
         record.notify_payload = notify_payload
-    record.paid_at = timezone.now()
+    record.paid_at = now_local_wall()
     record.save()
 
     order = record.buy_order

@@ -84,8 +84,16 @@ if _extra_hosts:
     ALLOWED_HOSTS.extend([h.strip() for h in _extra_hosts.split(',') if h.strip()])
 if DEBUG:
     _lan = _get_lan_ip_for_dev()
-    if _lan:
+    if _lan and _lan not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(_lan)
+# V1 安装包默认关调试：仍允许探测到的局域网 IP（与向导写入名单互补）
+elif (
+    os.environ.get('YECAO_V1_INSTALL_PENDING', '0') == '1'
+    or os.environ.get('YECAO_V1_LOCAL_MODE', '0') == '1'
+):
+    _lan_v1 = _get_lan_ip_for_dev()
+    if _lan_v1 and _lan_v1 not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_lan_v1)
 
 
 # Application definition
@@ -100,7 +108,7 @@ INSTALLED_APPS = [
     'waimai.apps.WaimaiConfig',
 ]
 
-# ---------- 服务器拥有者私人工具包（默认关闭；目录不进公开 Git）----------
+# ---------- 服务器拥有者私人工具包（默认关闭；以「整机插件」形态加载，目录不进公开 Git）----------
 YECAO_OWNER_TOOLKIT_ENABLED = os.environ.get('YECAO_OWNER_TOOLKIT_ENABLED', '0') == '1'
 YECAO_OWNER_TOOLKIT_PATH = Path(
     os.environ.get('YECAO_OWNER_TOOLKIT_PATH', str(BASE_DIR / 'owner_toolkit'))
@@ -108,25 +116,30 @@ YECAO_OWNER_TOOLKIT_PATH = Path(
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # 正式关调试时仍能送出 CSS/JS（V1 安装包与云上一致）
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'waimai.middleware.ShopWorkAuthMiddleware',
+    'waimai.middleware.V1SetupRedirectMiddleware',
+    'waimai.middleware.OperationLockMiddleware',
+    'waimai.middleware.V1LocalModeMiddleware',
     'waimai.middleware.ExperienceOnlineMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# 私人工具包：开启且目录存在时挂访客统计中间件
-if YECAO_OWNER_TOOLKIT_ENABLED and YECAO_OWNER_TOOLKIT_PATH.is_dir():
-    import sys as _sys
+# 整机私人插件：经 server_plugin_runtime 挂入，不在此写死私人中间件类名
+from waimai.server_plugin_runtime.django_hooks import apply_server_plugins_to_django  # noqa: E402
 
-    _owner_root = str(YECAO_OWNER_TOOLKIT_PATH.parent)
-    if _owner_root not in _sys.path:
-        _sys.path.insert(0, _owner_root)
-    INSTALLED_APPS.append('owner_toolkit.apps.OwnerToolkitConfig')
-    MIDDLEWARE.insert(-1, 'owner_toolkit.middleware.VisitorAnalyticsMiddleware')
+INSTALLED_APPS, MIDDLEWARE = apply_server_plugins_to_django(
+    INSTALLED_APPS,
+    MIDDLEWARE,
+    enabled=YECAO_OWNER_TOOLKIT_ENABLED,
+    toolkit_path=YECAO_OWNER_TOOLKIT_PATH,
+)
 
 ROOT_URLCONF = 'wuwei_system.urls'
 
@@ -147,6 +160,7 @@ TEMPLATES = [
                 'waimai.context_processors.site_compliance',
                 'waimai.context_processors.site_branding',
                 'waimai.context_processors.onboarding_boot',
+                'waimai.context_processors.v1_local_site',
                 'waimai.onboarding.context.experience_boot',
                 'waimai.context_processors_owner.visitor_tracking',
                 'waimai.context_processors_owner.server_plugin_nav',
@@ -167,6 +181,19 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# 若时间转换工作副本已就绪、正式库尚未盖回：临时改用工作副本，避免 USE_TZ=False 读到未平移的旧数字
+_tz_marker = BASE_DIR / 'backup' / '.yecao_datetime_storage.json'
+_tz_work = BASE_DIR / 'db.sqlite3.tzshift_work'
+if _tz_work.is_file() and _tz_marker.is_file():
+    try:
+        import json as _json
+
+        _tz_meta = _json.loads(_tz_marker.read_text(encoding='utf-8'))
+        if _tz_meta.get('mode') == 'pending_apply':
+            DATABASES['default']['NAME'] = _tz_work
+    except (OSError, ValueError, TypeError):
+        pass
 
 
 # Password validation
@@ -193,11 +220,15 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'zh-hans'
 
-TIME_ZONE = 'Asia/Shanghai'  # 全站展示统一为北京时间（UTC+8）
+# 全站时间跟「本机系统时区」（可用环境变量 YECAO_TIME_ZONE 覆盖；§5.17 步 1）
+from wuwei_system.system_timezone import detect_system_timezone_name  # noqa: E402
+
+TIME_ZONE = detect_system_timezone_name()
 
 USE_I18N = True
 
-USE_TZ = True  # 库内用 UTC 存，页面展示经 localtime / |beijing 转北京时间
+# 步 2：库内也跟系统本地墙钟（不再库内世界标准时、页面另一张脸）
+USE_TZ = False
 
 
 # Static files (CSS, JavaScript, Images)
@@ -206,6 +237,16 @@ USE_TZ = True  # 库内用 UTC 存，页面展示经 localtime / |beijing 转北
 STATIC_URL = 'static/'
 # 生产收集静态文件的目录（collectstatic）；本地可不跑该命令。目录已在 .gitignore
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# 关调试时用 WhiteNoise 压缩存储；开发机 DEBUG=1 仍走默认查找，免每次 collectstatic
+if not DEBUG:
+    STORAGES = {
+        'default': {
+            'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        },
+        'staticfiles': {
+            'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+        },
+    }
 # 服务器拥有者上传的备案图标等文件；目录不进 Git，生产环境由 Nginx 提供访问。
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -234,6 +275,11 @@ YECAO_EXPERIENCE_DAILY_SHOPS = int(os.environ.get('YECAO_EXPERIENCE_DAILY_SHOPS'
 YECAO_EXPERIENCE_DAILY_ACCOUNTS = int(os.environ.get('YECAO_EXPERIENCE_DAILY_ACCOUNTS', '30'))
 YECAO_EXPERIENCE_CONCURRENT = int(os.environ.get('YECAO_EXPERIENCE_CONCURRENT', '10'))
 YECAO_EXPERIENCE_NOTIFY_EMAIL = os.environ.get('YECAO_EXPERIENCE_NOTIFY_EMAIL', '').strip()
+
+# ---------- 本地营业内测版 V1.0（默认关闭；仅 V1 安装或专项验收设 YECAO_V1_LOCAL_MODE=1）----------
+YECAO_V1_LOCAL_MODE = os.environ.get('YECAO_V1_LOCAL_MODE', '0') == '1'
+# 安装程序首次启动待完成向导（默认关；开发机不设则不会自动进向导）
+YECAO_V1_INSTALL_PENDING = os.environ.get('YECAO_V1_INSTALL_PENDING', '0') == '1'
 
 # ---------- 邮件发送（新订单通知等）----------
 # 未在 .env 填写发信邮箱时不会发邮件，也不会报错（YECAO_EMAIL_READY 为 False）。

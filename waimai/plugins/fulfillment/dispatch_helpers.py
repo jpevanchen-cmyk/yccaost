@@ -2,6 +2,7 @@
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from waimai.time_helpers import now_local_wall
 
 from waimai.models import BuyOrder, DeliveryOrder, User
 from waimai.order_helpers import subtotal_from_dish_items
@@ -152,7 +153,7 @@ def dispatch_buy_order(buy_order, rider_id=None):
         pickup_address=pickup,
         delivery_address=buy_order.delivery_address,
         delivery_status='accepted',
-        accepted_at=timezone.now(),
+        accepted_at=now_local_wall(),
     )
     return delivery, None
 

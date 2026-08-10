@@ -17,7 +17,7 @@
         <tbody>
             {% for log in attendance_logs_page %}
             <tr>
-                <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.changed_at|beijing:"m-d H:i" }}</td>
+                <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.changed_at|local:"m-d H:i" }}</td>
                 <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log.display_name_snapshot }}</td>
                 <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{{ log|staff_account_type }}</td>
                 <td style="padding:8px;border-bottom:1px solid #f3f3f3;">{% if log.job_title_snapshot %}{{ log.job_title_snapshot }}{% else %}{{ log.role_snapshot|staff_role }}{% endif %}</td>

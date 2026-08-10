@@ -7,7 +7,7 @@
     </div>
     <p class="delivery-card-meta">
         {% if workbench_shell.show_table_on_board and order.table_label %}{{ workbench_shell.table_caption }}：<strong>{{ order.table_label }}</strong><br>{% endif %}
-        下单：{{ order.created_at|beijing:"m-d H:i" }}
+        下单：{{ order.created_at|local:"m-d H:i" }}
         {% if row.rider_id %}<br>{{ workbench_shell.rider_role_word }}：<strong>{{ row.rider_id }}</strong>{% endif %}
     </p>
     <span class="delivery-status-badge delivery-status-accepted">{{ row.phase_label }}</span>

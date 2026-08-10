@@ -10,7 +10,7 @@
         <div style="flex:1;min-width:180px;">
             <strong>订单 {{ order.get_display_order_no }}</strong>
             <div class="card-meta" style="margin-top:4px;">
-                {{ order.created_at|beijing:"m-d H:i" }} · {{ order.get_fulfillment_display_short }} · ¥{{ order.total_amount }}
+                {{ order.created_at|local:"m-d H:i" }} · {{ order.get_fulfillment_display_short }} · ¥{{ order.total_amount }}
             </div>
             <div class="card-meta" style="margin-top:4px;">
                 订单状态：{{ row.status_label }}
@@ -39,7 +39,7 @@
             <span class="badge badge-default">{{ row.kind }}</span>
         </div>
         <div style="flex:1;min-width:180px;">
-            <strong>{{ row.at|beijing:"H:i" }}</strong>
+            <strong>{{ row.at|local:"H:i" }}</strong>
             · 订单 {{ row.order.get_display_order_no }}
             <div class="card-meta" style="margin-top:4px;">{{ row.text }}</div>
         </div>

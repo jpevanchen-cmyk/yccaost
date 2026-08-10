@@ -1,0 +1,15 @@
+{% extends 'waimai/v1_setup/base.html' %}
+{% block setup_content %}
+<h1 class="page-title">🌱 欢迎使用野草本地营业内测版</h1>
+<p class="page-desc">本向导将帮你在本机 Windows 上完成首次配置，大约 7 步。</p>
+<ul class="card-meta" style="line-height:1.8;margin:16px 0;">
+    <li>创建<strong>唯一一家店</strong>与<strong>老板账号</strong>（兼服务器管理者）</li>
+    <li>设置店内手机/平板访问的本机地址</li>
+    <li>饮食插件默认开启；履约配送默认关闭</li>
+    <li>完成后进入 V1 模式，对外注册与开店入口将关闭</li>
+</ul>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-green">开始配置</button>
+</form>
+{% endblock %}

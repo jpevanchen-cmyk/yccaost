@@ -115,6 +115,9 @@ def handle_dine_post(request, seller_id):
                 setattr(settings, field, data[field])
             settings.save(update_fields=update_fields)
             replace_wait_time_rules(settings, wait_time_rules)
+        from waimai.v1_allowed_hosts_helpers import apply_lan_url_to_allowed_hosts
+
+        apply_lan_url_to_allowed_hosts(data.get('table_lan_base_url') or '')
         from waimai.audit_helpers import write_audit_log
         write_audit_log(
             action_code='operating',

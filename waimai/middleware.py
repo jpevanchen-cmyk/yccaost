@@ -95,6 +95,118 @@ class ShopWorkAuthMiddleware:
         return self.get_response(request)
 
 
+class V1LocalModeMiddleware:
+    """V1 本地营业内测：隐藏清单内网址统一拦截并重定向登录。"""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.contrib import messages
+        from django.shortcuts import redirect
+
+        from .v1_local_helpers import (
+            path_is_v1_blocked,
+            path_skips_v1_middleware,
+            v1_local_block_message,
+            v1_local_mode_enabled,
+        )
+        from .v1_setup_helpers import path_is_v1_setup
+
+        path = request.path or ''
+        if path_skips_v1_middleware(path):
+            return self.get_response(request)
+        if path_is_v1_setup(path):
+            return self.get_response(request)
+        if not v1_local_mode_enabled():
+            return self.get_response(request)
+        if not path_is_v1_blocked(path):
+            return self.get_response(request)
+
+        messages.info(request, v1_local_block_message())
+        return redirect('login')
+
+
+class OperationLockMiddleware:
+    """V1 操作锁：仅店铺管理后台；锁定用页面遮罩，不整页跳转。"""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.http import JsonResponse
+        from django.shortcuts import redirect
+
+        from .operation_lock_helpers import (
+            operation_lock_is_engaged,
+            path_in_operation_lock_scope,
+            path_skips_operation_lock,
+            request_user_subject_to_operation_lock,
+            touch_operation_lock_activity,
+            site_operation_lock_enabled,
+        )
+
+        path = request.path or ''
+        if path_skips_operation_lock(path):
+            return self.get_response(request)
+
+        locked = (
+            operation_lock_is_engaged(request)
+            and path_in_operation_lock_scope(path)
+            and request_user_subject_to_operation_lock(request)
+        )
+        if locked and request.method == 'POST':
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.headers.get('YecaoPanel') == '1':
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'message': '操作锁已锁定，请先输入 PIN 解锁。',
+                        'operation_lock': True,
+                    },
+                    status=403,
+                )
+            return redirect(path)
+
+        response = self.get_response(request)
+
+        if (
+            site_operation_lock_enabled()
+            and path_in_operation_lock_scope(path)
+            and request_user_subject_to_operation_lock(request)
+            and not operation_lock_is_engaged(request)
+        ):
+            touch_operation_lock_activity(request)
+        return response
+
+
+class V1SetupRedirectMiddleware:
+    """V1 待安装标记为真且空库时，自动进入首次向导。"""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.shortcuts import redirect
+
+        from .v1_setup_helpers import (
+            path_is_v1_setup,
+            should_auto_redirect_to_v1_setup,
+        )
+
+        path = request.path or ''
+        if path_is_v1_setup(path):
+            from .v1_setup_helpers import touch_v1_setup_session
+
+            # 仅向导路径：本会话加长到 15 分钟并续期（不改全站 5 分钟配置）
+            touch_v1_setup_session(request)
+            return self.get_response(request)
+        if path.startswith('/static/') or path.startswith('/media/'):
+            return self.get_response(request)
+        if not should_auto_redirect_to_v1_setup():
+            return self.get_response(request)
+        return redirect('v1_setup_entry')
+
+
 def shop_code_from_request_safe(request) -> str:
     from .staff_account_helpers import shop_code_from_request
     return shop_code_from_request(request)

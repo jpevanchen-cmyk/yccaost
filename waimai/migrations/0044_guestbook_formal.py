@@ -1,4 +1,5 @@
 # Generated manually · 留言板迁入 waimai 正式功能
+# 新库：主程序自己建表；旧库（曾有私人包表）：只补缺字段。不再依赖私人包是否安装。
 
 import uuid
 
@@ -14,42 +15,15 @@ def _column_names(schema_editor, table):
         }
 
 
-def _add_guestbook_columns(apps, schema_editor):
-    """在已有 owner_toolkit 表上补字段；新库则跳过（由 owner_toolkit 迁移建表）"""
-    connection = schema_editor.connection
-    tables = set(connection.introspection.table_names())
-    if 'owner_guestbook_thread' not in tables:
-        return
-
-    Thread = apps.get_model('waimai', 'GuestbookThread')
-    table = Thread._meta.db_table
-    existing = _column_names(schema_editor, table)
-
-    additions = [
-        ('public_code', 'varchar(20) NOT NULL DEFAULT \'\'' ),
-        ('guest_password_hash', 'varchar(128) NOT NULL DEFAULT \'\'' ),
-        ('receipt_email_failed', 'bool NOT NULL DEFAULT 0'),
-        ('email_delivery_suspect', 'bool NOT NULL DEFAULT 0'),
-    ]
-    if connection.vendor == 'postgresql':
-        for col, typedef in additions:
-            if col not in existing:
-                schema_editor.execute(
-                    f'ALTER TABLE {table} ADD COLUMN {col} {typedef.replace("bool", "boolean")}',
-                )
-    else:
-        # SQLite
-        for col, typedef in additions:
-            if col not in existing:
-                schema_editor.execute(f'ALTER TABLE {table} ADD COLUMN {col} {typedef}')
-
-    # 为旧数据补编号
+def _backfill_public_codes(apps, schema_editor):
+    """给缺编号的旧主题补对外编号。"""
     import secrets
     import string
 
     from django.utils import timezone
     from zoneinfo import ZoneInfo
 
+    Thread = apps.get_model('waimai', 'GuestbookThread')
     chars = string.ascii_letters + string.digits
     mmdd = timezone.now().astimezone(ZoneInfo('Asia/Shanghai')).strftime('%m%d')
     prefix = f'YC-{mmdd}-'
@@ -62,6 +36,58 @@ def _add_guestbook_columns(apps, schema_editor):
                 thread.public_code = code
                 thread.save(update_fields=['public_code'])
                 break
+
+
+def _add_missing_columns(apps, schema_editor):
+    """旧私人包表上补主程序需要的列（已有则跳过）。"""
+    connection = schema_editor.connection
+    tables = set(connection.introspection.table_names())
+    if 'owner_guestbook_thread' not in tables:
+        return
+
+    Thread = apps.get_model('waimai', 'GuestbookThread')
+    table = Thread._meta.db_table
+    existing = _column_names(schema_editor, table)
+
+    additions = [
+        ('public_code', "varchar(20) NOT NULL DEFAULT ''"),
+        ('guest_password_hash', "varchar(128) NOT NULL DEFAULT ''"),
+        ('guest_actor_key', "varchar(80) NOT NULL DEFAULT ''"),
+        ('receipt_email_failed', 'bool NOT NULL DEFAULT 0'),
+        ('email_delivery_suspect', 'bool NOT NULL DEFAULT 0'),
+    ]
+    if connection.vendor == 'postgresql':
+        for col, typedef in additions:
+            if col not in existing:
+                schema_editor.execute(
+                    f'ALTER TABLE {table} ADD COLUMN {col} {typedef.replace("bool", "boolean")}',
+                )
+    else:
+        for col, typedef in additions:
+            if col not in existing:
+                schema_editor.execute(f'ALTER TABLE {table} ADD COLUMN {col} {typedef}')
+
+    _backfill_public_codes(apps, schema_editor)
+
+
+def _ensure_guestbook_tables(apps, schema_editor):
+    """
+    主程序正式拥有留言板表：
+    - 无表：按本迁移状态建三张表（不含 receipt_email_rate_limited，留给 0045）
+    - 有表：只补缺列（兼容曾用私人包建表的旧库）
+    """
+    connection = schema_editor.connection
+    tables = set(connection.introspection.table_names())
+    if 'owner_guestbook_thread' in tables:
+        _add_missing_columns(apps, schema_editor)
+        return
+
+    GuestbookSettings = apps.get_model('waimai', 'GuestbookSettings')
+    GuestbookThread = apps.get_model('waimai', 'GuestbookThread')
+    GuestbookMessage = apps.get_model('waimai', 'GuestbookMessage')
+    schema_editor.create_model(GuestbookSettings)
+    schema_editor.create_model(GuestbookThread)
+    schema_editor.create_model(GuestbookMessage)
 
 
 def _noop_reverse(apps, schema_editor):
@@ -191,5 +217,5 @@ class Migration(migrations.Migration):
             ],
             database_operations=[],
         ),
-        migrations.RunPython(_add_guestbook_columns, _noop_reverse),
+        migrations.RunPython(_ensure_guestbook_tables, _noop_reverse),
     ]

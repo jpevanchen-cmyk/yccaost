@@ -1,0 +1,21 @@
+{% extends 'waimai/v1_setup/base.html' %}
+{% block setup_content %}
+<h1 class="page-title">第 3 步 · 端口与本机地址</h1>
+<p class="page-desc">店内设备用浏览器打开下面地址；桌码与工作台码也会用到。能测到会预填；测不到请留空或自行填写，不要用 127.0.0.1。</p>
+<form method="post" class="auth-form" style="max-width:480px;">
+    {% csrf_token %}
+    {% for field in form %}
+    <p>
+        <label>{{ field.label }}{% if field.field.required %} *{% endif %}<br>
+        {{ field }}
+        </label>
+        {% if field.help_text %}<span class="card-meta">{{ field.help_text }}</span>{% endif %}
+        {% for err in field.errors %}<span class="msg-err">{{ err }}</span>{% endfor %}
+    </p>
+    {% endfor %}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <a href="{% url 'v1_setup_step' 'shop' %}" class="btn btn-outline">上一步</a>
+        <button type="submit" class="btn btn-green">下一步</button>
+    </div>
+</form>
+{% endblock %}

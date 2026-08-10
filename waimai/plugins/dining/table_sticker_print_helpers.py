@@ -12,19 +12,10 @@ from waimai.workbench_qr import build_work_login_qr_png
 
 
 def _resolve_public_base_url(request: HttpRequest, seller_id: str) -> str:
-    """桌贴二维码用的根地址（与 PDF 导出优先级一致，但不依赖 fpdf）"""
-    from waimai.operating_helpers import get_operating_settings
-    from waimai.payments import get_payment_settings
+    """桌贴二维码用的根地址（与工作台等共用 resolve，禁止用 127 冒充）。"""
+    from waimai.operating_helpers import resolve_shop_access_base_url
 
-    operating = get_operating_settings(seller_id)
-    lan = (getattr(operating, 'table_lan_base_url', '') or '').strip().rstrip('/')
-    if lan:
-        return lan
-    ps = get_payment_settings(seller_id)
-    custom = (ps.public_site_url or '').strip().rstrip('/')
-    if custom:
-        return custom
-    return request.build_absolute_uri('/').rstrip('/')
+    return resolve_shop_access_base_url(request, seller_id)
 
 
 def build_table_sticker_print_cards(

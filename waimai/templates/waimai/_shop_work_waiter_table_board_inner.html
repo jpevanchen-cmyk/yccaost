@@ -1,0 +1,69 @@
+{# 桌台看板内容：固定格子总览 + 点进单桌详情（由 waiter_table_board.js 切换） #}
+{% if table_rows %}
+<div class="waiter-table-board-shell" data-yc-tour="waiter-table-shell">
+    <div class="waiter-table-grid-view" id="waiter-table-grid-view">
+        <div class="waiter-table-tile-grid" data-yc-tour="waiter-table-grid">
+            {% for row in table_rows %}
+            <button type="button"
+                    class="waiter-table-tile{% if row.is_busy %} is-busy{% endif %}"
+                    data-table-detail-id="waiter-table-detail-{{ row.table_id }}"
+                    data-yc-tour="waiter-table-{{ row.table_number }}"
+                    aria-label="{{ row.table_number }}号桌，{{ row.state_label }}">
+                <span class="waiter-table-tile-num">{{ row.table_number }}</span>
+                <span class="waiter-table-tile-state">{{ row.state_label }}</span>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% for row in table_rows %}
+    <div class="waiter-table-detail-view" id="waiter-table-detail-{{ row.table_id }}" hidden>
+        <div class="waiter-table-detail-head">
+            <button type="button" class="btn btn-sm btn-outline yc-waiter-table-back">← 返回桌台总览</button>
+            <span class="waiter-table-detail-title">{{ row.table_number }}号桌 · {{ row.state_label }}</span>
+        </div>
+        {% if row.is_busy %}
+        {% if row.addon_qr_data_url %}
+        <div class="waiter-table-addon">
+            <p class="card-meta">专属加点码（翻台后作废）</p>
+            <img src="{{ row.addon_qr_data_url }}" alt="{{ row.table_number }}号桌加点码"
+                 width="120" height="120">
+            <button type="button" class="btn btn-sm btn-outline yc-waiter-copy-addon"
+                    data-addon-path="{{ row.addon_scan_path }}">复制链接（备用）</button>
+        </div>
+        {% endif %}
+        {% if can_operate and row.order_url %}
+        <a class="btn btn-sm btn-green waiter-table-detail-action"
+           href="{{ row.order_url }}">帮此桌点餐</a>
+        {% endif %}
+        {% if can_operate %}
+        <form method="post" action="{{ form_action }}" class="waiter-table-detail-form"
+              data-yc-panel="work-waiter-panel-body">
+            {% csrf_token %}
+            <input type="hidden" name="waiter_close_table" value="1">
+            <input type="hidden" name="table_id" value="{{ row.table_id }}">
+            {% if row.can_close %}
+            <button type="submit" class="btn btn-sm btn-outline waiter-table-detail-action">翻台关桌</button>
+            {% else %}
+            <button type="button" class="btn btn-sm btn-outline waiter-table-detail-action" disabled
+                    title="{{ row.close_block_reason }}">翻台关桌</button>
+            <p class="card-meta waiter-table-close-hint">{{ row.close_block_reason }}</p>
+            {% endif %}
+        </form>
+        {% endif %}
+        {% elif row.can_open and can_operate %}
+        {# 开台须整页跳转到点菜页，不走 Panel 静默刷新 #}
+        <form method="post" action="{{ form_action }}" class="waiter-table-detail-form">
+            {% csrf_token %}
+            <input type="hidden" name="waiter_open_table" value="1">
+            <input type="hidden" name="table_id" value="{{ row.table_id }}">
+            <button type="submit" class="btn btn-sm btn-green waiter-table-detail-action">代客开台并点菜</button>
+        </form>
+        {% elif row.can_open %}
+        <p class="card-meta">只读模式，无法代客开台</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="card-meta">尚未配置桌台。请店主在管理后台「堂食设置」里添加实体桌台。</p>
+{% endif %}

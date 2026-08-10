@@ -5,17 +5,15 @@ from __future__ import annotations
 import secrets
 import string
 
-from django.utils import timezone
-from zoneinfo import ZoneInfo
-
-BEIJING = ZoneInfo('Asia/Shanghai')
 _CODE_CHARS = string.ascii_letters + string.digits
 _CODE_SUFFIX_LEN = 8
 _CODE_PREFIX = 'YC-'
 
 
 def _today_mmdd() -> str:
-    return timezone.now().astimezone(BEIJING).strftime('%m%d')
+    from .time_helpers import ensure_local_aware, now_local_wall
+
+    return ensure_local_aware(now_local_wall()).strftime('%m%d')
 
 
 def generate_public_code() -> str:

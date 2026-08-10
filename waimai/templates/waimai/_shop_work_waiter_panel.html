@@ -10,7 +10,11 @@
 </p>
 {% endif %}
 
-<p class="card-meta" data-yc-tour="work-waiter-action" style="margin-bottom:10px;">服务员操作区：接待、交付、协助收款与派单。</p>
+<p class="card-meta" data-yc-tour="work-waiter-action" style="margin-bottom:10px;">服务员操作区：桌台开台、接待、交付、协助收款与派单。</p>
+
+{% if show_table_board %}
+{% include 'waimai/_shop_work_waiter_table_board.html' %}
+{% endif %}
 
 <div data-yc-fold-multi="1">
 {% if order_groups %}

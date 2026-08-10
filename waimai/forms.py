@@ -447,6 +447,17 @@ from waimai.plugins.fulfillment.forms import ShopDeliverySettingsForm  # noqa: E
 class ShopPaymentSettingsForm(forms.ModelForm):
     """店铺支付配置表单"""
 
+    wechat_apiclient_cert_upload = forms.FileField(
+        required=False,
+        label='上传退款证书（apiclient_cert.pem）',
+        help_text='从微信商户平台下载 API 证书包，解压后选 apiclient_cert.pem；不选则保留已上传的文件',
+    )
+    wechat_apiclient_key_upload = forms.FileField(
+        required=False,
+        label='上传退款私钥（apiclient_key.pem）',
+        help_text='同一证书包里的 apiclient_key.pem；取消已微信收款订单退款时必填',
+    )
+
     class Meta:
         model = ShopPaymentSettings
         fields = [
@@ -485,6 +496,41 @@ class ShopPaymentSettingsForm(forms.ModelForm):
             'enable_cashier': '开启后，店铺工作台出现「收银台」Tab，供现场收当天待支付订单。',
             'cashier_page_size': '仅影响工作台收银台列表分页，与订单管理无关。',
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ('wechat_apiclient_cert_upload', 'wechat_apiclient_key_upload'):
+            self.fields[name].widget.attrs.setdefault('accept', '.pem')
+
+    def clean_wechat_apiclient_cert_upload(self):
+        uploaded = self.cleaned_data.get('wechat_apiclient_cert_upload')
+        if not uploaded:
+            return uploaded
+        from .payment_cert_helpers import _read_upload_limited, _validate_pem_bytes, _validate_upload_name, CERT_FILENAME
+
+        try:
+            _validate_upload_name(uploaded.name, CERT_FILENAME)
+            content = _read_upload_limited(uploaded)
+            _validate_pem_bytes(content, kind='cert')
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+        uploaded.seek(0)
+        return uploaded
+
+    def clean_wechat_apiclient_key_upload(self):
+        uploaded = self.cleaned_data.get('wechat_apiclient_key_upload')
+        if not uploaded:
+            return uploaded
+        from .payment_cert_helpers import _read_upload_limited, _validate_pem_bytes, _validate_upload_name, KEY_FILENAME
+
+        try:
+            _validate_upload_name(uploaded.name, KEY_FILENAME)
+            content = _read_upload_limited(uploaded)
+            _validate_pem_bytes(content, kind='key')
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+        uploaded.seek(0)
+        return uploaded
 
     def clean_cashier_page_size(self):
         size = self.cleaned_data.get('cashier_page_size')

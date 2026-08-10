@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.dispatch_display_helpers import (
     blur_address_for_dispatch_preview,
@@ -54,7 +55,7 @@ class DispatchDisplayTests(TestCase):
         self.assertNotIn('301', blurred)
 
     def test_pending_delivery_deadline_from_ready_at(self):
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='buyer1',
             seller_id=self.seller.username,
@@ -72,7 +73,7 @@ class DispatchDisplayTests(TestCase):
         self.assertEqual(int(delta.total_seconds()), 30 * 60)
 
     def test_pending_wait_displays(self):
-        now = timezone.now()
+        now = now_local_wall()
         order = BuyOrder.objects.create(
             buyer_id='buyer2',
             seller_id=self.seller.username,
@@ -91,7 +92,7 @@ class DispatchDisplayTests(TestCase):
         self.assertEqual(order.pending_delivery_wait['label'], '预计送达（预估）')
 
     def test_rider_board_enriches_pending_pool(self):
-        now = timezone.now()
+        now = now_local_wall()
         BuyOrder.objects.create(
             buyer_id='buyer3',
             seller_id=self.seller.username,

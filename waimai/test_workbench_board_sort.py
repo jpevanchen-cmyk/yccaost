@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.models import BuyOrder, ShopProfile, User
 from waimai.shop_work_helpers import build_kitchen_board_context, build_waiter_board_context
@@ -23,7 +24,7 @@ class WorkBoardSortTests(TestCase):
             shop_code='wbssort',
             address='测试地址',
         )
-        self.now = timezone.now()
+        self.now = now_local_wall()
 
     def _make_order(self, *, fulfillment_type, eta_minutes, prepared=None, served=None, order_status='preparing'):
         items = [{

@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.models import BuyOrder, CashRemittanceRequest, User
 from waimai.operating_helpers import get_operating_settings
@@ -70,7 +71,7 @@ class RemittanceNotifyTests(TestCase):
             order_status='completed',
             fulfillment_type='delivery',
             payment_method='cash',
-            cash_collected_at=timezone.now(),
+            cash_collected_at=now_local_wall(),
             cash_collected_by='rider1',
             cash_collected_amount=Decimal('25'),
         )

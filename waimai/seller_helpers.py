@@ -44,12 +44,23 @@ def handle_seller_post(request, seller_id, section):
 
     if 'save_payment_settings' in request.POST and section == 'payment':
         settings = get_payment_settings(seller_id)
-        form = ShopPaymentSettingsForm(request.POST, instance=settings)
+        form = ShopPaymentSettingsForm(request.POST, request.FILES, instance=settings)
         # 履约关闭时不允许改货到付款开关（字段不在表单里也应挡住 POST 篡改）
         if not fulfillment_plugin_enabled(seller_id) and 'enable_cod' in form.fields:
             del form.fields['enable_cod']
         if form.is_valid():
             form.save()
+            from .payment_cert_helpers import apply_wechat_cert_uploads
+
+            cert = form.cleaned_data.get('wechat_apiclient_cert_upload')
+            key = form.cleaned_data.get('wechat_apiclient_key_upload')
+            cert_errors: list[str] = []
+            if cert or key:
+                cert_errors = apply_wechat_cert_uploads(
+                    get_payment_settings(seller_id),
+                    cert_file=cert,
+                    key_file=key,
+                )
             from .audit_helpers import write_audit_log
             write_audit_log(
                 action_code='payment_settings',
@@ -58,11 +69,49 @@ def handle_seller_post(request, seller_id, section):
                 actor=request.user,
                 request=request,
             )
-            messages.success(request, '支付设置已保存')
+            if cert_errors:
+                for msg in cert_errors:
+                    messages.error(request, msg)
+            elif cert or key:
+                pay = get_payment_settings(seller_id)
+                from .payment_cert_helpers import build_wechat_cert_display
+
+                display = build_wechat_cert_display(pay)
+                if display['files_ready']:
+                    messages.success(
+                        request,
+                        '支付设置与退款证书已保存。'
+                        f'证书：{display["cert_path"]}；私钥：{display["key_path"]}',
+                    )
+                else:
+                    messages.success(request, '支付设置已保存；证书尚未完整，请查看下方路径与状态')
+            else:
+                messages.success(request, '支付设置已保存')
         else:
             err = next(iter(form.non_field_errors()), None) or '配置无效，请检查输入'
             messages.error(request, err)
         return _seller_panel_redirect('payment', 'payment-settings-form')
+
+    if 'clear_wechat_certs' in request.POST and section == 'payment':
+        from .payment_cert_helpers import clear_wechat_cert_files
+
+        pay = get_payment_settings(seller_id)
+        ok, msg = clear_wechat_cert_files(pay)
+        if ok:
+            from .audit_helpers import write_audit_log
+
+            write_audit_log(
+                action_code='payment_settings',
+                action_label='删除微信退款证书',
+                summary='删除本店上传的微信退款证书',
+                seller_id=seller_id,
+                actor=request.user,
+                request=request,
+            )
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+        return _seller_panel_redirect('payment', 'payment-wechat-refund-cert')
 
     if 'confirm_rider_remit' in request.POST and section == 'payment':
         messages.info(request, '配送员入金确认已移至「外卖现金管理」分区，请在那里操作。')

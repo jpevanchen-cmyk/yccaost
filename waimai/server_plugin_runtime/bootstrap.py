@@ -17,14 +17,15 @@ def is_owner_toolkit_enabled() -> bool:
 
 def bootstrap_server_plugins() -> None:
     """
-    若开启 YECAO_OWNER_TOOLKIT_ENABLED 且目录存在，则加载 owner_toolkit。
+    若开启 YECAO_OWNER_TOOLKIT_ENABLED 且目录存在，则登记整机私人插件。
+    Django 应用/中间件已由 django_hooks 在 settings 阶段挂入；此处只做 URL/导航注册。
     重复调用安全。
     """
     if not is_owner_toolkit_enabled():
         return
     toolkit_path = Path(getattr(settings, 'YECAO_OWNER_TOOLKIT_PATH', ''))
     if not toolkit_path.is_dir():
-        logger.warning('已开启私人工具包，但目录不存在：%s', toolkit_path)
+        logger.warning('已开启私人工具包插件，但目录不存在：%s', toolkit_path)
         return
 
     root = str(toolkit_path.parent)
@@ -34,7 +35,7 @@ def bootstrap_server_plugins() -> None:
     try:
         from owner_toolkit.plugin import register_owner_toolkit
     except ImportError as exc:
-        logger.warning('无法加载 owner_toolkit：%s', exc)
+        logger.warning('无法加载 owner_toolkit 插件：%s', exc)
         return
 
     register_owner_toolkit()

@@ -142,12 +142,21 @@ def build_order_cash_code_page_context(request, order: BuyOrder) -> dict:
     qr_bundle = build_order_cashier_qr_bundle(request, order, shop_code)
     shell = build_order_shell(order)
     cash_code_url = order_cash_code_url(order.order_id)
+    from .plugins.dining.buyer_entry import build_table_continue_dine_url, get_buyer_table_session
+
+    table_sess = get_buyer_table_session(request, order.seller_id)
+    continue_url = build_table_continue_dine_url(order.seller_id, table_sess)
+    from waimai.plugins.dining.waiter_table_order_helpers import get_waiter_table_order_page_url
+
+    waiter_page = get_waiter_table_order_page_url(request, order.seller_id)
+    if waiter_page:
+        continue_url = waiter_page
     return {
         'order': order,
         'order_shell': shell,
         'shop_profile': shop_profile,
         'qr_bundle': qr_bundle,
-        'shop_url': f'/shop/?seller_id={order.seller_id}',
+        'shop_url': continue_url,
         'order_detail_url': reverse('order_detail', kwargs={'order_id': order.order_id}),
         'cash_code_print_url': reverse('order_cash_code_print', kwargs={'order_id': order.order_id}),
         'cash_code_page_url': cash_code_url,

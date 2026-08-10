@@ -116,8 +116,21 @@ def evaluate_product_scan_for_buyer(dish, tier: str, seller_id: str, buyer, cart
     return 'tier_denied', reason or '暂时无法加购'
 
 
+def product_scan_qr_missing_lan(request, dish, seller_id: str) -> bool:
+    """有展示编号与可售档位，但没有店内可扫根地址（禁止用 127 凑数）。"""
+    from .operating_helpers import resolve_shop_access_base_url
+
+    code = normalize_display_code(getattr(dish, 'display_code', ''))
+    if not code:
+        return False
+    if resolve_shop_access_base_url(request, seller_id):
+        return False
+    return any(resolve_tier_price(dish, tier) is not None for tier in SCAN_TIERS)
+
+
 def build_product_scan_qr_rows(request, dish, seller_id: str) -> list[dict]:
-    """卖家后台：为本商品各可用档位生成二维码数据。"""
+    """卖家后台：为本商品各可用档位生成二维码数据（根地址与工作台码共用）。"""
+    from .operating_helpers import resolve_shop_access_base_url
     from .workbench_qr import build_work_login_qr_png
     import base64
 
@@ -125,7 +138,10 @@ def build_product_scan_qr_rows(request, dish, seller_id: str) -> list[dict]:
     if not code:
         return []
 
-    base = request.build_absolute_uri('/').rstrip('/')
+    # 与工作台/桌码一致：优先局域网/公网根地址，禁止用 127 冒充店内可扫地址
+    base = resolve_shop_access_base_url(request, seller_id)
+    if not base:
+        return []
     rows: list[dict] = []
     for tier in SCAN_TIERS:
         if resolve_tier_price(dish, tier) is None:

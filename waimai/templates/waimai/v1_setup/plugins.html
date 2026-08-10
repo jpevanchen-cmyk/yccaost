@@ -1,0 +1,20 @@
+{% extends 'waimai/v1_setup/base.html' %}
+{% block setup_content %}
+<h1 class="page-title">第 4 步 · 插件</h1>
+<p class="page-desc">当前为<strong>同仓混合架构</strong>：开关写在店铺设置里，与卖家后台「插件试验」相同。</p>
+<div class="card" style="padding:12px 16px;margin-bottom:16px;border-left:4px solid #67c23a;">
+    <p style="margin:0;"><strong>🍽 饮食插件</strong> · 已默认开启（V1 本地营业必选，本步不可关闭）</p>
+    <p class="card-meta" style="margin:8px 0 0;">堂食桌码、打包/外卖通道、服务员/后厨工作台等。</p>
+</div>
+<form method="post" class="auth-form" style="max-width:480px;">
+    {% csrf_token %}
+    <p>
+        <label>{{ form.enable_fulfillment }} {{ form.enable_fulfillment.label }}</label>
+        {% if form.enable_fulfillment.help_text %}<span class="card-meta">{{ form.enable_fulfillment.help_text }}</span>{% endif %}
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <a href="{% url 'v1_setup_step' 'network' %}" class="btn btn-outline">上一步</a>
+        <button type="submit" class="btn btn-green">下一步</button>
+    </div>
+</form>
+{% endblock %}

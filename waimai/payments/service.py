@@ -3,6 +3,7 @@
 
 from django.db import transaction
 from django.utils import timezone
+from waimai.time_helpers import now_local_wall
 
 from ..models import BuyOrder, ShopPaymentSettings
 from ..order_status_event_helpers import (
@@ -252,7 +253,7 @@ def rider_collect_cash(
     if amt > order.total_amount:
         return False, '实收金额不能高于应收金额，请先找零后按实际应收登记'
 
-    now = timezone.now()
+    now = now_local_wall()
     order.cash_collected_amount = amt
     order.cash_collected_by = rider_id or ''
     if amt < order.total_amount:
@@ -308,7 +309,7 @@ def buyer_respond_cash_shortfall(order: BuyOrder, buyer_id: str, *, accept: bool
     if order.cash_shortfall_status != 'buyer_pending':
         return False, '这份少收申请已经处理，不能重复确认'
 
-    now = timezone.now()
+    now = now_local_wall()
     order.cash_shortfall_buyer_responded_at = now
     if not accept:
         order.cash_shortfall_status = 'buyer_rejected'
@@ -345,7 +346,7 @@ def mark_cash_exception(order: BuyOrder, rider_id: str, note: str) -> tuple[bool
     order.cash_shortfall_status = 'exception'
     order.cash_exception_note = note
     order.cash_exception_marked_by = rider_id or ''
-    order.cash_exception_marked_at = timezone.now()
+    order.cash_exception_marked_at = now_local_wall()
     order.save(update_fields=[
         'cash_shortfall_status', 'cash_exception_note',
         'cash_exception_marked_by', 'cash_exception_marked_at', 'updated_at',
@@ -368,7 +369,7 @@ def manager_approve_cash_exception(order: BuyOrder, manager_id: str, note: str) 
     if not delivery or delivery.delivery_status not in RIDER_POST_PICKUP_STATUSES:
         return False, '配送员尚未取餐或尚未开始配送，当前不能兜底结单'
 
-    now = timezone.now()
+    now = now_local_wall()
     order.cash_shortfall_status = 'manager_approved'
     order.cash_collected_at = now
     order.payment_status = 'paid'
@@ -410,7 +411,7 @@ def confirm_cash_remittance(orders, confirmer_id: str) -> tuple[int, str]:
     骑手入金：店主/店长确认骑手交回的现金。
     orders 为已收款未入金的订单集合；返回 (确认笔数, 提示)。
     """
-    now = timezone.now()
+    now = now_local_wall()
     count = 0
     for order in orders:
         if not order.cash_remit_pending():
@@ -470,6 +471,13 @@ def poll_wechat_payment(order: BuyOrder) -> bool:
         return order.payment_status == 'paid'
 
     return try_sync_wechat_payment(record, settings)
+
+
+def poll_wechat_refund(order: BuyOrder) -> bool:
+    """轮询微信查退款（无公网回调时的备用）"""
+    from .wechat_refund_helpers import poll_wechat_refund as _poll
+
+    return _poll(order)
 
 
 def handle_wechat_notify(xml_body: bytes) -> tuple[bytes, int]:

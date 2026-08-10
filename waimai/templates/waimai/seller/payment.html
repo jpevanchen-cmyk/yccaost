@@ -15,10 +15,11 @@
         骑手交款与外卖货到付款现金核对请至「外卖现金管理」。
     </p>
 
-    <form method="POST" id="payment-settings-form-el" data-unsaved-guard>
+    <form method="POST" id="payment-settings-form-el" enctype="multipart/form-data" data-unsaved-guard>
         {% csrf_token %}
         <div class="seller-form-grid">
             {% for field in payment_form %}
+            {% if field.name != 'wechat_apiclient_cert_upload' and field.name != 'wechat_apiclient_key_upload' %}
             <div class="seller-field {% if field.field.widget.input_type == 'checkbox' %}seller-field-check{% endif %}"{% if field.name == 'enable_simulate' %} data-yc-tour="payment-demo"{% elif field.name == 'enable_wechat' %} data-yc-tour="payment-wechat"{% elif field.name == 'enable_cash' %} data-yc-tour="payment-cash"{% elif field.name == 'enable_cod' %} data-yc-tour="payment-cod"{% elif field.name == 'enable_cashier' %} data-yc-tour="payment-cashier"{% elif field.name == 'cashier_page_size' %} data-yc-tour="payment-cashier-page-size"{% elif field.name == 'wechat_mch_id' %} data-yc-tour="payment-wechat-mch-id"{% elif field.name == 'wechat_app_id' %} data-yc-tour="payment-wechat-app-id"{% elif field.name == 'wechat_api_key' %} data-yc-tour="payment-wechat-api-key"{% elif field.name == 'public_site_url' %} data-yc-tour="payment-public-site-url"{% endif %}>
                 {% if field.field.widget.input_type == 'checkbox' %}
                 <label class="seller-check-label">
@@ -31,7 +32,50 @@
                 {% if field.help_text %}<p class="field-hint">{{ field.help_text }}</p>{% endif %}
                 {% for err in field.errors %}<p class="msg-err">{{ err }}</p>{% endfor %}
             </div>
+            {% endif %}
             {% endfor %}
+
+            <div class="seller-field" style="grid-column:1/-1;" id="payment-wechat-refund-cert" data-yc-tour="payment-wechat-refund-cert">
+                <h3 style="margin:0 0 8px;font-size:16px;">微信退款证书（取消已收款订单时必填）</h3>
+                <p class="card-meta" style="margin:0 0 10px;">
+                    当前状态：<strong>{% if wechat_cert_display.refund_ready %}✅{% elif wechat_cert_display.files_ready %}🟡{% else %}⬜{% endif %} {{ wechat_cert_display.summary }}</strong>
+                </p>
+
+                {% if wechat_cert_display.cert_path or wechat_cert_display.key_path %}
+                <div class="seller-panel-box" style="padding:12px;margin:0 0 12px;background:#f8faf8;border:1px solid #e0e8e0;">
+                    <p class="card-meta" style="margin:0 0 8px;font-weight:600;">已保存的文件（供核对，仅本机私有目录）</p>
+                    <p class="card-meta" style="margin:0 0 6px;word-break:break-all;">
+                        证书 apiclient_cert.pem：<br>
+                        <code style="font-size:12px;">{% if wechat_cert_display.cert_path %}{{ wechat_cert_display.cert_path }}{% else %}（尚未上传）{% endif %}</code>
+                        {% if wechat_cert_display.cert_readable %}<span style="color:#2e7d32;"> · 系统可读 ✓</span>{% elif wechat_cert_display.cert_path %}<span class="msg-err"> · 找不到文件 ✗</span>{% endif %}
+                    </p>
+                    <p class="card-meta" style="margin:0;word-break:break-all;">
+                        私钥 apiclient_key.pem：<br>
+                        <code style="font-size:12px;">{% if wechat_cert_display.key_path %}{{ wechat_cert_display.key_path }}{% else %}（尚未上传）{% endif %}</code>
+                        {% if wechat_cert_display.key_readable %}<span style="color:#2e7d32;"> · 系统可读 ✓</span>{% elif wechat_cert_display.key_path %}<span class="msg-err"> · 找不到文件 ✗</span>{% endif %}
+                    </p>
+                </div>
+                {% endif %}
+
+                <p class="field-hint" style="margin:0 0 12px;">
+                    从微信商户平台下载 API 证书包并解压，在此上传两个 .pem 文件即可；保存后上方会显示本机存放路径。
+                    详细步骤见《卖家微信支付开通指南》。证书仅存本机 <code>private/wechat_certs/你的店铺账号/</code>，不会进入 Git。
+                </p>
+                <div class="seller-form-grid" style="margin:0;">
+                    <div class="seller-field">
+                        <label for="{{ payment_form.wechat_apiclient_cert_upload.id_for_label }}">{{ payment_form.wechat_apiclient_cert_upload.label }}</label>
+                        {{ payment_form.wechat_apiclient_cert_upload }}
+                        {% if payment_form.wechat_apiclient_cert_upload.help_text %}<p class="field-hint">{{ payment_form.wechat_apiclient_cert_upload.help_text }}</p>{% endif %}
+                        {% for err in payment_form.wechat_apiclient_cert_upload.errors %}<p class="msg-err">{{ err }}</p>{% endfor %}
+                    </div>
+                    <div class="seller-field">
+                        <label for="{{ payment_form.wechat_apiclient_key_upload.id_for_label }}">{{ payment_form.wechat_apiclient_key_upload.label }}</label>
+                        {{ payment_form.wechat_apiclient_key_upload }}
+                        {% if payment_form.wechat_apiclient_key_upload.help_text %}<p class="field-hint">{{ payment_form.wechat_apiclient_key_upload.help_text }}</p>{% endif %}
+                        {% for err in payment_form.wechat_apiclient_key_upload.errors %}<p class="msg-err">{{ err }}</p>{% endfor %}
+                    </div>
+                </div>
+            </div>
         </div>
         <p class="card-meta" style="margin:12px 0;" data-yc-tour="payment-notify-url">
             微信异步通知地址（配置公网网址后自动使用）：<br>
@@ -39,5 +83,15 @@
         </p>
         <button type="submit" name="save_payment_settings" value="1" class="btn btn-primary btn-block" data-yc-tour="payment-save">保存支付设置</button>
     </form>
+
+    {% if wechat_cert_display.can_clear %}
+    <form method="POST" style="margin-top:12px;" onsubmit="return confirm('确定删除本店已上传的微信退款证书？删除后取消已收款订单将无法自动原路退款。');">
+        {% csrf_token %}
+        <button type="submit" name="clear_wechat_certs" value="1" class="btn btn-outline btn-block" style="color:#c62828;border-color:#c62828;" data-yc-tour="payment-clear-wechat-cert">
+            删除已上传的退款证书
+        </button>
+        <p class="field-hint" style="margin:8px 0 0;">不用微信退款时可在此删除；不必手动进文件夹删，避免误删别的文件。</p>
+    </form>
+    {% endif %}
 </div>
 {% endblock %}

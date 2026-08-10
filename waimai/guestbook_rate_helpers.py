@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta, timezone as dt_timezone
-from zoneinfo import ZoneInfo
+from datetime import timedelta
 
-from django.utils import timezone
+from .time_helpers import now_local_wall
 
 GUESTBOOK_ACTOR_COOKIE = 'yc_gb_actor'
 SESSION_ACTOR_KEY = 'yc_gb_actor_key'
-BEIJING = ZoneInfo('Asia/Shanghai')
 
 
 def resolve_guestbook_actor(request) -> tuple[str, str | None]:
@@ -54,11 +52,12 @@ def _guestbook_daily_max() -> int:
     return int(getattr(settings, 'YECAO_GUESTBOOK_ACTOR_DAILY_MAX', 15))
 
 
-def _beijing_day_start():
-    """北京时间当天 0 点（UTC）"""
-    local_now = timezone.now().astimezone(BEIJING)
-    local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return local_midnight.astimezone(dt_timezone.utc)
+def _local_day_start():
+    """系统本地当天 0 点（查询用；USE_TZ=False 时必须是 naive）"""
+    from .time_helpers import local_day_bounds_for_query
+
+    start, _end = local_day_bounds_for_query()
+    return start
 
 
 def check_guestbook_rate_limit(actor_key: str) -> tuple[bool, str]:
@@ -71,8 +70,8 @@ def check_guestbook_rate_limit(actor_key: str) -> tuple[bool, str]:
 
     hourly_max = _guestbook_hourly_max()
     daily_max = _guestbook_daily_max()
-    hour_ago = timezone.now() - timedelta(hours=1)
-    day_start = _beijing_day_start()
+    hour_ago = now_local_wall() - timedelta(hours=1)
+    day_start = _local_day_start()
 
     hourly_count = GuestbookThread.objects.filter(
         guest_actor_key=key, created_at__gte=hour_ago,

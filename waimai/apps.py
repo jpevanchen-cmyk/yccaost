@@ -8,17 +8,45 @@ class WaimaiConfig(AppConfig):
     def ready(self):
         import waimai.models  # 应用启动时加载信号
         from django.contrib import admin
+        from django.db.backends.signals import connection_created
         from django.db.models.signals import post_save
 
         from .models import BuyOrder
         from .order_notify_helpers import on_buy_order_created
         from .plugin_runtime.bootstrap import bootstrap_builtin_plugins
         from .server_plugin_runtime.bootstrap import bootstrap_server_plugins
+        from .v1_sqlite_helpers import on_connection_created
 
         # 同仓内置插件（饮食等）装入注册表
         bootstrap_builtin_plugins()
         # 服务器拥有者私人工具包（可选；默认关闭）
         bootstrap_server_plugins()
+        # V1：首次请求时再补允许主机（避免 ready 阶段查库告警）
+        from django.core.signals import request_started
+
+        def _load_lan_hosts_once(**kwargs):
+            from django.conf import settings as dj_settings
+
+            if getattr(dj_settings, '_yc_lan_hosts_loaded', False):
+                return
+            dj_settings._yc_lan_hosts_loaded = True
+            try:
+                from .v1_allowed_hosts_helpers import load_saved_lan_hosts_into_allowed
+
+                load_saved_lan_hosts_into_allowed()
+            except Exception:
+                pass
+
+        request_started.connect(
+            _load_lan_hosts_once,
+            dispatch_uid='yc_load_lan_hosts_once',
+        )
+
+        # V1 文件库：连库后自动 WAL + busy_timeout（仅 v1_local_mode 生效）
+        connection_created.connect(
+            on_connection_created,
+            dispatch_uid='yc_v1_sqlite_pragmas',
+        )
 
         # 新订单邮件通知：新建订单后触发（dispatch_uid 防止重复注册）
         post_save.connect(

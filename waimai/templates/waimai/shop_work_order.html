@@ -57,7 +57,7 @@
                 <div class="order-chat-meta">
                     {% if m.author_side == 'buyer' %}买家{% else %}店家{% endif %}
                     · {{ m.author_username }}
-                    · {{ m.created_at|beijing:"m-d H:i" }}
+                    · {{ m.created_at|local:"m-d H:i" }}
                 </div>
                 <div class="order-chat-body">{{ m.body }}</div>
             </div>
@@ -88,7 +88,7 @@
         {% for label, dt in timeline %}
         <div class="detail-row">
             <span>{{ label }}</span>
-            <span>{% if dt %}{{ dt|beijing:"m-d H:i" }}{% else %}<span class="pending-text">—</span>{% endif %}</span>
+            <span>{% if dt %}{{ dt|local:"m-d H:i" }}{% else %}<span class="pending-text">—</span>{% endif %}</span>
         </div>
         {% empty %}
         <p class="pending-text">暂无进度记录</p>
@@ -107,7 +107,7 @@
             {% else %}
             请先在「订单沟通」留言，或在下方写明沟通方式与过程（至少 8 个字）。
             {% endif %}
-            取消后若已收款，请线下退款。操作会写入留痕。
+            {{ shop_cancel_refund_hint|default:"操作会写入留痕。" }}
         </p>
         <form method="post" onsubmit="return confirm('确定取消此订单？此操作会记入操作留痕。');">
             {% csrf_token %}

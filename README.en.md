@@ -2,36 +2,51 @@
 
 A decentralized local dining / delivery web system. Phase 1 focuses on a **single shop**: dine-in first, delivery second. Each shop manages its own menu, orders, waiter / kitchen / rider workbench, and payment settings.
 
-Chinese documentation is the source of truth. Start with [README.md](README.md) and `docs/`.
+**Chinese documentation is the source of truth.** Start with [README.md](README.md) and `docs/`.
 
-**Live site (trial)**: **[https://yichbo.com/](https://yichbo.com/)** — server home. Legacy `/directory/` redirects to `/`.
+## Project home (start here)
+
+**Live trial site: <https://yichbo.com/>**
+
+- Product introduction and the public trial entry point live on that site.  
+- Legacy `/directory/` redirects to the home page.  
+- This repository holds the open-source program and public docs. Process notes (progress / logs) are kept privately by the project owner.
+
+## What it does (short)
+
+- Guests order and pay in a mobile browser (cash / merchant WeChat / demo pay, depending on shop settings).  
+- The shop owner manages menu, tables, staff, payments, and orders in a web admin.  
+- Waiters / kitchen / riders use the shop **workbench**.  
+- Money goes to the **shop’s own** merchant account; YecaoST does not take a cut.
+
+The project is also delivering **Local Shop Runtime V1** (Windows PC in the shop, tray app, LAN). See Chinese docs: `docs/V1本地营业内测版.md` and `docs/V1本地营业用户说明书.md`.
 
 ## Quick start (local development only)
+
+> For developers. Visitors should open **yichbo.com**.  
+> If you installed the **V1 Windows package**, follow the Chinese V1 user guide — do **not** use `runserver` below.
 
 ```text
 .\.venv\Scripts\python.exe manage.py runserver
 ```
 
-Open `http://127.0.0.1:8000/` on your machine (**local dev only**). Public visitors use **yichbo.com** above.
+Open `http://127.0.0.1:8000/` on your machine (**local debug only**). Public visitors use **<https://yichbo.com/>**.
 
-See `docs/环境与依赖清单.md` for dependencies and `docs/用户使用说明书.md` for end-user guidance (Chinese).
+See `docs/环境与依赖清单.md` for dependencies.
 
-## Current stage (summary · 2026-07-23)
+## Current stage (summary · 2026-08-09)
 
 | Area | Status |
 |------|--------|
-| Single-shop core | Runnable locally; dine-in, workbench, channels, payment foundation in place |
-| Showcase home (A.10) | Server home at `/` and shop home at `/s/<code>/home/`; in-page block expand/collapse |
-| Plugins (trial) | Dining / fulfillment split in progress; core fallback when plugins off |
-| Production trial | Live at **[yichbo.com](https://yichbo.com/)** (HTTPS); ICP / police filing via admin; WeChat Native pay tested |
-| Before public launch | Refunds, privacy encryption, production audit — **not done yet** |
-| Next (rules set, code pending) | Batch G: product images → pickup time → unified buyer messaging; install/relay packages (46–48) |
-
-Process docs (progress / logs) are kept privately by the project owner and are **not** in this public repo.
+| Public home | Live at **[yichbo.com](https://yichbo.com/)** (HTTPS) |
+| Single-shop core | Runnable; dine-in, workbench, payment foundation in place |
+| Local Shop Runtime V1 | Tray / backup / setup wizard / local password reset landed; Inno installer finishing |
+| WeChat pay / minimal refund | Available on local builds; validate with real devices before relying on it |
+| Before wider public launch | Remaining audit / safety items — follow Chinese handbook and deploy docs |
 
 ## License (summary)
 
 - **Main program**: **AGPL-3.0** (`LICENSE`).  
 - **Plugins**: additional permission in `LICENSE.PLUGIN-EXCEPTION` (plugins need not be AGPL).  
-- **Voluntary certification list**: `CERTIFIED_DIRECTORY.md` (not part of the AGPL text).  
-- Chinese rules: handbook sections **A.14**, **A.15** (architecture target; full code split not complete).
+- **Voluntary certification list**: `CERTIFIED_DIRECTORY.md` (repo canonical copy; not part of the AGPL text).  
+- Chinese product rules: handbook sections **A.14**, **A.15**.

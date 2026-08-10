@@ -51,6 +51,7 @@
         重新启用后可继续使用。
     </p>
     {% if staff_account_rows %}
+        <div data-yc-fold-group="staff-account-rows">
         {% for row in staff_account_rows %}
         <details class="seller-panel-fold" style="margin-top:10px;" {% if forloop.first %}open data-yc-tour="staff-account-expand"{% endif %}>
             <summary data-yc-tour="{% if forloop.first %}staff-account-row{% endif %}">
@@ -99,6 +100,7 @@
             </div>
         </details>
         {% endfor %}
+        </div>
     {% else %}
         <p class="card-meta">还没有员工子账号。</p>
     {% endif %}

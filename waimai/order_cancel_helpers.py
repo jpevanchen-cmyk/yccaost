@@ -2,6 +2,7 @@
 
 from django.db import transaction
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from .models import BuyOrder, OrderMessage
 from .order_status_transition_helpers import (
@@ -62,7 +63,12 @@ def shop_can_cancel_order(user, order: BuyOrder) -> bool:
     seller_id = resolve_employer_seller_id(user)
     if not seller_id or seller_id != order.seller_id:
         return False
-    return user_has_cancel_order_perm(user)
+    if not user_has_cancel_order_perm(user):
+        return False
+    # V1：已微信到账单仅店主可取消（会触发原路退款）
+    if order.payment_status == 'paid' and order.payment_method == 'wechat':
+        return getattr(user, 'role', '') == 'seller'
+    return True
 
 
 def shop_has_cancel_communication(order: BuyOrder) -> bool:
@@ -94,7 +100,7 @@ def _cancel_delivery_if_any(order: BuyOrder) -> None:
 
 
 def _apply_cancel_fields(order: BuyOrder, *, side: str, note: str) -> list[str]:
-    now = timezone.now()
+    now = now_local_wall()
     transition_order_status(
         order, 'cancelled', source='order_cancel_helpers._apply_cancel_fields',
     )
@@ -141,11 +147,49 @@ def cancel_order_by_buyer(order: BuyOrder, user) -> tuple[bool, str]:
 def cancel_order_by_shop(order: BuyOrder, user, note: str = '') -> tuple[bool, str]:
     """店家/授权员工取消（兜底）"""
     if not shop_can_cancel_order(user, order):
+        if (
+            order.payment_status == 'paid'
+            and order.payment_method == 'wechat'
+            and user_has_cancel_order_perm(user)
+            and resolve_employer_seller_id(user) == order.seller_id
+            and getattr(user, 'role', '') != 'seller'
+        ):
+            return False, '已微信收款的订单只能由店主取消并原路退款，请联系店主'
         return False, '您没有取消此订单的权限，或订单已不可取消'
 
     ok, gate_msg = shop_cancel_gate_ok(order, note)
     if not ok:
         return False, gate_msg
+
+    refund_msg = ''
+    from .payments.service import get_payment_settings
+    from .payments.wechat_refund_helpers import (
+        get_wechat_success_record,
+        initiate_wechat_refund_for_order,
+        order_needs_wechat_refund,
+    )
+
+    cancel_at = now_local_wall()
+    if order_needs_wechat_refund(order):
+        pay_settings = get_payment_settings(order.seller_id)
+        refund_ok, refund_msg = initiate_wechat_refund_for_order(
+            order,
+            pay_settings,
+            operator=getattr(user, 'username', '') or 'seller',
+        )
+        if not refund_ok:
+            return False, refund_msg
+        record = get_wechat_success_record(order)
+        if record:
+            from .fund_ledger_hooks import record_shop_order_cancelled_wechat_refund
+
+            record_shop_order_cancelled_wechat_refund(
+                order,
+                out_trade_no=record.out_trade_no,
+                source='shop_cancel_refund',
+                operator=getattr(user, 'username', '') or 'seller',
+                occurred_at=cancel_at,
+            )
 
     text = (note or '').strip()
     # 若本次填写了沟通备注且沟通区尚无记录，写入一条店家留言留痕
@@ -165,10 +209,14 @@ def cancel_order_by_shop(order: BuyOrder, user, note: str = '') -> tuple[bool, s
     release_catalog_sales_for_order(order)
     _cancel_delivery_if_any(order)
 
+    order.refresh_from_db()
+
     from .audit_helpers import write_audit_log
 
     paid_hint = ''
-    if order.payment_status == 'paid':
+    if order.payment_status == 'paid' and order.payment_method == 'wechat':
+        paid_hint = f'；微信退款：{refund_msg or "已提交"}'
+    elif order.payment_status == 'paid':
         paid_hint = '；若已收款请线下退款给客人'
     write_audit_log(
         action_code='order_status',
@@ -180,6 +228,10 @@ def cancel_order_by_shop(order: BuyOrder, user, note: str = '') -> tuple[bool, s
         summary=f'店家取消订单 {order.get_display_order_no()}：{reason[:200]}{paid_hint}',
     )
     msg = '订单已取消'
-    if order.payment_status == 'paid':
+    if order.payment_status == 'refunded':
+        msg += '，微信款已原路退回'
+    elif order.payment_status == 'paid' and order.payment_method == 'wechat':
+        msg += f'。{refund_msg or "微信退款已提交，请稍后在订单页查看结果"}'
+    elif order.payment_status == 'paid':
         msg += '。若已收款，请尽快线下退款给客人'
     return True, msg

@@ -22,7 +22,7 @@
     <div style="flex:1;min-width:220px;">
         <strong>订单 {{ order.get_display_order_no }}</strong>
         <div class="card-meta" style="margin-top:4px;">
-            {{ order.created_at|beijing:"m-d H:i" }}
+            {{ order.created_at|local:"m-d H:i" }}
             · ¥{{ order.total_amount }}
             · {{ order.get_order_status_display }}
             · 支付：{{ order.get_payment_status_display }}

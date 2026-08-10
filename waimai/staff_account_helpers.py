@@ -12,6 +12,7 @@ from django.http import HttpResponse, QueryDict
 from django.utils import timezone
 
 from .models import StaffAttendanceLog, User
+from .time_helpers import as_storage_datetime, format_local, local_today, now_local_wall, to_local
 
 STAFF_USERNAME_SEP = '::'
 ATTENDANCE_LOG_PAGE_SIZES = (10, 15, 20)
@@ -466,7 +467,7 @@ class AttendanceFilterForm(forms.Form):
 
 
 def parse_local_datetime_input(value: str):
-    """解析页面 datetime-local 输入为本机时区时间"""
+    """解析页面 datetime-local 输入为可写库的系统本地时间"""
     text = (value or '').strip()
     if not text:
         return None
@@ -474,19 +475,13 @@ def parse_local_datetime_input(value: str):
         dt = datetime.fromisoformat(text)
     except ValueError:
         return None
-    if timezone.is_naive(dt):
-        dt = timezone.make_aware(dt, timezone.get_current_timezone())
-    return dt
+    return as_storage_datetime(dt)
 
 
 def datetime_local_input_value(dt=None) -> str:
     """生成 datetime-local 控件用的默认值"""
-    moment = dt or timezone.localtime()
-    if timezone.is_naive(moment):
-        moment = timezone.make_aware(moment, timezone.get_current_timezone())
-    else:
-        moment = timezone.localtime(moment)
-    return moment.strftime('%Y-%m-%dT%H:%M')
+    moment = to_local(dt) if dt is not None else to_local(now_local_wall())
+    return format_local(moment, '%Y-%m-%dT%H:%M')
 
 
 def attendance_get_with_defaults(request, *, default_today: bool) -> QueryDict:
@@ -495,7 +490,7 @@ def attendance_get_with_defaults(request, *, default_today: bool) -> QueryDict:
         return request.GET
     if not default_today:
         return request.GET
-    today = timezone.localdate().isoformat()
+    today = local_today().isoformat()
     q = QueryDict(mutable=True)
     q['date_from'] = today
     q['date_to'] = today
@@ -594,8 +589,8 @@ def handle_manager_staff_status_post(request, seller_id: str, *, section: str = 
         if break_end <= break_start:
             messages.error(request, '休息结束时间必须晚于开始时间')
             return redirect('seller_panel_section', section=section)
-        start_text = timezone.localtime(break_start).strftime('%m-%d %H:%M')
-        end_text = timezone.localtime(break_end).strftime('%m-%d %H:%M')
+        start_text = format_local(break_start, '%m-%d %H:%M')
+        end_text = format_local(break_end, '%m-%d %H:%M')
         break_note = note or f'休息 {start_text}～{end_text}'
         create_attendance_log(
             user,
@@ -613,7 +608,7 @@ def handle_manager_staff_status_post(request, seller_id: str, *, section: str = 
             note='休息结束，恢复上班',
             changed_at=break_end,
         )
-        now = timezone.now()
+        now = now_local_wall()
         if break_start <= now < break_end:
             target = STAFF_WORK_BREAK
             updated_at = break_start
@@ -621,7 +616,7 @@ def handle_manager_staff_status_post(request, seller_id: str, *, section: str = 
             target = STAFF_WORK_ON_DUTY
             updated_at = break_end if now >= break_end else now
         user.staff_work_status = target
-        user.staff_work_status_updated_at = updated_at
+        user.staff_work_status_updated_at = as_storage_datetime(updated_at)
         user.save(update_fields=['staff_work_status', 'staff_work_status_updated_at'])
         messages.success(
             request,
@@ -704,7 +699,7 @@ def create_attendance_log(
         note=(note or '').strip(),
     )
     if changed_at is not None:
-        payload['changed_at'] = changed_at
+        payload['changed_at'] = as_storage_datetime(changed_at)
     StaffAttendanceLog.objects.create(**payload)
 
 
@@ -731,7 +726,7 @@ def set_staff_work_status(
     target = _normalize_staff_work_status(status)
     changed = _normalize_staff_work_status(user.staff_work_status) != target
     user.staff_work_status = target
-    event_time = log_at if log_at is not None else timezone.now()
+    event_time = as_storage_datetime(log_at if log_at is not None else now_local_wall())
     user.staff_work_status_updated_at = event_time
     user.save(update_fields=['staff_work_status', 'staff_work_status_updated_at'])
     if changed or force_log:
@@ -812,7 +807,7 @@ def purge_old_attendance_logs(seller_id: str, retention_value: str) -> int:
     days = attendance_retention_days_value(retention_value)
     if days is None:
         return 0
-    cutoff = timezone.now() - timedelta(days=days)
+    cutoff = now_local_wall() - timedelta(days=days)
     deleted, _ = StaffAttendanceLog.objects.filter(seller_id=seller_id, changed_at__lt=cutoff).delete()
     return deleted
 
@@ -822,7 +817,7 @@ def query_attendance_logs(seller_id: str, retention_value: str, filters: dict | 
     qs = StaffAttendanceLog.objects.filter(seller_id=seller_id)
     days = attendance_retention_days_value(retention_value)
     if days is not None:
-        cutoff = timezone.now() - timedelta(days=days)
+        cutoff = now_local_wall() - timedelta(days=days)
         qs = qs.filter(changed_at__gte=cutoff)
     data = filters or {}
     start = data.get('date_from')
@@ -849,7 +844,7 @@ def query_attendance_logs(seller_id: str, retention_value: str, filters: dict | 
 
 def build_staff_status_rows(staff_users, attendance_logs) -> list[dict]:
     """把当前员工状态整理成老板易看的表格行"""
-    today = timezone.localdate()
+    today = local_today()
     by_user: dict[str, list] = {}
     for log in attendance_logs:
         key = log.username_snapshot or ''
@@ -858,7 +853,7 @@ def build_staff_status_rows(staff_users, attendance_logs) -> list[dict]:
     rows = []
     for user in staff_users:
         logs = by_user.get(user.username, [])
-        today_logs = [log for log in logs if timezone.localtime(log.changed_at).date() == today]
+        today_logs = [log for log in logs if to_local(log.changed_at).date() == today]
         first_on_duty = next((log for log in reversed(today_logs) if log.action == STAFF_WORK_ON_DUTY), None)
         last_today = today_logs[0] if today_logs else None
         rows.append({
@@ -883,7 +878,7 @@ def export_attendance_csv(logs, *, seller_id: str) -> HttpResponse:
     writer.writerow(['时间', '员工姓名', '账号类别', '职务', '动作', '来源', '操作人账号', '备注'])
     for log in logs:
         writer.writerow([
-            timezone.localtime(log.changed_at).strftime('%Y-%m-%d %H:%M:%S'),
+            format_local(log.changed_at, '%Y-%m-%d %H:%M:%S'),
             log.display_name_snapshot,
             attendance_account_type_label(log),
             log.job_title_snapshot or staff_role_label(log.role_snapshot),
@@ -928,7 +923,7 @@ def handle_seller_staff_toggle_post(request, seller_id: str, role: str, *, secti
     user.is_active = not user.is_active
     if not user.is_active:
         user.staff_work_status = STAFF_WORK_OFF_DUTY
-        user.staff_work_status_updated_at = timezone.now()
+        user.staff_work_status_updated_at = now_local_wall()
         user.save(update_fields=['is_active', 'staff_work_status', 'staff_work_status_updated_at'])
         create_attendance_log(
             user,
@@ -970,7 +965,7 @@ def handle_staff_cancel_perm_post(request, seller_id: str, *, section='workbench
     from .audit_helpers import write_audit_log
 
     write_audit_log(
-        action_code='other',
+        action_code='staff_account',
         action_label='店长权限变更',
         seller_id=seller_id,
         actor=request.user,
@@ -1007,7 +1002,7 @@ def handle_create_staff_account_post(request, seller_id: str, *, section='workbe
         from .audit_helpers import write_audit_log
 
         write_audit_log(
-            action_code='other',
+            action_code='staff_account',
             action_label='创建员工子账号',
             seller_id=seller_id,
             actor=request.user,
@@ -1053,7 +1048,7 @@ def handle_edit_staff_account_post(request, seller_id: str, *, section='workbenc
         from .audit_helpers import write_audit_log
 
         write_audit_log(
-            action_code='other',
+            action_code='staff_account',
             action_label='员工职务权限变更',
             seller_id=seller_id,
             actor=request.user,
@@ -1085,7 +1080,7 @@ def handle_toggle_staff_account_post(request, seller_id: str, *, section='workbe
     update_fields = ['is_active']
     if not user.is_active:
         user.staff_work_status = STAFF_WORK_OFF_DUTY
-        user.staff_work_status_updated_at = timezone.now()
+        user.staff_work_status_updated_at = now_local_wall()
         update_fields.extend(['staff_work_status', 'staff_work_status_updated_at'])
     user.save(update_fields=update_fields)
     if not user.is_active:
@@ -1100,5 +1095,17 @@ def handle_toggle_staff_account_post(request, seller_id: str, *, section='workbe
     messages.success(
         request,
         f'已{state_word}{staff_job_title(user)} {staff_display_username(user.username)}',
+    )
+    from .audit_helpers import write_audit_log
+
+    write_audit_log(
+        action_code='staff_account',
+        action_label='员工账号启停',
+        seller_id=seller_id,
+        actor=request.user,
+        target_type='staff',
+        target_id=user.username,
+        summary=f'{state_word}员工：{staff_job_title(user)}（{staff_display_username(user.username)}）',
+        request=request,
     )
     return redirect('seller_panel_section', section=section)

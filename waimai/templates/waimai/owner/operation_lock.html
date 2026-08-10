@@ -1,0 +1,43 @@
+{% extends 'waimai/owner/base.html' %}
+{% block title %}操作锁{% endblock %}
+{% block owner_content %}
+<h1 class="page-title">🔒 操作锁</h1>
+<p class="page-desc">可选安全功能：默认关闭。启用后仅锁定<strong>店主后台</strong>与<strong>本页（服务器设置）</strong>；店铺工作台、收银、客人点餐不锁。</p>
+<form method="post" class="auth-form" style="max-width:480px;">
+    {% csrf_token %}
+    <p>
+        <label><input type="checkbox" name="operation_lock_enabled" value="1" {% if site_settings.operation_lock_enabled %}checked{% endif %}> 启用操作锁</label>
+    </p>
+    <p>
+        <label>无操作自动锁定（秒，60～3600，默认 300 = 5 分钟）<br>
+        <input type="number" name="operation_lock_idle_seconds" min="60" max="3600" value="{{ idle_seconds }}"></label>
+    </p>
+    {% if lock_configured %}
+    <p class="card-meta">修改或关闭须验证当前 PIN。</p>
+    <p>
+        <label>当前 PIN<br>
+        <input type="password" name="old_pin" autocomplete="off"></label>
+    </p>
+    {% endif %}
+    <p>
+        <label>新 PIN（至少 4 位；启用时必填）<br>
+        <input type="password" name="new_pin" autocomplete="new-password"></label>
+    </p>
+    <p>
+        <label>确认新 PIN<br>
+        <input type="password" name="confirm_pin" autocomplete="new-password"></label>
+    </p>
+    <button type="submit" class="btn btn-green">保存设置</button>
+</form>
+{% if lock_configured %}
+<form method="post" style="margin-top:16px;">
+    {% csrf_token %}
+    <input type="hidden" name="disable_lock" value="1">
+    <p>
+        <label>关闭操作锁须输入当前 PIN<br>
+        <input type="password" name="old_pin" autocomplete="off"></label>
+    </p>
+    <button type="submit" class="btn btn-outline">关闭操作锁</button>
+</form>
+{% endif %}
+{% endblock %}

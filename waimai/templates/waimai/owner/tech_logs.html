@@ -1,0 +1,49 @@
+{% extends 'waimai/owner/base.html' %}
+{% block title %}系统排错日志{% endblock %}
+{% block owner_content %}
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h1 style="margin:0 0 8px;font-size:18px;">🔧 系统排错日志</h1>
+    <p class="card-meta" style="margin:0 0 12px;">
+        仅供维护本台服务器的人查看程序运行与报错原文。普通店主请在店铺管理看「操作留痕」和「流水」；此处不是给日常营业用的。
+    </p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <a class="btn btn-sm {% if tech_view == 'tech_runtime' %}btn-primary{% else %}btn-outline{% endif %}"
+           href="{% url 'server_settings_tech_logs' %}{{ tech_query_runtime }}">程序运行记录</a>
+        <a class="btn btn-sm {% if tech_view == 'tech_error' %}btn-primary{% else %}btn-outline{% endif %}"
+           href="{% url 'server_settings_tech_logs' %}{{ tech_query_error }}">报错与收款异常</a>
+    </div>
+    <form method="get" action="{% url 'server_settings_tech_logs' %}" class="auth-form" style="margin:0;">
+        <input type="hidden" name="view" value="{{ tech_view }}">
+        <p style="margin:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <label for="tech-q" style="margin:0;">搜索</label>
+            <input type="search" name="q" id="tech-q" value="{{ tech_q }}" placeholder="日志行内关键词…" style="flex:1;min-width:180px;">
+            <button type="submit" class="btn btn-sm btn-primary">查找</button>
+            {% if tech_q %}
+            <a class="btn btn-sm btn-outline" href="{% url 'server_settings_tech_logs' %}?view={{ tech_view }}">清除</a>
+            {% endif %}
+        </p>
+    </form>
+</div>
+
+{% if tech_view == 'tech_runtime' %}
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h2 style="margin:0 0 10px;font-size:16px;">程序运行记录（文件末尾）{% if tech_q %} · 含「{{ tech_q }}」{% endif %}</h2>
+    {% if runtime_log_lines %}
+    <pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;background:#f7f7f7;padding:10px;border-radius:8px;max-height:520px;overflow:auto;">{% for line in runtime_log_lines %}{{ line }}
+{% endfor %}</pre>
+    {% else %}
+    <p class="card-meta">{% if tech_q %}没有匹配的日志行。{% else %}暂无记录，或日志文件尚未生成。{% endif %}</p>
+    {% endif %}
+</div>
+{% else %}
+<div class="card" style="padding:16px;">
+    <h2 style="margin:0 0 10px;font-size:16px;">报错与收款异常（文件末尾）{% if tech_q %} · 含「{{ tech_q }}」{% endif %}</h2>
+    {% if error_payment_log_lines %}
+    <pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;background:#f7f7f7;padding:10px;border-radius:8px;max-height:520px;overflow:auto;">{% for line in error_payment_log_lines %}{{ line }}
+{% endfor %}</pre>
+    {% else %}
+    <p class="card-meta">{% if tech_q %}没有匹配的日志行。{% else %}暂无记录，或日志文件尚未生成。{% endif %}</p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

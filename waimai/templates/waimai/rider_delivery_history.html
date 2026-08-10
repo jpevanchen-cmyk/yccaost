@@ -20,7 +20,7 @@
                 <div class="card-meta" style="margin:4px 0 0;">
                     {{ row.shop_name }}
                     {% if d.completed_at %}
-                    · 送达 {{ d.completed_at|beijing:"Y-m-d H:i" }}
+                    · 送达 {{ d.completed_at|local:"Y-m-d H:i" }}
                     {% endif %}
                 </div>
             </div>
@@ -34,7 +34,7 @@
         <div>
             <span class="badge badge-pay-paid">已送达</span>
             {% if d.picked_up_at %}
-            <span class="card-meta" style="margin-left:8px;">取餐 {{ d.picked_up_at|beijing:"m-d H:i" }}</span>
+            <span class="card-meta" style="margin-left:8px;">取餐 {{ d.picked_up_at|local:"m-d H:i" }}</span>
             {% endif %}
         </div>
         <div class="order-card-actions">

@@ -13,6 +13,7 @@ from .service import (
     manager_approve_cash_exception,
     mark_cash_exception,
     poll_wechat_payment,
+    poll_wechat_refund,
     rider_collect_cash,
 )
 
@@ -30,4 +31,5 @@ __all__ = [
     'close_uncollected_cash_order',
     'handle_wechat_notify',
     'poll_wechat_payment',
+    'poll_wechat_refund',
 ]

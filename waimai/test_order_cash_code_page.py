@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.models import BuyOrder, ShopProfile, User
 from waimai.order_qr_helpers import order_cash_code_url
@@ -82,7 +83,7 @@ class OrderCashCodePageTests(TestCase):
     def test_non_cash_order_redirects_to_detail(self):
         self.order.payment_method = 'wechat_simulate'
         self.order.payment_status = 'paid'
-        self.order.payment_time = timezone.now()
+        self.order.payment_time = now_local_wall()
         self.order.save(update_fields=['payment_method', 'payment_status', 'payment_time'])
         url = reverse('order_cash_code', kwargs={'order_id': self.order.order_id})
         response = self.client.get(url)

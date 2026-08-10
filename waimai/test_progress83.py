@@ -8,6 +8,7 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import Client, RequestFactory, TestCase
 from django.template.loader import render_to_string
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.flash_notice_helpers import collect_page_notices
 from waimai.models import BuyOrder, DeliveryOrder, ShopProfile
@@ -198,7 +199,7 @@ class RiderStartedButtonTests(Progress83Base):
             pickup_address='店址',
             delivery_address='顾客地址',
             delivery_status='in_transit',
-            in_transit_at=timezone.now(),
+            in_transit_at=now_local_wall(),
         )
         delivery.handoff_ready = True
         delivery.rider_fold_id = 'delivery-test1234'

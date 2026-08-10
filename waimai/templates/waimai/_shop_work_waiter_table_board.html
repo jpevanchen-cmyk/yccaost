@@ -1,0 +1,14 @@
+{# 服务员 Tab · 桌台看板：固定格子总览，点进单桌详情 #}
+<details class="seller-panel-fold" id="waiter-table-board" open data-yc-tour="waiter-table-board">
+    <summary class="seller-panel-fold-head" data-yc-tour="waiter-table-board-head">
+        <span class="seller-panel-fold-title">🪑 桌台看板</span>
+    </summary>
+    <div class="seller-panel-fold-body">
+        <p class="card-meta waiter-table-board-hint">
+            点桌号查看详情；代客开台后<strong>直接进入点菜</strong>；启用桌可「帮此桌点餐」或出示<strong>加点二维码</strong>。
+        </p>
+        <div id="waiter-table-board-body">
+            {% include 'waimai/_shop_work_waiter_table_board_inner.html' %}
+        </div>
+    </div>
+</details>

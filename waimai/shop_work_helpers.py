@@ -1,9 +1,6 @@
 # 店铺工作台：店码、权限、页面数据组装
 
-from datetime import datetime, time, timedelta
-
 from django.urls import reverse
-from django.utils import timezone
 
 from .models import ShopProfile
 from .staff_account_helpers import ALL_STAFF_ROLES
@@ -145,11 +142,10 @@ def get_delivery_dispatch_role(seller_id: str) -> str:
 
 
 def _today_range():
-    """返回今天的起止时间（按项目时区）"""
-    tz = timezone.get_current_timezone()
-    today = timezone.localdate()
-    start = timezone.make_aware(datetime.combine(today, time.min), tz)
-    return start, start + timedelta(days=1)
+    """返回今天的起止时间（系统本地墙钟，可直接查库）"""
+    from .time_helpers import local_day_bounds_for_query
+
+    return local_day_bounds_for_query()
 
 
 def build_shop_work_daily_history(
@@ -408,6 +404,7 @@ def build_shop_work_daily_history(
 
 def build_waiter_board_context(
     seller_id: str, *, allow_dispatch: bool = False, sort_mode: str = 'newest',
+    request=None, shop_code: str = '',
 ) -> dict:
     """服务员 Tab 数据"""
     from .dispatch_helpers import get_shop_riders
@@ -464,7 +461,17 @@ def build_waiter_board_context(
         })
     orders = sort_waiter_board_rows(orders)
     order_groups = group_board_rows_by_fulfillment(orders, fold_id_prefix='waiter')
-    return {'orders': orders, 'order_groups': order_groups, 'dispatch_riders': dispatch_riders}
+    from .plugins.dining.waiter_table_helpers import build_waiter_table_board_context
+
+    ctx = {
+        'orders': orders,
+        'order_groups': order_groups,
+        'dispatch_riders': dispatch_riders,
+    }
+    ctx.update(build_waiter_table_board_context(
+        seller_id, request=request, shop_code=shop_code,
+    ))
+    return ctx
 
 
 def build_kitchen_board_context(

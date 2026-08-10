@@ -114,6 +114,55 @@ def assemble_table_lan_url(
     return f'http://{".".join(nums)}:{port_num}', ''
 
 
+def http_base_is_loopback(url: str) -> bool:
+    """是否为本机回环地址（仅本机可开，店内手机不可用）。"""
+    text = (url or '').strip()
+    if not text:
+        return False
+    if '://' not in text:
+        text = 'http://' + text
+    try:
+        host = (urlparse(text).hostname or '').strip().lower()
+    except Exception:
+        return False
+    if not host:
+        return False
+    if host in ('127.0.0.1', 'localhost', '::1'):
+        return True
+    if host.startswith('127.'):
+        return True
+    return False
+
+
+def resolve_shop_access_base_url(request, seller_id: str) -> str:
+    """
+    店内设备可访问的根地址（工作台码、桌贴等共用）。
+    优先：经营设置局域网 → V1 站点局域网 → 支付里的公网根地址 → 当前请求主机。
+    任一为回环（127/localhost）则跳过；都不可用则返回空串（禁止用 127 冒充店内地址）。
+    """
+    lan = (getattr(get_operating_settings(seller_id), 'table_lan_base_url', '') or '').strip().rstrip('/')
+    if lan and not http_base_is_loopback(lan):
+        return lan
+
+    from .owner_helpers import get_site_settings
+
+    v1 = (getattr(get_site_settings(), 'v1_lan_base_url', '') or '').strip().rstrip('/')
+    if v1 and not http_base_is_loopback(v1):
+        return v1
+
+    from .payments import get_payment_settings
+
+    custom = (get_payment_settings(seller_id).public_site_url or '').strip().rstrip('/')
+    if custom and not http_base_is_loopback(custom):
+        return custom
+
+    if request is not None:
+        current = request.build_absolute_uri('/').rstrip('/')
+        if current and not http_base_is_loopback(current):
+            return current
+    return ''
+
+
 def build_order_alert_config(seller_id: str) -> dict:
     """给新单强提醒前端用的店铺自定义配置：音量(0~1)、重复间隔(秒)、自定义音频网址。"""
     settings = get_operating_settings(seller_id)
@@ -158,7 +207,9 @@ def check_order_admission(seller_id: str, fulfillment_type: str) -> tuple[bool, 
     from .channel_helpers import channel_label, channel_switch_enabled
 
     settings = get_operating_settings(seller_id)
-    now_t = timezone.localtime(timezone.now()).time()
+    from .time_helpers import now_local_wall
+
+    now_t = now_local_wall().time()
 
     if settings.pause_new_orders:
         return False, '店铺已暂停接单，请稍后再试'

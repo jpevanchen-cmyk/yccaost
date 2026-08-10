@@ -53,8 +53,13 @@
             chips.forEach(function (chip) {
                 var row = document.createElement('div');
                 row.className = 'scan-path-row';
-                row.innerHTML = '<strong>' + chip.getAttribute('data-label') + '</strong> ' +
-                    '<code>' + chip.getAttribute('data-scan') + '</code>';
+                var html = '<strong>' + chip.getAttribute('data-label') + '</strong> ' +
+                    '开台 <code>' + chip.getAttribute('data-scan') + '</code>';
+                var addon = chip.getAttribute('data-addon-scan');
+                if (addon) {
+                    html += '<br><span class="card-meta">专属加点码</span> <code>' + addon + '</code>';
+                }
+                row.innerHTML = html;
                 pathsBox.appendChild(row);
             });
         }

@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from .time_helpers import now_local_wall
 
 # 约 5 分钟无报平安 → 会话失效（与 settings.SESSION_COOKIE_AGE 对齐）
 HEARTBEAT_TIMEOUT_SECONDS = 5 * 60
@@ -19,7 +20,7 @@ SESSION_LAST_HEARTBEAT = 'yc_last_heartbeat_ts'
 
 
 def _now_ts() -> float:
-    return timezone.now().timestamp()
+    return now_local_wall().timestamp()
 
 
 def touch_user_activity(request) -> None:

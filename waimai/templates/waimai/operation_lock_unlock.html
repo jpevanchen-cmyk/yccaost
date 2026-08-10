@@ -1,0 +1,19 @@
+{% extends 'waimai/base.html' %}
+{% block title %}操作锁{% endblock %}
+{% block content %}
+<div style="max-width:420px;margin:24px auto;">
+    <h1 class="page-title">🔒 操作锁</h1>
+    <p class="page-desc">店铺管理已锁定。请输入 PIN 继续（不会退出登录）。</p>
+    <p class="card-meta">工作台、收银、客人点餐不受影响。</p>
+    <form method="post" class="auth-form" style="margin-top:16px;">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_path }}">
+        <p>
+            <label>操作 PIN<br>
+            <input type="password" name="pin" autocomplete="off" required autofocus></label>
+        </p>
+        <button type="submit" class="btn btn-green btn-block">解锁</button>
+    </form>
+    <p class="card-meta" style="margin-top:16px;">店铺工作台、收银、客人点餐无需此 PIN，可照常使用。</p>
+</div>
+{% endblock %}

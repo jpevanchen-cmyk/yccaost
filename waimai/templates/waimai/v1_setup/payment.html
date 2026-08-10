@@ -1,0 +1,26 @@
+{% extends 'waimai/v1_setup/base.html' %}
+{% block setup_content %}
+<h1 class="page-title">第 5 步 · 支付</h1>
+<p class="page-desc">V1 支持现金、商户微信、演示（模拟）；个人微信收款码嵌入不在 V1 范围。</p>
+<form method="post" class="auth-form" style="max-width:480px;">
+    {% csrf_token %}
+    <p><label>{{ form.enable_cash }} {{ form.enable_cash.label }}</label></p>
+    <p><label>{{ form.enable_wechat }} {{ form.enable_wechat.label }}</label></p>
+    <p><label>{{ form.enable_simulate }} {{ form.enable_simulate.label }}</label></p>
+    <hr style="margin:16px 0;border:none;border-top:1px solid #eee;">
+    <p class="card-meta">若暂不开微信，可留空下面三项，以后在卖家后台「支付设置」补填。</p>
+    {% for field in form %}
+    {% if field.name != 'enable_cash' and field.name != 'enable_wechat' and field.name != 'enable_simulate' %}
+    <p>
+        <label>{{ field.label }}<br>{{ field }}</label>
+        {% if field.help_text %}<span class="card-meta">{{ field.help_text }}</span>{% endif %}
+        {% for err in field.errors %}<span class="msg-err">{{ err }}</span>{% endfor %}
+    </p>
+    {% endif %}
+    {% endfor %}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <a href="{% url 'v1_setup_step' 'plugins' %}" class="btn btn-outline">上一步</a>
+        <button type="submit" class="btn btn-green">下一步</button>
+    </div>
+</form>
+{% endblock %}

@@ -30,6 +30,35 @@ def handle_waiter_post(request, seller_id: str, *, redirect_to=None):
         return _finish_waiter(
             request, target, ok=False, message='您没有服务员工作台操作权限',
         )
+
+    if 'waiter_open_table' in request.POST:
+        table_id = request.POST.get('table_id', '').strip()
+        from .plugins.dining.waiter_table_helpers import waiter_open_table_for_guest
+        from .plugins.dining.waiter_table_order_helpers import build_waiter_table_order_path
+        from .shop_work_auth import SESSION_SHOP_WORK_CODE
+
+        ok, msg = waiter_open_table_for_guest(
+            seller_id,
+            table_id,
+            operator=operator,
+        )
+        if ok:
+            shop_code = (request.session.get(SESSION_SHOP_WORK_CODE) or '').strip()
+            if shop_code:
+                return redirect(build_waiter_table_order_path(shop_code, table_id))
+        return _finish_waiter(request, target, ok=ok, message=msg)
+
+    if 'waiter_close_table' in request.POST:
+        table_id = request.POST.get('table_id', '').strip()
+        from .plugins.dining.waiter_table_helpers import waiter_close_table
+
+        ok, msg = waiter_close_table(
+            seller_id,
+            table_id,
+            operator=operator,
+        )
+        return _finish_waiter(request, target, ok=ok, message=msg)
+
     if 'adjust_wait_time' in request.POST:
         order_id = request.POST.get('order_id', '').strip()
         order = get_object_or_404(BuyOrder, order_id=order_id, seller_id=seller_id)

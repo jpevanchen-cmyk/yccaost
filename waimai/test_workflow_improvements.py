@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.test import Client, TestCase
 from django.template.loader import render_to_string
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from waimai.channel_helpers import channel_session_key
 from waimai.dispatch_helpers import (
@@ -311,7 +312,7 @@ class CashReconciliationTests(WorkflowImprovementBase):
         order.order_status = 'completed'
         order.save(update_fields=['order_status', 'updated_at'])
         DeliveryOrder.objects.filter(buy_order=order).update(
-            delivery_status='completed', completed_at=timezone.now(),
+            delivery_status='completed', completed_at=now_local_wall(),
         )
         remit, _ = create_cash_remittance_request(
             self.seller.username, self.rider.username, '本班现金',
@@ -349,7 +350,7 @@ class CashReconciliationTests(WorkflowImprovementBase):
         remit_order.order_status = 'completed'
         remit_order.save(update_fields=['order_status', 'updated_at'])
         DeliveryOrder.objects.filter(buy_order=remit_order).update(
-            delivery_status='completed', completed_at=timezone.now(),
+            delivery_status='completed', completed_at=now_local_wall(),
         )
         create_cash_remittance_request(
             self.seller.username, self.rider.username, '本班现金',
@@ -402,7 +403,7 @@ class WorkbenchSortTests(WorkflowImprovementBase):
         old_order = self.make_order()
         new_order = self.make_order()
         BuyOrder.objects.filter(pk=old_order.pk).update(
-            created_at=timezone.now() - timedelta(hours=1),
+            created_at=now_local_wall() - timedelta(hours=1),
         )
 
         newest = build_order_desk_context(

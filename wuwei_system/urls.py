@@ -1,10 +1,10 @@
 from django.contrib import admin
-from django.conf import settings
-from django.conf.urls.static import static
 from django.urls import path, include
 
 from waimai import views
 from waimai import owner_views as views_owner
+from waimai import v1_setup_views as views_v1
+from waimai import operation_lock_views as views_op_lock
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -18,6 +18,11 @@ urlpatterns = [
     path('s/<str:shop_code>/work/new-orders.json', views.shop_work_new_orders_json, name='shop_work_new_orders_json'),
     path('s/<str:shop_code>/work/remittances-pending.json', views.shop_work_pending_remittances_json, name='shop_work_pending_remittances_json'),
     path('s/<str:shop_code>/work/logout/', views.shop_work_logout, name='shop_work_logout'),
+    path(
+        's/<str:shop_code>/work/table/<uuid:table_id>/order/',
+        views.shop_work_waiter_table_order,
+        name='shop_work_waiter_table_order',
+    ),
     path(
         's/<str:shop_code>/work/order/<uuid:order_id>/',
         views.shop_work_order,
@@ -44,6 +49,12 @@ urlpatterns = [
     path('server-settings/branding/', views_owner.server_settings_branding, name='server_settings_branding'),
     path('server-settings/compliance/', views_owner.server_settings_compliance, name='server_settings_compliance'),
     path('server-settings/email/', views_owner.server_settings_email, name='server_settings_email'),
+    path('server-settings/tech-logs/', views_owner.server_settings_tech_logs, name='server_settings_tech_logs'),
+    path(
+        'server-settings/operation-lock/',
+        views_owner.server_settings_operation_lock,
+        name='server_settings_operation_lock',
+    ),
     path('server-settings/home/', views_owner.server_settings_home_page, name='server_settings_home_page'),
     path('server-settings/guestbook/', views_owner.server_settings_guestbook, name='server_settings_guestbook'),
     path(
@@ -83,6 +94,9 @@ urlpatterns = [
     path('account/password/', views.account_password_change, name='account_password_change'),
     path('accounts/session/heartbeat/', views.session_heartbeat, name='session_heartbeat'),
     path('accounts/session/beacon-logout/', views.session_beacon_logout, name='session_beacon_logout'),
+    path('operation-lock/unlock/', views_op_lock.operation_lock_unlock, name='operation_lock_unlock'),
+    path('operation-lock/lock/', views_op_lock.operation_lock_manual, name='operation_lock_manual'),
+    path('operation-lock/touch/', views_op_lock.operation_lock_touch, name='operation_lock_touch'),
     path('seller-panel/', views.seller_panel, name='seller_panel'),
     path('seller-panel/products/print-qr/', views.seller_product_qr_print, name='seller_product_qr_print'),
     path('seller-panel/workbench/attendance-logs/', views.seller_panel_attendance_logs, name='seller_panel_attendance_logs'),
@@ -113,6 +127,17 @@ urlpatterns = [
         name='seller_order_cashier_qr_print',
     ),
     path('experience/', include('waimai.onboarding.urls')),
+    path('v1-local/setup/', views_v1.v1_setup_entry, name='v1_setup_entry'),
+    path(
+        'v1-local/setup/pick-backup-dir/',
+        views_v1.v1_setup_pick_backup_dir,
+        name='v1_setup_pick_backup_dir',
+    ),
+    path(
+        'v1-local/setup/<slug:step_slug>/',
+        views_v1.v1_setup_step,
+        name='v1_setup_step',
+    ),
 ]
 
 # 服务器拥有者私人工具包 URL（未开启时不注册）
@@ -123,6 +148,8 @@ try:
 except Exception:
     pass
 
-# 本地开发时由 Django 提供上传图片；正式服务器由 Nginx 提供 /media/。
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# 调试或 V1 本机无 Nginx：由程序提供上传图（显式挂路由；勿用 static()——关调试时它故意返回空）。
+# 云上正式站关调试且非 V1 时由 Nginx 提供。
+from waimai.v1_local_helpers import uploaded_media_urlpatterns
+
+urlpatterns += uploaded_media_urlpatterns()

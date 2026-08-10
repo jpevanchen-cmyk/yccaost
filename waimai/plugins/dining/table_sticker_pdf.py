@@ -28,23 +28,12 @@ _MARGIN = 12
 
 def resolve_public_base_url(request: HttpRequest, seller_id: str) -> str:
     """
-    桌码/桌贴用的网站根地址，优先级：
-    1. 堂食设置「桌码局域网固定地址」（店内扫码推荐）
-    2. 支付设置「店铺公网网址」
-    3. 当前浏览器访问地址（本机测试）
+    桌码/桌贴用的网站根地址（与工作台共用）。
+    回环地址不可用时返回空，禁止用 127 冒充店内可扫地址。
     """
-    from waimai.operating_helpers import get_operating_settings
-    from waimai.payments import get_payment_settings
+    from waimai.operating_helpers import resolve_shop_access_base_url
 
-    operating = get_operating_settings(seller_id)
-    lan = (getattr(operating, 'table_lan_base_url', '') or '').strip().rstrip('/')
-    if lan:
-        return lan
-    ps = get_payment_settings(seller_id)
-    custom = (ps.public_site_url or '').strip().rstrip('/')
-    if custom:
-        return custom
-    return request.build_absolute_uri('/').rstrip('/')
+    return resolve_shop_access_base_url(request, seller_id)
 
 
 def build_table_scan_absolute_url(base_url: str, seller_id: str, qr_token: str) -> str:

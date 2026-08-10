@@ -61,11 +61,19 @@ def _attach_edit_scan_qr(ctx, request, seller_id: str) -> None:
     edit_pick = (ctx.get('edit_dish_id') or '').strip()
     if not edit_pick:
         return
-    from waimai.product_scan_helpers import build_product_scan_qr_rows
+    from waimai.product_scan_helpers import (
+        build_product_scan_qr_rows,
+        product_scan_qr_missing_lan,
+    )
 
     for dish in ctx.get('dishes') or []:
         if dish.dish_id.hex[:8] == edit_pick:
             ctx['edit_scan_qr_rows'] = build_product_scan_qr_rows(
+                request,
+                dish,
+                seller_id,
+            )
+            ctx['edit_scan_qr_missing_lan'] = product_scan_qr_missing_lan(
                 request,
                 dish,
                 seller_id,

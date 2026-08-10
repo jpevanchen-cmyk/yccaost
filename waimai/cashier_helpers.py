@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from .models import BuyOrder, ShopPaymentSettings
 from .order_desk_helpers import format_order_dish_summary
@@ -235,8 +236,6 @@ def _order_in_cashier_scope(order: BuyOrder) -> bool:
         return False
     start, end = _today_range()
     created = order.created_at
-    if timezone.is_naive(created):
-        created = timezone.make_aware(created, timezone.get_current_timezone())
     return start <= created < end
 
 
@@ -315,7 +314,7 @@ def cashier_confirm_payment(
         if order.payment_status != 'paid':
             return False, '该订单已收款，无需重复确认'
 
-    now = timezone.now()
+    now = now_local_wall()
     order.cash_collected_amount = amt
     order.cash_collected_by = getattr(actor, 'username', '') or ''
     order.cash_collected_at = now
@@ -375,7 +374,7 @@ def cashier_confirm_simulate_payment(order: BuyOrder, *, actor) -> tuple[bool, s
         if order.payment_status != 'paid':
             return False, '该订单已收款，无需重复确认'
 
-    now = timezone.now()
+    now = now_local_wall()
     order.cash_collected_amount = order.total_amount
     order.cash_collected_by = getattr(actor, 'username', '') or ''
     order.cash_collected_at = now

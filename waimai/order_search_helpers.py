@@ -95,11 +95,13 @@ def build_order_list_pagination_query(get_params) -> str:
 
 def _apply_date_range(qs, date_range: str):
     """按时间范围过滤"""
+    from .time_helpers import local_day_start, now_local_wall
+
     if date_range == 'all':
         return qs
-    now = timezone.now()
+    now = now_local_wall()
     if date_range == 'today':
-        start = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
+        start = local_day_start(now)
         return qs.filter(created_at__gte=start)
     if date_range == 'week':
         return qs.filter(created_at__gte=now - timedelta(days=7))

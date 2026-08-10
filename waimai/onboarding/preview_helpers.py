@@ -182,11 +182,19 @@ def build_experience_products_context(request, *, profile_pick: str = '') -> dic
     ctx['tour_demo_dish_edit_pick'] = demo_dish.dish_id.hex[:8] if demo_dish else ''
     edit_pick = (ctx.get('edit_dish_id') or '').strip()
     if edit_pick:
-        from waimai.product_scan_helpers import build_product_scan_qr_rows
+        from waimai.product_scan_helpers import (
+            build_product_scan_qr_rows,
+            product_scan_qr_missing_lan,
+        )
 
         for dish in dishes:
             if dish.dish_id.hex[:8] == edit_pick:
                 ctx['edit_scan_qr_rows'] = build_product_scan_qr_rows(
+                    request,
+                    dish,
+                    seller_id,
+                )
+                ctx['edit_scan_qr_missing_lan'] = product_scan_qr_missing_lan(
                     request,
                     dish,
                     seller_id,
@@ -202,14 +210,17 @@ def build_experience_print_qr_context(request) -> dict[str, Any]:
         return {}
     seller_id = shop.seller_id
     from waimai.menu_helpers import get_active_menu_profile
+    from waimai.operating_helpers import resolve_shop_access_base_url
     from waimai.product_qr_print_helpers import build_catalog_qr_print_cards
 
+    missing_lan = not bool(resolve_shop_access_base_url(request, seller_id))
     ctx = base_experience_preview_context('批量打印商品二维码（演示）', 'products')
     ctx.update({
         'onboarding_readonly': True,
         'experience_writable': False,
         'experience_tour_query': _experience_tour_query(request),
-        'print_cards': build_catalog_qr_print_cards(request, seller_id),
+        'print_cards': [] if missing_lan else build_catalog_qr_print_cards(request, seller_id),
+        'print_qr_missing_lan': missing_lan,
         'active_profile': get_active_menu_profile(seller_id),
         'experience_products_url': reverse_experience_products(request),
     })
@@ -415,6 +426,8 @@ def build_experience_payment_context(request) -> dict[str, Any]:
     from waimai.plugin_runtime.registry import is_plugin_enabled
     from waimai.rider_cash_helpers import rider_cash_summary
 
+    from waimai.payment_cert_helpers import build_wechat_cert_display, wechat_cert_status_label
+
     fulfillment_on = is_plugin_enabled('fulfillment', seller_id)
     payment_form = ShopPaymentSettingsForm(instance=get_payment_settings(seller_id))
     if not fulfillment_on and 'enable_cod' in payment_form.fields:
@@ -427,6 +440,8 @@ def build_experience_payment_context(request) -> dict[str, Any]:
         'payment_form': payment_form,
         'experience_block_wechat': seller_blocked_from_real_wechat(seller_id),
         'experience_site': experience_site_enabled(),
+        'wechat_cert_status': wechat_cert_status_label(get_payment_settings(seller_id)),
+        'wechat_cert_display': build_wechat_cert_display(get_payment_settings(seller_id)),
         'show_rider_cash': fulfillment_on,
         'rider_cash': rider_cash_summary(seller_id) if fulfillment_on else None,
     })

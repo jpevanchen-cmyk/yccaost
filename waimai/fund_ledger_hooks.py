@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.utils import timezone
+from .time_helpers import now_local_wall
 
 from .fund_ledger_helpers import (
     record_fund_ledger_if_absent,
@@ -66,7 +67,7 @@ def record_order_payment_received(
         entry_status=FundLedgerEntry.ENTRY_STATUS_SUCCESS,
         fund_status=fund_status,
         note=note,
-        occurred_at=order.payment_time or timezone.now(),
+        occurred_at=order.payment_time or now_local_wall(),
     )
 
 
@@ -88,7 +89,7 @@ def record_wechat_scan_initiated(
         source=source,
         operator=operator,
         entry_status=FundLedgerEntry.ENTRY_STATUS_PENDING,
-        fund_status=FundLedgerEntry.FUND_STATUS_NOT_APPLICABLE,
+        fund_status=FundLedgerEntry.FUND_STATUS_PENDING_ARRIVAL,
     )
 
 
@@ -122,7 +123,100 @@ def record_wechat_payment_success(
         entry_status=FundLedgerEntry.ENTRY_STATUS_SUCCESS,
         fund_status=FundLedgerEntry.FUND_STATUS_AT_SHOP,
         related_ledger=init_ledger,
-        occurred_at=order.payment_time or timezone.now(),
+        occurred_at=order.payment_time or now_local_wall(),
+    )
+
+
+def record_shop_order_cancelled_wechat_refund(
+    order: BuyOrder,
+    *,
+    out_trade_no: str,
+    source: str = 'shop_cancel_refund',
+    operator: str = 'seller',
+    occurred_at=None,
+    note: str = '',
+) -> None:
+    """店家取消订单并发起微信原路退款（取消与发起退款合并记一条）。"""
+    paid_ledger = find_ledger_by_reference(order.seller_id, f'wechat_paid:{out_trade_no}')
+    record_fund_ledger_if_absent(
+        order,
+        reference_key=f'shop_cancel_refund:{order.order_id}',
+        direction=FundLedgerEntry.DIRECTION_EXPENSE,
+        amount=order.total_amount,
+        payment_method='wechat',
+        business_type='shop_order_cancelled',
+        source=source,
+        operator=operator,
+        entry_status=FundLedgerEntry.ENTRY_STATUS_SUCCESS,
+        fund_status='',
+        related_ledger=paid_ledger,
+        note=note or '店家取消订单并发起微信原路退款',
+        occurred_at=occurred_at or now_local_wall(),
+    )
+
+
+def record_wechat_refund_processing(
+    order: BuyOrder,
+    *,
+    out_refund_no: str,
+    out_trade_no: str,
+    source: str = 'shop_cancel_refund',
+    operator: str = 'seller',
+) -> None:
+    """发起微信退款：记一条支出流水（处理中）。"""
+    paid_ledger = find_ledger_by_reference(order.seller_id, f'wechat_paid:{out_trade_no}')
+    record_fund_ledger_if_absent(
+        order,
+        reference_key=f'wechat_refund:{out_refund_no}',
+        direction=FundLedgerEntry.DIRECTION_EXPENSE,
+        amount=order.total_amount,
+        payment_method='wechat',
+        business_type='wechat_refund_processing',
+        source=source,
+        operator=operator,
+        entry_status=FundLedgerEntry.ENTRY_STATUS_PENDING,
+        fund_status='',
+        refund_status=FundLedgerEntry.REFUND_STATUS_PROCESSING,
+        related_ledger=paid_ledger,
+        note='微信原路退款处理中',
+    )
+
+
+def record_wechat_refund_success(
+    order: BuyOrder,
+    *,
+    out_refund_no: str,
+    out_trade_no: str,
+    source: str = 'wechat_refund_query',
+    operator: str = 'system',
+) -> None:
+    """微信退款到账：结束处理中行，并另记一条退款完成流水。"""
+    refund_ledger = find_ledger_by_reference(order.seller_id, f'wechat_refund:{out_refund_no}')
+    paid_ledger = find_ledger_by_reference(order.seller_id, f'wechat_paid:{out_trade_no}')
+    if refund_ledger:
+        transition_fund_ledger_entry(
+            refund_ledger,
+            entry_status=FundLedgerEntry.ENTRY_STATUS_SUCCESS,
+            refund_status=FundLedgerEntry.REFUND_STATUS_COMPLETED,
+            operator=operator,
+            source=source,
+            note='微信原路退款完成',
+        )
+    record_fund_ledger_if_absent(
+        order,
+        reference_key=f'wechat_refund_done:{out_refund_no}',
+        direction=FundLedgerEntry.DIRECTION_EXPENSE,
+        amount=order.total_amount,
+        payment_method='wechat',
+        business_type='wechat_refund_success',
+        source=source,
+        operator=operator,
+        entry_status=FundLedgerEntry.ENTRY_STATUS_SUCCESS,
+        fund_status='',
+        refund_status=FundLedgerEntry.REFUND_STATUS_COMPLETED,
+        related_ledger=refund_ledger or paid_ledger,
+        note='微信原路退款完成',
+        occurred_at=now_local_wall(),
     )
 
 
@@ -145,7 +239,7 @@ def record_rider_cash_collected(
         entry_status=FundLedgerEntry.ENTRY_STATUS_SUCCESS,
         fund_status=FundLedgerEntry.FUND_STATUS_IN_TRANSIT,
         note=order.cash_shortfall_reason or '',
-        occurred_at=order.cash_collected_at or timezone.now(),
+        occurred_at=order.cash_collected_at or now_local_wall(),
     )
 
 
@@ -177,7 +271,7 @@ def record_cash_remittance_confirmed(
         entry_status=FundLedgerEntry.ENTRY_STATUS_SUCCESS,
         fund_status=FundLedgerEntry.FUND_STATUS_AT_SHOP,
         related_ledger=collect_ledger,
-        occurred_at=order.cash_remitted_at or timezone.now(),
+        occurred_at=order.cash_remitted_at or now_local_wall(),
     )
 
 
@@ -201,5 +295,5 @@ def record_cash_exception_settled(
         entry_status=FundLedgerEntry.ENTRY_STATUS_SUCCESS,
         fund_status=FundLedgerEntry.FUND_STATUS_IN_TRANSIT,
         note=note,
-        occurred_at=order.payment_time or timezone.now(),
+        occurred_at=order.payment_time or now_local_wall(),
     )

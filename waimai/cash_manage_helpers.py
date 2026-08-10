@@ -26,15 +26,13 @@ def _money2(value) -> Decimal:
 
 def resolve_cash_month(raw_value) -> str:
 
-    """解析 YYYY-MM；默认当前北京月份。"""
+    """解析 YYYY-MM；默认当前系统本地月份。"""
 
     import re
 
-    from django.utils import timezone
+    from .time_helpers import to_local, now_local_wall
 
-    from .time_helpers import to_beijing
-
-    default = to_beijing(timezone.now()).date().strftime('%Y-%m')
+    default = to_local(now_local_wall()).date().strftime('%Y-%m')
 
     text = (raw_value or '').strip()
 
@@ -64,15 +62,13 @@ def build_cash_month_choices(*, selected: str, extra_months: list[str] | None = 
 
 
 
-    from django.utils import timezone
+    
+
+    from .time_helpers import to_local, now_local_wall
 
 
 
-    from .time_helpers import to_beijing
-
-
-
-    today = to_beijing(timezone.now()).date()
+    today = to_local(now_local_wall()).date()
 
     months: list[str] = []
 
@@ -196,7 +192,7 @@ def build_cash_manage_daily_table(
     """
     from .models import CashRemittanceRequest
     from .plugins.fulfillment.rider_cash_helpers import _cod_cash_qs
-    from .time_helpers import to_beijing
+    from .time_helpers import to_local, now_local_wall
 
     bucket: dict[str, dict] = defaultdict(lambda: {
         'order_count': 0,
@@ -215,7 +211,7 @@ def build_cash_manage_daily_table(
     ).iterator():
         if not order.cash_collected_at:
             continue
-        collect_day = to_beijing(order.cash_collected_at).date().isoformat()
+        collect_day = to_local(order.cash_collected_at).date().isoformat()
         collected = order.cash_collected_amount or Decimal('0')
         expected = order.total_amount or Decimal('0')
         shortfall = expected - collected

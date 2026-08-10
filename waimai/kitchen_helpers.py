@@ -13,7 +13,7 @@ from .order_progress_helpers import (
     norm_dish_id,
     normalize_dish_items,
 )
-from .time_helpers import format_beijing_time
+from .time_helpers import format_local_time
 
 
 def get_shop_kitchens(seller_id: str, *, active_only: bool = False):
@@ -273,6 +273,6 @@ def recent_kitchen_activity_logs(order: BuyOrder, limit: int = 8) -> list[str]:
     lines: list[str] = []
     for log in order.kitchen_dish_prep_logs.order_by('-changed_at')[:limit]:
         action = '标记' if log.action == OrderKitchenDishPrepLog.ACTION_MARK else '撤回'
-        ts = format_beijing_time(log.changed_at, '%H:%M')
+        ts = format_local_time(log.changed_at, '%H:%M')
         lines.append(f'{ts} · {log.changed_by} · {action}「{log.dish_name}」（{log.prepared_after}/{log.total_qty}）')
     return lines

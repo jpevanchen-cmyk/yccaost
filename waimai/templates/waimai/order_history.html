@@ -17,7 +17,7 @@
             <div>
                 <div class="order-card-id">订单号：{{ order.get_display_order_no }}</div>
                 <div class="card-meta" style="margin:4px 0 0;">
-                    {{ row.shop_name }} · {{ order.created_at|beijing:"m-d H:i" }}
+                    {{ row.shop_name }} · {{ order.created_at|local:"m-d H:i" }}
                 </div>
             </div>
             <div class="order-card-amount">¥{{ order.total_amount }}</div>

@@ -35,12 +35,16 @@ def build_tier_print_caption(dish, tier: str, seller_id: str, menu_item=None) ->
 def build_catalog_qr_print_cards(request, seller_id: str) -> list[dict]:
     """使用中清单内全部商品的打印用二维码卡片。"""
     from .menu_helpers import get_active_menu_items_map, get_shop_dishes_for_sale
+    from .operating_helpers import resolve_shop_access_base_url
     from .workbench_qr import build_work_login_qr_png
 
     dishes_qs, using_menu = get_shop_dishes_for_sale(seller_id)
     dishes = list(dishes_qs)
     menu_map = get_active_menu_items_map(seller_id) if using_menu else {}
-    base = request.build_absolute_uri('/').rstrip('/')
+    # 与工作台/桌码一致：优先局域网/公网根地址，禁止用 127 冒充
+    base = resolve_shop_access_base_url(request, seller_id)
+    if not base:
+        return []
 
     cards: list[dict] = []
     for dish in dishes:

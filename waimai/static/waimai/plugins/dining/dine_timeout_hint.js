@@ -52,7 +52,7 @@
     box.className = 'msg-warn dine-timeout-hint';
 
     var text = document.createElement('span');
-    text.textContent = '堂食点餐状态已超时，请重新扫描桌上的二维码进入本桌点餐。';
+    text.textContent = '堂食点餐状态已超时，请重新扫描专属加点码或联系服务员。';
     box.appendChild(text);
 
     var close = document.createElement('button');

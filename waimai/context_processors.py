@@ -154,3 +154,28 @@ def onboarding_boot(request):
         'official_shop_name': name,
     }
 
+
+def v1_local_site(request):
+    """V1 本地营业内测：模板用开关与注册入口是否展示。"""
+    from .v1_local_helpers import v1_local_mode_enabled
+    from .operation_lock_helpers import (
+        operation_lock_is_engaged,
+        path_in_operation_lock_scope,
+        request_user_subject_to_operation_lock,
+        site_operation_lock_enabled,
+    )
+
+    enabled = v1_local_mode_enabled()
+    op_lock = site_operation_lock_enabled()
+    engaged = False
+    if op_lock and getattr(request, 'user', None) and request.user.is_authenticated:
+        if path_in_operation_lock_scope(request.path or '') and request_user_subject_to_operation_lock(request):
+            engaged = operation_lock_is_engaged(request)
+    return {
+        'v1_local_mode': enabled,
+        'v1_public_register_enabled': not enabled,
+        'operation_lock_enabled': op_lock,
+        'operation_lock_engaged': engaged,
+        'operation_lock_show_settings': False,
+    }
+

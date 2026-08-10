@@ -12,7 +12,9 @@ from waimai.models import BuyOrder, ShopProfile
 from waimai.plugin_runtime.registry import collect_seller_nav_items
 from waimai.shop_work_auth import establish_shop_work_session
 from waimai.staff_account_helpers import PERM_FULFILLMENT_CASH_MANAGE
-from waimai.time_helpers import to_beijing
+from datetime import datetime
+
+from waimai.time_helpers import as_storage_datetime, to_local, now_local_wall
 from waimai.panel_refresh_helpers import PANEL_REQUEST_HEADER
 from waimai.workbench_shell_helpers import build_workbench_shell
 
@@ -104,8 +106,8 @@ class CashManageFrameworkTests(TestCase):
 
     def test_daily_table_two_decimals_and_totals(self):
         """按日表格金额两位小数，合计行有数。"""
-        now = timezone.now()
-        day = to_beijing(now).date().isoformat()
+        now = now_local_wall()
+        day = to_local(now).date().isoformat()
         BuyOrder.objects.create(
             buyer_id='buyer_a',
             seller_id=self.seller.username,
@@ -134,7 +136,7 @@ class CashManageFrameworkTests(TestCase):
 
     def test_daily_table_shortfall_column(self):
         """异常减收列汇总少付差额。"""
-        now = timezone.now()
+        now = now_local_wall()
         BuyOrder.objects.create(
             buyer_id='buyer_short',
             seller_id=self.seller.username,
@@ -159,7 +161,7 @@ class CashManageFrameworkTests(TestCase):
 
     def test_daily_table_auto_note_unremitted(self):
         """未入金时在备注中提示。"""
-        now = timezone.now()
+        now = now_local_wall()
         BuyOrder.objects.create(
             buyer_id='buyer_pending',
             seller_id=self.seller.username,
@@ -179,7 +181,7 @@ class CashManageFrameworkTests(TestCase):
         self.assertIn('尚有未入金', row['note'])
 
     def test_seller_and_workbench_show_daily_table(self):
-        now = timezone.now()
+        now = now_local_wall()
         BuyOrder.objects.create(
             buyer_id='buyer_b',
             seller_id=self.seller.username,
@@ -222,8 +224,8 @@ class CashManageFrameworkTests(TestCase):
     def test_cash_month_filter(self):
         from waimai.cash_manage_helpers import resolve_cash_month
 
-        jan = timezone.make_aware(timezone.datetime(2026, 1, 15, 12, 0, 0))
-        feb = timezone.make_aware(timezone.datetime(2026, 2, 10, 12, 0, 0))
+        jan = as_storage_datetime(datetime(2026, 1, 15, 12, 0, 0))
+        feb = as_storage_datetime(datetime(2026, 2, 10, 12, 0, 0))
         BuyOrder.objects.create(
             buyer_id='buyer_jan',
             seller_id=self.seller.username,
@@ -260,7 +262,7 @@ class CashManageFrameworkTests(TestCase):
         self.assertEqual(resolve_cash_month('2026-2'), '2026-02')
 
     def test_workbench_history_fold_and_pagination(self):
-        now = timezone.now()
+        now = now_local_wall()
         for idx in range(12):
             BuyOrder.objects.create(
                 buyer_id=f'buyer_{idx}',
@@ -292,8 +294,8 @@ class CashManageFrameworkTests(TestCase):
 
     def test_seller_cash_month_panel_refresh_returns_json(self):
         """汇总月份下拉走 Panel：返回 JSON 片段，不整页 reload。"""
-        jan = timezone.make_aware(timezone.datetime(2026, 1, 15, 12, 0, 0))
-        feb = timezone.make_aware(timezone.datetime(2026, 2, 10, 12, 0, 0))
+        jan = as_storage_datetime(datetime(2026, 1, 15, 12, 0, 0))
+        feb = as_storage_datetime(datetime(2026, 2, 10, 12, 0, 0))
         BuyOrder.objects.create(
             buyer_id='buyer_jan_p',
             seller_id=self.seller.username,
@@ -340,7 +342,7 @@ class CashManageFrameworkTests(TestCase):
 
     def test_workbench_cash_month_panel_refresh_returns_json(self):
         """工作台现金 Tab · 月份下拉 Panel 返回 JSON。"""
-        jan = timezone.make_aware(timezone.datetime(2026, 1, 20, 12, 0, 0))
+        jan = as_storage_datetime(datetime(2026, 1, 20, 12, 0, 0))
         BuyOrder.objects.create(
             buyer_id='buyer_wb_jan',
             seller_id=self.seller.username,
@@ -381,7 +383,7 @@ class CashManageFrameworkTests(TestCase):
         """工作台现金 Tab · 确认入金走 Panel JSON。"""
         from waimai.rider_cash_helpers import create_cash_remittance_request
 
-        now = timezone.now()
+        now = now_local_wall()
         BuyOrder.objects.create(
             buyer_id='buyer_remit',
             seller_id=self.seller.username,
@@ -430,7 +432,7 @@ class CashManageFrameworkTests(TestCase):
         """卖家后台现金管理 · 确认入金走 Panel JSON。"""
         from waimai.rider_cash_helpers import create_cash_remittance_request
 
-        now = timezone.now()
+        now = now_local_wall()
         BuyOrder.objects.create(
             buyer_id='buyer_seller_remit',
             seller_id=self.seller.username,
@@ -471,7 +473,7 @@ class CashManageFrameworkTests(TestCase):
         """工作台现金 Tab · 退回交款走 Panel JSON。"""
         from waimai.rider_cash_helpers import create_cash_remittance_request
 
-        now = timezone.now()
+        now = now_local_wall()
         BuyOrder.objects.create(
             buyer_id='buyer_reject_remit',
             seller_id=self.seller.username,

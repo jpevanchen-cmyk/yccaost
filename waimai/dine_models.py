@@ -271,6 +271,15 @@ class TableSession(models.Model):
     share_label = models.CharField(max_length=64, blank=True, default='', verbose_name='拼桌单号')
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='open', db_index=True)
     device_key = models.CharField(max_length=64, blank=True, default='', verbose_name='设备标识')
+    # V1：开台后一次性加点码；翻台后失效；仅 main 会话使用
+    addon_token = models.CharField(
+        max_length=32,
+        unique=True,
+        null=True,
+        blank=True,
+        default=None,
+        verbose_name='专属加点码令牌',
+    )
     opened_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(blank=True, null=True)
 

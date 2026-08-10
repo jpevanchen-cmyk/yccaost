@@ -14,6 +14,10 @@ build/
 venv/
 env/
 
+# V1 安装包中间产物（体积大；脚本与 iss 保留）
+installer/staging/
+installer/output/
+
 # Django
 db.sqlite3
 db.sqlite3-journal
@@ -21,6 +25,7 @@ db.sqlite3-journal
 logs/
 local_settings.py
 media/
+private/
 staticfiles/
 
 # 环境与密钥（切勿提交）
@@ -60,6 +65,10 @@ scripts/
 # Cline 专用规则与纠错清单（给另一个智能体用，不进 Git）
 AGENTS.md
 智能体纠错清单.md
+# V1 托盘本地密码设置（不进 Git）
+launcher/tray_local_settings.json
+launcher/tray_show_window.flag
+launcher/tray_startup_error.log
 # 完整手册/方案仅存拥有者私有目录；禁止把完整版副本推进公开仓
 **/野草系统-核心规则速查手册-完整版.md
 **/开发方案-完整版.md
