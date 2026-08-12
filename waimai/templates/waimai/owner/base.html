@@ -33,9 +33,23 @@
     </nav>
     {% block owner_content %}{% endblock %}
 </main>
-{% include 'waimai/_flash_modal.html' %}
-<script src="{% static 'waimai/seller_panel_fold.js' %}?v=7"></script>
-<script src="{% static 'waimai/panel_refresh.js' %}?v=18"></script>
-<script src="{% static 'waimai/home_block_editor.js' %}?v=2"></script>
+    {% include 'waimai/_flash_modal.html' %}
+    {% if session_guard_enabled %}
+    <script>
+    window.YC_SESSION_GUARD = {
+        enabled: true,
+        channel: "{{ session_guard_channel|default:'eco' }}",
+        heartbeatUrl: "{{ session_heartbeat_url }}",
+        beaconUrl: "{{ session_beacon_url }}",
+        csrfToken: "{{ csrf_token }}",
+        heartbeatSeconds: {{ session_heartbeat_seconds|default:5 }},
+        idleSeconds: {{ session_idle_seconds|default:900 }}
+    };
+    </script>
+    <script src="{% static 'waimai/session_guard.js' %}?v=6"></script>
+    {% endif %}
+    <script src="{% static 'waimai/seller_panel_fold.js' %}?v=7"></script>
+    <script src="{% static 'waimai/panel_refresh.js' %}?v=20"></script>
+    <script src="{% static 'waimai/home_block_editor.js' %}?v=2"></script>
 </body>
 </html>

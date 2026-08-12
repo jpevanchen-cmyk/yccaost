@@ -57,7 +57,7 @@ def _session_guard_channel_for_path(path: str, *, has_eco: bool, has_work: bool)
         return 'work'
     if path.startswith('/waiter-home/'):
         return 'work'
-    if path.startswith('/seller-panel') or path.startswith('/accounts/'):
+    if path.startswith('/seller-panel') or path.startswith('/accounts/') or path.startswith('/server-settings'):
         return 'eco'
     if path.startswith('/order-history') or path.startswith('/order/') or path.startswith('/pay/'):
         return 'eco'

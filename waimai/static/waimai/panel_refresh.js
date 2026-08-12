@@ -22,6 +22,8 @@
     var SELLER_CASH_MANAGE_PANEL_ID = 'cash-manage-panel-body';
     var PANEL_WAIT_SPIN_MS = 5000;
     var PANEL_TIMEOUT_MS = 20000;
+    /* 带文件上传：放宽等待（慢网传安装包可达数分钟）；与会话忙任务配合 */
+    var PANEL_UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
     var PANEL_TIMEOUT_MESSAGE = '服务器可能走丢了，请检查网络';
     var loadingOverlay = null;
     /* Panel 等待锁屏计数：并发请求时只拦一次滚动、最后一次解锁才放开 */
@@ -113,31 +115,80 @@
         return loadingOverlay;
     }
 
-    /** 等待服务器 HTTP 响应：0 秒起锁屏；5 秒显示转圈；20 秒 Abort（非等 WiFi/online） */
-    function beginPanelWait() {
+    function formDataHasUploadFiles(fd) {
+        if (!fd || typeof FormData === 'undefined' || !(fd instanceof FormData)) return false;
+        try {
+            var it = fd.entries();
+            var step = it.next();
+            while (!step.done) {
+                var val = step.value[1];
+                if (typeof File !== 'undefined' && val instanceof File && val.size > 0) {
+                    return true;
+                }
+                step = it.next();
+            }
+        } catch (e) { /* 旧环境忽略 */ }
+        return false;
+    }
+
+    function formatUploadBytes(n) {
+        var x = Number(n) || 0;
+        if (x < 1024) return Math.round(x) + ' B';
+        if (x < 1024 * 1024) return (x / 1024).toFixed(1) + ' KB';
+        return (x / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function formatUploadEta(seconds) {
+        var s = Math.max(0, Math.round(Number(seconds) || 0));
+        if (s < 60) return s + ' 秒';
+        var m = Math.floor(s / 60);
+        var r = s % 60;
+        if (m < 60) return m + ' 分' + (r ? r + ' 秒' : '');
+        var h = Math.floor(m / 60);
+        return h + ' 小时' + (m % 60) + ' 分';
+    }
+
+    /** 等待服务器 HTTP 响应：0 秒起锁屏；普通请求 5 秒转圈、20 秒 Abort；上传则显示进度并放宽超时 */
+    function beginPanelWait(opts) {
+        opts = opts || {};
+        var uploadMode = !!opts.uploadMode;
+        var timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : PANEL_TIMEOUT_MS;
         var overlay = ensureLoadingOverlay();
+        var textEl = overlay.querySelector('.yc-panel-loading-text');
         var slowTimer = null;
         var timeoutTimer = null;
         var abortController = new AbortController();
+
+        function setProgressText(text) {
+            if (textEl) textEl.textContent = text || '';
+        }
 
         lockPanelWaitScroll();
         overlay.hidden = false;
         overlay.classList.add('is-blocking');
         overlay.classList.remove('is-visible');
+        setProgressText(uploadMode ? '正在上传文件…' : '正在读取数据…');
 
-        slowTimer = setTimeout(function () {
+        if (uploadMode) {
             overlay.classList.add('is-visible');
-        }, PANEL_WAIT_SPIN_MS);
+        } else {
+            slowTimer = setTimeout(function () {
+                overlay.classList.add('is-visible');
+            }, PANEL_WAIT_SPIN_MS);
+        }
         timeoutTimer = setTimeout(function () {
             abortController.abort();
-        }, PANEL_TIMEOUT_MS);
+        }, timeoutMs);
         return {
             signal: abortController.signal,
+            uploadMode: uploadMode,
+            setProgressText: setProgressText,
             finish: function () {
                 clearTimeout(slowTimer);
                 clearTimeout(timeoutTimer);
                 overlay.hidden = true;
                 overlay.classList.remove('is-blocking', 'is-visible');
+                setProgressText('正在读取数据…');
                 unlockPanelWaitScroll();
             },
             errorMessage: function (err) {
@@ -150,17 +201,126 @@
         };
     }
 
+    function panelXhrWithUploadProgress(url, options, wait) {
+        return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            var headers = options.headers || {};
+            var lastLoaded = 0;
+            var lastTs = Date.now();
+            var busyStarted = false;
+
+            function startBusy() {
+                if (busyStarted) return;
+                busyStarted = true;
+                if (window.YcSessionGuard && window.YcSessionGuard.beginBusy) {
+                    window.YcSessionGuard.beginBusy();
+                }
+            }
+
+            function stopBusy() {
+                if (!busyStarted) return;
+                busyStarted = false;
+                if (window.YcSessionGuard && window.YcSessionGuard.endBusy) {
+                    window.YcSessionGuard.endBusy();
+                }
+            }
+
+            xhr.open(options.method || 'POST', url, true);
+            xhr.withCredentials = true;
+            Object.keys(headers).forEach(function (k) {
+                if (!k) return;
+                /* multipart 边界须由浏览器自动带，勿手写 Content-Type */
+                if (String(k).toLowerCase() === 'content-type') return;
+                try { xhr.setRequestHeader(k, headers[k]); } catch (e) { /* 忽略 */ }
+            });
+
+            xhr.upload.onprogress = function (ev) {
+                startBusy();
+                if (window.YcSessionGuard && window.YcSessionGuard.pingBusy) {
+                    window.YcSessionGuard.pingBusy();
+                }
+                if (!ev.lengthComputable || !ev.total) {
+                    wait.setProgressText('正在上传文件…已传 ' + formatUploadBytes(ev.loaded));
+                    return;
+                }
+                var pct = Math.min(99, Math.round((ev.loaded / ev.total) * 100));
+                var now = Date.now();
+                var dt = (now - lastTs) / 1000;
+                var speed = dt > 0.25 ? (ev.loaded - lastLoaded) / dt : 0;
+                var remain = speed > 1 ? (ev.total - ev.loaded) / speed : 0;
+                var line = '上传中 ' + pct + '%（' + formatUploadBytes(ev.loaded)
+                    + ' / ' + formatUploadBytes(ev.total) + '）';
+                if (speed > 1) {
+                    line += ' · 约 ' + formatUploadBytes(speed) + '/秒 · 大约还要 ' + formatUploadEta(remain);
+                }
+                wait.setProgressText(line);
+                lastLoaded = ev.loaded;
+                lastTs = now;
+            };
+
+            xhr.upload.onload = function () {
+                wait.setProgressText('文件已传完，正在保存…');
+            };
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) return;
+                stopBusy();
+                if (wait.signal && wait.signal.aborted) {
+                    reject(Object.assign(new Error(PANEL_TIMEOUT_MESSAGE), { name: 'AbortError' }));
+                    return;
+                }
+                resolve({
+                    ok: xhr.status >= 200 && xhr.status < 300,
+                    status: xhr.status,
+                    text: function () { return Promise.resolve(xhr.responseText || ''); },
+                    json: function () {
+                        try {
+                            return Promise.resolve(JSON.parse(xhr.responseText || '{}'));
+                        } catch (e) {
+                            return Promise.reject(e);
+                        }
+                    },
+                });
+            };
+
+            xhr.onerror = function () {
+                stopBusy();
+                reject(new Error('Failed to fetch'));
+            };
+
+            xhr.onabort = function () {
+                stopBusy();
+                reject(Object.assign(new Error(PANEL_TIMEOUT_MESSAGE), { name: 'AbortError' }));
+            };
+
+            if (wait.signal) {
+                wait.signal.addEventListener('abort', function () {
+                    try { xhr.abort(); } catch (e) { /* 忽略 */ }
+                });
+            }
+
+            startBusy();
+            xhr.send(options.body || null);
+        });
+    }
+
     function panelFetch(url, options) {
         options = options || {};
-        var wait = beginPanelWait();
-        var fetchOpts = {
-            method: options.method || 'GET',
-            credentials: 'same-origin',
-            headers: options.headers || {},
-            signal: wait.signal,
-        };
-        if (options.body) fetchOpts.body = options.body;
-        return fetch(url, fetchOpts)
+        var hasFiles = formDataHasUploadFiles(options.body);
+        var wait = beginPanelWait({
+            uploadMode: hasFiles,
+            timeoutMs: hasFiles ? PANEL_UPLOAD_TIMEOUT_MS : PANEL_TIMEOUT_MS,
+        });
+        var run = hasFiles
+            ? panelXhrWithUploadProgress(url, options, wait)
+            : fetch(url, {
+                method: options.method || 'GET',
+                credentials: 'same-origin',
+                headers: options.headers || {},
+                signal: wait.signal,
+                body: options.body,
+            });
+        return run
             .then(function (response) {
                 wait.finish();
                 return response;

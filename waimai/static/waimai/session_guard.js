@@ -4,6 +4,7 @@
  * 2. 关闭单个标签不主动退出，避免同一设备其它标签被误踢
  * 3. 约 5 分钟无报平安则失效（心跳 + 服务端会话寿命）
  * 4. 超过 15 分钟无操作则退出
+ * 5. 大文件上传等「忙任务」期间：持续算有操作并加紧报平安，不按空闲踢人
  */
 (function () {
     var cfg = window.YC_SESSION_GUARD;
@@ -20,6 +21,9 @@
     var warnOnLeave = true;
     var allowUnloadLogout = false;
     var unloadBeaconSent = false;
+    var busyDepth = 0;
+    var busyTimer = null;
+    var BUSY_HEARTBEAT_MS = 10000;
 
     function getCookie(name) {
         var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
@@ -84,8 +88,35 @@
         lastActivity = Date.now();
     }
 
+    function beginBusy() {
+        busyDepth += 1;
+        markActivity();
+        heartbeat(true);
+        if (!busyTimer) {
+            busyTimer = setInterval(function () {
+                markActivity();
+                heartbeat(true);
+            }, BUSY_HEARTBEAT_MS);
+        }
+    }
+
+    function endBusy() {
+        busyDepth = Math.max(0, busyDepth - 1);
+        if (busyDepth === 0 && busyTimer) {
+            clearInterval(busyTimer);
+            busyTimer = null;
+        }
+        markActivity();
+    }
+
+    function pingBusy() {
+        if (busyDepth <= 0) return;
+        markActivity();
+    }
+
     function checkIdle() {
         if (leaving) return;
+        if (busyDepth > 0) return;
         if (Date.now() - lastActivity >= idleMs) {
             leaving = true;
             warnOnLeave = false;
@@ -147,4 +178,11 @@
     heartbeat(true);
     setInterval(function () { heartbeat(false); }, heartbeatMs);
     setInterval(checkIdle, 15000);
+
+    window.YcSessionGuard = {
+        beginBusy: beginBusy,
+        endBusy: endBusy,
+        pingBusy: pingBusy,
+        isBusy: function () { return busyDepth > 0; },
+    };
 })();
