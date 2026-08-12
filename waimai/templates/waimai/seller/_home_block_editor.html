@@ -46,6 +46,25 @@
             <p class="card-meta" style="margin:8px 0 0;">名录块自带搜索与店铺列表；一般不用配图和附加链接。</p>
             <input type="hidden" name="link_url" value="{{ block.link_url }}">
             <input type="hidden" name="link_label" value="{{ block.link_label }}">
+            {% elif block.block_type == 'file_download' %}
+            <label class="form-label">标题</label>
+            <input class="form-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="例如：下载本地营业安装包">
+            <label class="form-label">介绍</label>
+            <textarea class="form-input home-block-body-input" name="body" rows="4" placeholder="说明这段下载是干什么的">{{ block.body }}</textarea>
+            <label class="form-label">按钮文字</label>
+            <input class="form-input" type="text" name="link_label" value="{{ block.link_label }}" maxlength="32" placeholder="留空则显示「下载文件」">
+            <div class="home-block-media-box" style="margin-top:12px;">
+                <p class="form-label" style="margin-bottom:6px;">下载文件</p>
+                <p class="card-meta" style="margin:0 0 10px;">支持 exe / zip / pdf / msi / 7z / rar，单文件不超过 80 MB。未上传时主页不显示下载按钮。</p>
+                {% if block.has_download_file and block.download_file %}
+                <p class="card-meta" style="margin:0 0 8px;">当前文件：{{ block.download_file.name }}</p>
+                <label class="form-check" style="margin:0 0 10px;">
+                    <input type="checkbox" name="clear_block_download" value="1"> 清除已上传的文件
+                </label>
+                {% endif %}
+                <input class="form-input" type="file" name="block_download" accept=".exe,.zip,.pdf,.msi,.7z,.rar">
+            </div>
+            <input type="hidden" name="link_url" value="">
             {% else %}
             <label class="form-label">标题</label>
             <input class="form-input home-block-title-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="显示在主页上的大标题" data-yc-tour="home-block-title">
@@ -98,8 +117,8 @@
         <button type="submit" class="btn btn-primary" style="margin-top:12px;" data-yc-tour="home-block-save">保存本块</button>
     </div>
 </form>
-{% if block.is_custom %}
-<form method="post" style="margin-top:8px;" onsubmit="return confirm('确定删除这块自定义积木吗？');" data-yc-panel="{{ home_blocks_panel_id|default:'home-page-blocks-panel' }}">
+{% if block.is_custom or block.is_download_block %}
+<form method="post" style="margin-top:8px;" onsubmit="return confirm('确定删除这块积木吗？');" data-yc-panel="{{ home_blocks_panel_id|default:'home-page-blocks-panel' }}">
     {% csrf_token %}
     <input type="hidden" name="{{ delete_block_action_name }}" value="1">
     <input type="hidden" name="block_id" value="{{ block.block_id }}">

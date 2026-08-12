@@ -22,7 +22,9 @@ def validate_compliance_icon_size(uploaded_file):
 MAX_HOME_BLOCK_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_USER_UPLOADED_PHOTOS = 100
 
-# 商品多图（A.11.11 · G1-2）：单商品张数上限在 product_image_helpers 定义
+# 服务器主页「文件下载」积木：单文件上限（安装包约十几 MB，留余量）
+MAX_HOME_BLOCK_DOWNLOAD_BYTES = 80 * 1024 * 1024
+ALLOWED_HOME_BLOCK_DOWNLOAD_EXT = frozenset({'exe', 'zip', 'pdf', 'msi', '7z', 'rar'})
 
 
 def validate_home_block_image_size(uploaded_file):
@@ -31,12 +33,28 @@ def validate_home_block_image_size(uploaded_file):
         raise ValidationError('图片不能超过 5 MB，请压缩后再上传。')
 
 
+def validate_home_block_download_size(uploaded_file):
+    """下载积木附件不超过 80 MB。"""
+    if uploaded_file.size > MAX_HOME_BLOCK_DOWNLOAD_BYTES:
+        raise ValidationError('下载文件不能超过 80 MB，请换更小的文件或压缩后再上传。')
+
+
 def home_block_image_upload_to(instance, filename):
     """按积木 ID 存图，同块再次上传会覆盖旧文件名。"""
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'jpg'
     if ext not in ('png', 'jpg', 'jpeg', 'webp', 'gif'):
         ext = 'jpg'
     return f'home_blocks/{instance.block_id}.{ext}'
+
+
+def home_block_download_upload_to(instance, filename):
+    """按积木 ID 存下载附件，尽量保留原扩展名。"""
+    raw = (filename or 'file.bin').replace('\\', '/').rsplit('/', 1)[-1]
+    ext = raw.rsplit('.', 1)[-1].lower() if '.' in raw else 'bin'
+    if ext not in ALLOWED_HOME_BLOCK_DOWNLOAD_EXT:
+        ext = 'bin'
+    safe_stem = re.sub(r'[^\w\u4e00-\u9fff\-]+', '_', raw.rsplit('.', 1)[0])[:80] or 'file'
+    return f'home_downloads/{instance.block_id}/{safe_stem}.{ext}'
 
 
 # ============================================
@@ -420,6 +438,15 @@ class ServerHomeBlock(models.Model):
     link_label = models.CharField(
         max_length=32, blank=True, default='', verbose_name='附加链接显示文字',
     )
+    download_file = models.FileField(
+        upload_to=home_block_download_upload_to,
+        blank=True,
+        verbose_name='下载附件',
+        validators=[
+            FileExtensionValidator(allowed_extensions=sorted(ALLOWED_HOME_BLOCK_DOWNLOAD_EXT)),
+            validate_home_block_download_size,
+        ],
+    )
     nav_label = models.CharField(max_length=32, blank=True, default='', verbose_name='导航短名')
     is_enabled = models.BooleanField(default=False, db_index=True, verbose_name='是否启用')
     show_in_nav = models.BooleanField(default=True, verbose_name='是否出现在吸顶导航')
@@ -434,13 +461,34 @@ class ServerHomeBlock(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=['home_page', 'block_type'],
-                condition=~models.Q(block_type='custom'),
+                condition=~models.Q(block_type__in=['custom', 'file_download']),
                 name='uniq_server_home_block_type_non_custom',
             ),
         ]
 
     def __str__(self):
         return f'server:{self.block_type}:{self.title}'
+
+
+class HomeBlockDownloadHit(models.Model):
+    """服务器主页「文件下载」积木：每次点击下载记账（真源，不靠直链 media）"""
+
+    hit_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='记录ID')
+    block_id = models.UUIDField(db_index=True, verbose_name='积木块ID')
+    block_title = models.CharField(max_length=120, blank=True, default='', verbose_name='标题快照')
+    original_filename = models.CharField(max_length=255, blank=True, default='', verbose_name='文件名快照')
+    ip = models.GenericIPAddressField(blank=True, null=True, db_index=True, verbose_name='IP')
+    user_agent = models.CharField(max_length=300, blank=True, default='', verbose_name='浏览器标识')
+    clicked_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='点击时间')
+
+    class Meta:
+        db_table = 'home_block_download_hit'
+        ordering = ['-clicked_at']
+        verbose_name = '主页下载点击'
+        verbose_name_plural = '主页下载点击'
+
+    def __str__(self):
+        return f'{self.block_title}:{self.original_filename}:{self.clicked_at}'
 
 
 class UserUploadedPhoto(models.Model):

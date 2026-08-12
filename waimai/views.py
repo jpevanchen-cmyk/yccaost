@@ -250,6 +250,13 @@ def home(request):
     return render(request, 'waimai/showcase_home.html', context)
 
 
+def home_block_download(request, block_id):
+    """服务器主页文件下载积木：先记账再发文件"""
+    from .home_block_download_helpers import serve_home_block_download
+
+    return serve_home_block_download(request, block_id)
+
+
 def directory(request):
     """旧名录地址：兼容跳到服务器主页（名录为服务器主页积木）"""
     return redirect('home')

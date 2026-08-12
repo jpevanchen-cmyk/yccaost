@@ -1,0 +1,7 @@
+{# 主页积木正文共用展示：按编辑框输入的换行显示；过长由 showcase_home.js 裁切 #}
+{% if body %}
+<div class="showcase-body-wrap">
+    <div class="showcase-body">{{ body }}</div>
+    <span class="showcase-body-more" hidden>点击阅读全文</span>
+</div>
+{% endif %}

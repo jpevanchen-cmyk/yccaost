@@ -109,41 +109,15 @@ owner_compliance = server_settings_compliance
 @_manager_required
 def server_settings_home_page(request):
     """编辑服务器主页积木"""
-    from .home_block_media import photo_quota_hint
     from .home_page_handlers import handle_server_home_page_post
-    from .home_page_helpers import (
-        MAX_SERVER_CUSTOM_BLOCKS,
-        count_server_custom_blocks,
-        ensure_server_home_page,
-        list_server_preset_specs,
-    )
-    from .home_page_panel_helpers import (
-        SERVER_HOME_BLOCKS_PANEL_ID,
-        build_server_home_blocks,
-    )
+    from .home_page_panel_helpers import _server_home_common_context
 
     if request.method == 'POST':
         response = handle_server_home_page_post(request)
         if response is not None:
             return response
 
-    page = ensure_server_home_page()
-    blocks = build_server_home_blocks()
-    custom_count = count_server_custom_blocks(page)
-    ctx = {
-        'home_page': page,
-        'home_blocks': blocks,
-        'preset_specs': list_server_preset_specs(),
-        'custom_block_count': custom_count,
-        'max_custom_blocks': MAX_SERVER_CUSTOM_BLOCKS,
-        'can_add_custom_block': custom_count < MAX_SERVER_CUSTOM_BLOCKS,
-        'section': 'server_home',
-        'preview_url': '/',
-        'save_block_action_name': 'save_server_home_block',
-        'delete_block_action_name': 'delete_server_home_block',
-        'home_blocks_panel_id': SERVER_HOME_BLOCKS_PANEL_ID,
-    }
-    ctx.update(photo_quota_hint(request.user))
+    ctx = _server_home_common_context(request)
     return render(request, 'waimai/owner/server_home.html', ctx)
 
 

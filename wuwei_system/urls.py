@@ -56,6 +56,11 @@ urlpatterns = [
         name='server_settings_operation_lock',
     ),
     path('server-settings/home/', views_owner.server_settings_home_page, name='server_settings_home_page'),
+    path(
+        'home-download/<uuid:block_id>/',
+        views.home_block_download,
+        name='home_block_download',
+    ),
     path('server-settings/guestbook/', views_owner.server_settings_guestbook, name='server_settings_guestbook'),
     path(
         'server-settings/guestbook/<str:public_code>/',

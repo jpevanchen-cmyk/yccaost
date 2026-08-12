@@ -9,13 +9,16 @@ from .home_block_media import block_display_image_src, photo_quota_hint
 from .home_page_helpers import (
     BLOCK_CUSTOM,
     BLOCK_DIRECTORY,
+    BLOCK_FILE_DOWNLOAD,
     BLOCK_ORDER_CTA,
     MAX_SERVER_CUSTOM_BLOCKS,
+    MAX_SERVER_DOWNLOAD_BLOCKS,
     MAX_SHOP_CUSTOM_BLOCKS,
     SERVER_ONLY_BLOCK_TYPES,
     SHOP_LEGACY_BLOCK_TYPES,
     block_dom_id,
     count_server_custom_blocks,
+    count_server_download_blocks,
     count_shop_custom_blocks,
     ensure_home_page_for_seller,
     ensure_server_home_page,
@@ -34,6 +37,7 @@ def _enrich_shop_block(block) -> None:
     block.spec = get_shop_block_spec(block.block_type)
     block.dom_id = block_dom_id(block)
     block.is_custom = block.block_type == BLOCK_CUSTOM
+    block.is_download_block = False
     if block.is_custom:
         block.fold_title = (block.title or '').strip() or '自定义积木'
     else:
@@ -43,15 +47,32 @@ def _enrich_shop_block(block) -> None:
 
 
 def _enrich_server_block(block) -> None:
+    from .home_block_download_helpers import (
+        block_download_button_label,
+        block_download_url,
+        block_has_download_file,
+    )
+
     block.spec = get_server_block_spec(block.block_type)
     block.dom_id = block_dom_id(block)
     block.is_custom = block.block_type == BLOCK_CUSTOM
+    block.is_download_block = block.block_type == BLOCK_FILE_DOWNLOAD
     block.display_image_src = block_display_image_src(block)
-    block.shows_rich_media = block.block_type not in (BLOCK_ORDER_CTA, BLOCK_DIRECTORY)
+    block.shows_rich_media = block.block_type not in (
+        BLOCK_ORDER_CTA, BLOCK_DIRECTORY, BLOCK_FILE_DOWNLOAD,
+    )
     if block.is_custom:
         block.fold_title = (block.title or '').strip() or '自定义积木'
+    elif block.is_download_block:
+        block.fold_title = (block.title or '').strip() or '文件下载'
+        block.has_download_file = block_has_download_file(block)
+        block.download_url = block_download_url(block) if block.has_download_file else ''
+        block.download_button_label = block_download_button_label(block)
     else:
         block.fold_title = block.spec.label if block.spec else block.block_type
+        block.has_download_file = False
+        block.download_url = ''
+        block.download_button_label = ''
 
 
 def build_shop_home_blocks(request: HttpRequest, seller_id: str, shop_profile=None) -> list:
@@ -95,6 +116,7 @@ def _server_home_common_context(request: HttpRequest) -> dict:
     page = ensure_server_home_page()
     blocks = build_server_home_blocks()
     custom_count = count_server_custom_blocks(page)
+    download_count = count_server_download_blocks(page)
     ctx = {
         'home_page': page,
         'home_blocks': blocks,
@@ -102,6 +124,9 @@ def _server_home_common_context(request: HttpRequest) -> dict:
         'custom_block_count': custom_count,
         'max_custom_blocks': MAX_SERVER_CUSTOM_BLOCKS,
         'can_add_custom_block': custom_count < MAX_SERVER_CUSTOM_BLOCKS,
+        'download_block_count': download_count,
+        'max_download_blocks': MAX_SERVER_DOWNLOAD_BLOCKS,
+        'can_add_download_block': download_count < MAX_SERVER_DOWNLOAD_BLOCKS,
         'section': 'server_home',
         'preview_url': '/',
         'save_block_action_name': 'save_server_home_block',

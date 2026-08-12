@@ -40,13 +40,13 @@
     {% if block.block_type == 'order_cta' %}
         <h2 class="showcase-block-title">{{ block.title|default:"进入店铺" }}</h2>
         <div class="showcase-block-main">
-        {% if block.body %}<p class="card-meta" style="margin-bottom:12px;">{{ block.body }}</p>{% endif %}
+        {% include 'waimai/_showcase_block_body.html' with body=block.body only %}
         <a class="btn btn-orange btn-block" href="{{ order_url }}">{{ block.title|default:"进入店铺" }}</a>
         </div>
     {% elif block.block_type == 'directory' %}
         <h2 class="showcase-block-title">{{ block.title|default:"店铺名录" }}</h2>
         <div class="showcase-block-main">
-        {% if block.body %}<p class="card-meta" style="margin-bottom:12px;">{{ block.body }}</p>{% endif %}
+        {% include 'waimai/_showcase_block_body.html' with body=block.body only %}
         <form method="get" action="/" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
             <input class="form-input" type="search" name="q" value="{{ directory_query }}" placeholder="按店名或地址搜索" style="flex:1;min-width:160px;">
             <button type="submit" class="btn btn-primary">搜索</button>
@@ -75,6 +75,14 @@
         </div>
     {% elif block.block_type == 'contact_us' %}
         {% include 'waimai/guestbook/contact_us_block.html' with block=block %}
+    {% elif block.block_type == 'file_download' %}
+        <h2 class="showcase-block-title">{{ block.title|default:"下载" }}</h2>
+        <div class="showcase-block-main">
+        {% include 'waimai/_showcase_block_body.html' with body=block.body only %}
+        {% if block.has_download_file and block.download_url %}
+        <a class="btn btn-orange btn-block" href="{{ block.download_url }}" data-yc-download="1">{{ block.download_button_label }}</a>
+        {% endif %}
+        </div>
     {% else %}
         <h2 class="showcase-block-title">
             {{ block.title }}{% if block.link_url %}<a class="showcase-block-title-link" href="{{ block.link_url }}" rel="noopener" target="_blank">{{ block.display_link_label }}</a>{% endif %}
@@ -83,12 +91,7 @@
         {% if block.display_image_src %}
         <img class="showcase-block-img" src="{{ block.display_image_src }}" alt="">
         {% endif %}
-        {% if block.body %}
-        <div class="showcase-body-wrap">
-            <div class="showcase-body">{{ block.body }}</div>
-            <span class="showcase-body-more" hidden>点击阅读全文</span>
-        </div>
-        {% endif %}
+        {% include 'waimai/_showcase_block_body.html' with body=block.body only %}
         </div>
         {% if block.display_image_src %}
         <div class="showcase-block-actions">

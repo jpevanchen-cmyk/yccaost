@@ -19,6 +19,7 @@ BLOCK_ORDER_CTA = 'order_cta'
 BLOCK_DIRECTORY = 'directory'
 BLOCK_YECAO_INTRO = 'yecao_intro'
 BLOCK_CONTACT_US = 'contact_us'
+BLOCK_FILE_DOWNLOAD = 'file_download'
 BLOCK_CUSTOM = 'custom'
 
 ORDER_NAV_TO_SHOP = 'to_shop'
@@ -27,6 +28,7 @@ ORDER_NAV_TO_CTA = 'to_cta_block'
 # 第一版：自定义积木数量上限（防乱折腾）
 MAX_SHOP_CUSTOM_BLOCKS = 10
 MAX_SERVER_CUSTOM_BLOCKS = 10
+MAX_SERVER_DOWNLOAD_BLOCKS = 5
 
 # 店铺主页：店主后台可编辑的预设块（仅三块）
 SHOP_EDITOR_PRESET_TYPES = frozenset({BLOCK_INTRO, BLOCK_NOTICE, BLOCK_ORDER_CTA})
@@ -36,7 +38,7 @@ SHOP_EDITABLE_BLOCK_TYPES = frozenset(SHOP_EDITOR_PRESET_TYPES | {BLOCK_CUSTOM})
 SHOP_LEGACY_BLOCK_TYPES = frozenset({BLOCK_HERO, BLOCK_HOURS, BLOCK_ADDRESS})
 SHOP_AUTO_BLOCK_TYPES = SHOP_LEGACY_BLOCK_TYPES
 # 服务器主页专用（店主后台不出现）
-SERVER_ONLY_BLOCK_TYPES = frozenset({BLOCK_DIRECTORY, BLOCK_YECAO_INTRO})
+SERVER_ONLY_BLOCK_TYPES = frozenset({BLOCK_DIRECTORY, BLOCK_YECAO_INTRO, BLOCK_FILE_DOWNLOAD})
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,11 @@ SHOP_PRESET_SPECS: tuple[BlockTypeSpec, ...] = (
 CUSTOM_BLOCK_SPEC = BlockTypeSpec(
     BLOCK_CUSTOM, '自定义积木', '更多', True, True, 200, True,
     '可自由填写标题、正文、图片与链接；第一版每店最多 10 块', 'both',
+)
+
+FILE_DOWNLOAD_BLOCK_SPEC = BlockTypeSpec(
+    BLOCK_FILE_DOWNLOAD, '文件下载', '下载', True, False, 55, True,
+    '标题+介绍+上传一个文件；未上传文件时主页不显示下载按钮。可添加多块。', 'server',
 )
 
 SERVER_PRESET_SPECS: tuple[BlockTypeSpec, ...] = (
@@ -110,6 +117,8 @@ def get_shop_block_spec(code: str) -> BlockTypeSpec | None:
 def get_server_block_spec(code: str) -> BlockTypeSpec | None:
     if code == BLOCK_CUSTOM:
         return CUSTOM_BLOCK_SPEC
+    if code == BLOCK_FILE_DOWNLOAD:
+        return FILE_DOWNLOAD_BLOCK_SPEC
     from waimai.server_plugin_runtime.registry import get_server_block_spec as _plugin_spec
 
     plugin = _plugin_spec(code)
@@ -137,8 +146,8 @@ def list_preset_specs() -> list[BlockTypeSpec]:
 
 
 def block_dom_id(block) -> str:
-    """前台锚点与卡片 id（自定义块用 UUID，预设块用类型名）"""
-    if block.block_type == BLOCK_CUSTOM:
+    """前台锚点与卡片 id（自定义块、下载块用 UUID，其它预设块用类型名）"""
+    if block.block_type in (BLOCK_CUSTOM, BLOCK_FILE_DOWNLOAD):
         return f'block-{block.block_id}'
     return f'block-{block.block_type}'
 
@@ -149,6 +158,10 @@ def count_shop_custom_blocks(page) -> int:
 
 def count_server_custom_blocks(page) -> int:
     return page.blocks.filter(block_type=BLOCK_CUSTOM).count()
+
+
+def count_server_download_blocks(page) -> int:
+    return page.blocks.filter(block_type=BLOCK_FILE_DOWNLOAD).count()
 
 
 def _next_custom_sort_order(page) -> int:
@@ -190,6 +203,25 @@ def add_server_custom_block(page):
         show_in_nav=False,
         sort_order=_next_custom_sort_order(page),
         nav_label='更多',
+    )
+
+
+@transaction.atomic
+def add_server_download_block(page):
+    """新增一块服务器「文件下载」积木；达上限返回 None"""
+    if count_server_download_blocks(page) >= MAX_SERVER_DOWNLOAD_BLOCKS:
+        return None
+    n = count_server_download_blocks(page) + 1
+    return page.blocks.create(
+        block_id=uuid.uuid4(),
+        block_type=BLOCK_FILE_DOWNLOAD,
+        title=f'下载文件 {n}',
+        body='点击下方按钮下载。',
+        is_enabled=True,
+        show_in_nav=False,
+        sort_order=_next_custom_sort_order(page),
+        nav_label='下载',
+        link_label='下载文件',
     )
 
 
@@ -351,6 +383,11 @@ def resolve_entry_home_page():
 
 def _attach_block_meta(blocks, get_spec_fn):
     """给块挂上说明书、前台锚点与展示用图片地址"""
+    from .home_block_download_helpers import (
+        block_download_button_label,
+        block_download_url,
+        block_has_download_file,
+    )
     from .home_block_media import block_display_image_src, block_display_link_label
 
     for b in blocks:
@@ -358,8 +395,18 @@ def _attach_block_meta(blocks, get_spec_fn):
         b.dom_id = block_dom_id(b)
         b.display_image_src = block_display_image_src(b)
         b.display_link_label = block_display_link_label(b)
-        # 与前台 showcase 一致：进入店铺/名录块不用配图与附加链接
-        b.shows_rich_media = b.block_type not in (BLOCK_ORDER_CTA, BLOCK_DIRECTORY)
+        # 与前台 showcase 一致：进入店铺/名录/下载块不用配图与附加链接那套
+        b.shows_rich_media = b.block_type not in (
+            BLOCK_ORDER_CTA, BLOCK_DIRECTORY, BLOCK_FILE_DOWNLOAD,
+        )
+        if b.block_type == BLOCK_FILE_DOWNLOAD:
+            b.has_download_file = block_has_download_file(b)
+            b.download_url = block_download_url(b) if b.has_download_file else ''
+            b.download_button_label = block_download_button_label(b)
+        else:
+            b.has_download_file = False
+            b.download_url = ''
+            b.download_button_label = ''
 
 
 def build_shop_home_view_context(page, request=None) -> dict:

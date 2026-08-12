@@ -2,9 +2,25 @@
 {% for block in home_blocks %}
 {% include 'waimai/seller/_panel_fold.html' with fold_id=block.dom_id fold_title=block.fold_title %}
     {% if block.is_custom %}<p class="card-meta" style="margin:0 0 8px;">自定义积木</p>{% endif %}
+    {% if block.is_download_block %}<p class="card-meta" style="margin:0 0 8px;">文件下载积木（先记账再发文件）</p>{% endif %}
     {% include 'waimai/seller/_home_block_editor.html' %}
 {% include 'waimai/seller/_panel_fold_end.html' %}
 {% endfor %}
+
+{% include 'waimai/seller/_panel_fold.html' with fold_id='download-blocks-toolbar' fold_title='➕ 文件下载积木（添加）' %}
+    <p class="card-meta" style="margin:0 0 10px;">
+        已用 {{ download_block_count }} / {{ max_download_blocks }} 块。填标题、介绍并上传文件后，主页才显示下载按钮。
+    </p>
+    {% if can_add_download_block %}
+    <form method="post" style="display:inline;" data-yc-panel="{{ home_blocks_panel_id }}">
+        {% csrf_token %}
+        <input type="hidden" name="add_server_download_block" value="1">
+        <button type="submit" class="btn btn-sm btn-outline">+ 添加一块文件下载</button>
+    </form>
+    {% else %}
+    <p class="card-meta" style="margin:0;">已达上限，请删除不需要的块后再添加。</p>
+    {% endif %}
+{% include 'waimai/seller/_panel_fold_end.html' %}
 
 {% include 'waimai/seller/_panel_fold.html' with fold_id='custom-blocks-toolbar' fold_title='➕ 自定义积木（添加）' %}
     <p class="card-meta" style="margin:0 0 10px;">

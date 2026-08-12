@@ -7,12 +7,16 @@ from .home_block_media import (
     apply_home_block_image_from_post,
     release_block_photo_quota,
 )
+from .home_block_download_helpers import apply_home_block_download_from_post
 from .home_page_helpers import (
     BLOCK_CUSTOM,
+    BLOCK_FILE_DOWNLOAD,
     MAX_SERVER_CUSTOM_BLOCKS,
+    MAX_SERVER_DOWNLOAD_BLOCKS,
     MAX_SHOP_CUSTOM_BLOCKS,
     SHOP_EDITABLE_BLOCK_TYPES,
     add_server_custom_block,
+    add_server_download_block,
     add_shop_custom_block,
     block_dom_id,
     ensure_home_page_for_seller,
@@ -226,17 +230,50 @@ def handle_server_home_page_post(request):
             return panel_resp
         return redirect_with_anchor(reverse('server_settings_home_page'), scroll)
 
+    if 'add_server_download_block' in request.POST:
+        block = add_server_download_block(page)
+        if block is None:
+            msg = f'文件下载积木最多 {MAX_SERVER_DOWNLOAD_BLOCKS} 块，无法再添加'
+            panel_resp = respond_home_panel(
+                request, panel_id=SERVER_HOME_BLOCKS_PANEL_ID, ok=False, message=msg,
+            )
+            if panel_resp is not None:
+                return panel_resp
+            messages.error(request, msg)
+            return redirect('server_settings_home_page')
+        msg = '已添加一块文件下载积木，请上传文件后保存'
+        scroll = block_dom_id(block)
+        panel_resp = respond_home_panel(
+            request,
+            panel_id=SERVER_HOME_BLOCKS_PANEL_ID,
+            ok=True,
+            message=msg,
+            html=render_server_home_blocks_panel_html(request),
+            scroll_to=scroll,
+        )
+        if panel_resp is not None:
+            return panel_resp
+        return redirect_with_anchor(reverse('server_settings_home_page'), scroll)
+
     if 'delete_server_home_block' in request.POST:
         block_id = (request.POST.get('block_id') or '').strip()
         block = page.blocks.filter(block_id=block_id).first()
         if not block:
             msg, ok = '找不到该积木块', False
-        elif block.block_type != BLOCK_CUSTOM:
+        elif block.block_type not in (BLOCK_CUSTOM, BLOCK_FILE_DOWNLOAD):
             msg, ok = '预设积木不能删除，只能关闭显示', False
         else:
+            was_download = block.block_type == BLOCK_FILE_DOWNLOAD
             release_block_photo_quota(request.user, block, 'server_home_block')
+            if was_download and block.download_file:
+                try:
+                    block.download_file.delete(save=False)
+                except Exception:
+                    pass
             block.delete()
-            msg, ok = '已删除该自定义积木', True
+            msg, ok = (
+                ('已删除该下载积木', True) if was_download else ('已删除该自定义积木', True)
+            )
         panel_resp = respond_home_panel(
             request,
             panel_id=SERVER_HOME_BLOCKS_PANEL_ID,
@@ -268,8 +305,12 @@ def handle_server_home_page_post(request):
         block.title = (request.POST.get('title') or '')[:120]
         block.body = request.POST.get('body') or ''
         block.image_url = ''
-        block.link_url = (request.POST.get('link_url') or '').strip()[:500]
-        block.link_label = (request.POST.get('link_label') or '').strip()[:32]
+        if block.block_type == BLOCK_FILE_DOWNLOAD:
+            block.link_url = ''
+            block.link_label = (request.POST.get('link_label') or '').strip()[:32]
+        else:
+            block.link_url = (request.POST.get('link_url') or '').strip()[:500]
+            block.link_label = (request.POST.get('link_label') or '').strip()[:32]
         block.nav_label = (request.POST.get('nav_label') or '')[:32]
         block.is_enabled = request.POST.get('is_enabled') == '1'
         block.show_in_nav = request.POST.get('show_in_nav') == '1'
@@ -277,9 +318,12 @@ def handle_server_home_page_post(request):
             block.sort_order = max(0, int(request.POST.get('sort_order') or block.sort_order))
         except (TypeError, ValueError):
             pass
-        err = apply_home_block_image_from_post(
-            request.user, block, request, scope='server_home_block',
-        )
+        if block.block_type == BLOCK_FILE_DOWNLOAD:
+            err = apply_home_block_download_from_post(block, request)
+        else:
+            err = apply_home_block_image_from_post(
+                request.user, block, request, scope='server_home_block',
+            )
         if err:
             panel_resp = respond_home_panel(
                 request, panel_id=SERVER_HOME_BLOCKS_PANEL_ID, ok=False, message=err,

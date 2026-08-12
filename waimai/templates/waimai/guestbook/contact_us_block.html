@@ -2,9 +2,9 @@
 <h2 class="showcase-block-title">{{ block.title|default:"联系我们" }}</h2>
 <div class="showcase-block-main guestbook-block" id="guestbook-block-root">
     {% if guestbook_settings.block_intro %}
-    <div class="showcase-body-wrap"><div class="showcase-body">{{ guestbook_settings.block_intro|linebreaksbr }}</div></div>
-    {% elif block.body %}
-    <div class="showcase-body-wrap"><div class="showcase-body">{{ block.body|linebreaksbr }}</div></div>
+    {% include 'waimai/_showcase_block_body.html' with body=guestbook_settings.block_intro only %}
+    {% else %}
+    {% include 'waimai/_showcase_block_body.html' with body=block.body only %}
     {% endif %}
 
     <form id="guestbook-new-form" class="guestbook-form seller-form-stack" method="post" action="{% url 'guestbook_post' %}">
