@@ -41,21 +41,50 @@ def build_table_scan_absolute_url(base_url: str, seller_id: str, qr_token: str) 
     return f'{base_url.rstrip("/")}{build_table_scan_path(seller_id, qr_token)}'
 
 
-def _register_font(pdf: FPDF) -> str:
-    """加载中文字体；找不到则用西文字体（店名可能显示不全）"""
-    candidates = [
-        Path(settings.BASE_DIR) / 'waimai' / 'static' / 'waimai' / 'fonts' / 'NotoSansSC-Regular.ttf',
+class TableStickerFontError(Exception):
+    """没有能写中文的字体，不能生成桌贴 PDF。"""
+
+
+# 找不到中文字体时给店主看的话（不要再退回英文字体导致 500）
+_FONT_MISSING_HINT = (
+    '导出桌贴失败：这台服务器上没有能写中文的字体。'
+    '请联系维护者安装中文字体后再试。'
+)
+
+
+def _cjk_font_candidates() -> list[Path]:
+    """开发机 Windows 字体 + Linux 常见中文字体 + 项目内预留文件。"""
+    base = Path(settings.BASE_DIR)
+    return [
+        base / 'waimai' / 'static' / 'waimai' / 'fonts' / 'NotoSansSC-Regular.ttf',
+        base / 'waimai' / 'static' / 'waimai' / 'fonts' / 'NotoSansSC-Regular.otf',
         Path('C:/Windows/Fonts/simhei.ttf'),
         Path('C:/Windows/Fonts/msyh.ttf'),
+        Path('C:/Windows/Fonts/simsun.ttc'),
+        Path('/usr/share/fonts/truetype/wqy/wqy-microhei.ttc'),
+        Path('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'),
+        Path('/usr/share/fonts/wqy-microhei/wqy-microhei.ttc'),
+        Path('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'),
+        Path('/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf'),
+        Path('/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc'),
+        Path('/usr/share/fonts/truetype/noto/NotoSansSC-Regular.otf'),
+        Path('/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf'),
+        Path('/usr/share/fonts/truetype/arphic/uming.ttc'),
+        Path('/usr/share/fonts/truetype/arphic/ukai.ttc'),
     ]
-    for path in candidates:
-        if path.is_file():
-            try:
-                pdf.add_font('YCJK', '', str(path))
-                return 'YCJK'
-            except Exception:
-                continue
-    return 'Helvetica'
+
+
+def _register_font(pdf: FPDF) -> str:
+    """加载中文字体；找不到就停止，禁止用西文字体硬写中文。"""
+    for path in _cjk_font_candidates():
+        if not path.is_file():
+            continue
+        try:
+            pdf.add_font('YCJK', '', str(path))
+            return 'YCJK'
+        except Exception:
+            continue
+    raise TableStickerFontError(_FONT_MISSING_HINT)
 
 
 def _qr_image_bytes(url: str) -> bytes:

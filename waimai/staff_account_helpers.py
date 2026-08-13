@@ -69,6 +69,68 @@ CORE_ORDER_DESK_PERMISSIONS = (
     PERM_ORDERS_CONTACT,
 )
 
+# 勾了某项业务后，订单台这些项必须同时有（界面锁住；保存时也会补上）
+STAFF_PERMISSION_BUNDLES = (
+    {
+        'code': PERM_DINING_WAITER,
+        'label': '服务员业务',
+        'implies': CORE_ORDER_DESK_PERMISSIONS,
+    },
+    {
+        'code': PERM_DINING_KITCHEN,
+        'label': '后厨业务',
+        'implies': (PERM_ORDERS_VIEW, PERM_ORDERS_UPDATE_STATUS),
+    },
+    {
+        'code': PERM_DINING_RIDER,
+        'label': '本店配送业务',
+        'implies': (PERM_ORDERS_VIEW, PERM_ORDERS_CONTACT),
+    },
+)
+
+
+def implied_staff_permission_codes(selected_codes) -> set[str]:
+    """根据已勾的业务权限，算出必须同时有的订单台权限（多项取并集）。"""
+    selected = set(selected_codes or [])
+    implied = set()
+    for bundle in STAFF_PERMISSION_BUNDLES:
+        if bundle['code'] in selected:
+            implied.update(bundle['implies'])
+    return implied
+
+
+def expand_staff_permissions_for_save(selected_codes) -> list[str]:
+    """保存前补上业务权限连带的订单台项，避免只勾业务、漏掉连带项。"""
+    codes = set(selected_codes or [])
+    codes.update(implied_staff_permission_codes(codes))
+    return sorted(codes)
+
+
+def staff_permission_lock_payload(seller_id: str) -> dict:
+    """给勾选页脚本用：哪些业务会锁住哪些项、模板会勾哪些。"""
+    available = {item['code'] for item in get_staff_permission_definitions(seller_id)}
+    bundles = []
+    for bundle in STAFF_PERMISSION_BUNDLES:
+        if bundle['code'] not in available:
+            continue
+        implies = [code for code in bundle['implies'] if code in available]
+        if not implies:
+            continue
+        bundles.append({
+            'code': bundle['code'],
+            'label': bundle['label'],
+            'implies': implies,
+        })
+    presets = {}
+    for account_type in ('management', 'employee'):
+        for item in get_staff_account_presets(seller_id, account_type):
+            code = (item.get('code') or '').strip()
+            if not code:
+                continue
+            presets[code] = list(item.get('permissions') or [])
+    return {'bundles': bundles, 'presets': presets}
+
+
 CORE_STAFF_PERMISSION_DEFINITIONS = [
     {
         'code': PERM_ORDERS_VIEW,
@@ -161,13 +223,8 @@ def staff_permission_codes(user) -> set[str]:
     codes.update(legacy.get(role, set()))
     if getattr(user, 'perm_cancel_order', False):
         codes.add(PERM_CANCEL_ORDER)
-    # 已有饮食前台权限的新壳账号：默认可做主体订单台（关插件后不空转）
-    if PERM_DINING_WAITER in codes:
-        codes.update(CORE_ORDER_DESK_PERMISSIONS)
-    elif PERM_DINING_KITCHEN in codes:
-        codes.update({PERM_ORDERS_VIEW, PERM_ORDERS_UPDATE_STATUS})
-    elif PERM_DINING_RIDER in codes:
-        codes.update({PERM_ORDERS_VIEW, PERM_ORDERS_CONTACT})
+    # 已有饮食/配送业务权限：默认可做主体订单台（关插件后不空转）
+    codes.update(implied_staff_permission_codes(codes))
     return codes
 
 

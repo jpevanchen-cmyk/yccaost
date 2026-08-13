@@ -319,6 +319,7 @@ class CreateStaffAccountForm(_SkipUsernameUniqueValidationMixin, UserCreationFor
             (item['code'], f"{item['label']}：{item.get('help_text', '')}".rstrip('：'))
             for item in self.permission_definitions
         ]
+        self.fields['permissions'].widget.attrs['class'] = 'yc-staff-perm-list'
         self.fields['preset'].choices = [('', '不套模板，自行填写')] + [
             (item['code'], item['label']) for item in self.presets
         ]
@@ -361,7 +362,11 @@ class CreateStaffAccountForm(_SkipUsernameUniqueValidationMixin, UserCreationFor
         return cleaned
 
     def save(self, commit=True):
-        from .staff_account_helpers import PERM_CANCEL_ORDER, staff_internal_username
+        from .staff_account_helpers import (
+            PERM_CANCEL_ORDER,
+            expand_staff_permissions_for_save,
+            staff_internal_username,
+        )
 
         user = super().save(commit=False)
         user.username = staff_internal_username(self.seller_id, self.cleaned_data['username'])
@@ -369,7 +374,9 @@ class CreateStaffAccountForm(_SkipUsernameUniqueValidationMixin, UserCreationFor
         user.employer_seller_id = self.seller_id
         user.staff_account_type = self.cleaned_data['account_type']
         user.staff_job_title = (self.cleaned_data.get('job_title') or '').strip()
-        user.staff_permissions = sorted(set(self.cleaned_data.get('permissions') or []))
+        user.staff_permissions = expand_staff_permissions_for_save(
+            self.cleaned_data.get('permissions'),
+        )
         user.perm_cancel_order = PERM_CANCEL_ORDER in user.staff_permissions
         if commit:
             user.save()
@@ -409,6 +416,7 @@ class EditStaffAccountForm(forms.Form):
         self.fields['permissions'].choices = [
             (item['code'], item['label']) for item in self.permission_definitions
         ]
+        self.fields['permissions'].widget.attrs['class'] = 'yc-staff-perm-list'
         if user and not self.is_bound:
             account_type = (getattr(user, 'staff_account_type', '') or '').strip()
             if not account_type:
@@ -420,11 +428,15 @@ class EditStaffAccountForm(forms.Form):
             })
 
     def save(self):
-        from .staff_account_helpers import PERM_CANCEL_ORDER, staff_permission_codes
+        from .staff_account_helpers import (
+            PERM_CANCEL_ORDER,
+            expand_staff_permissions_for_save,
+            staff_permission_codes,
+        )
 
         selected = set(self.cleaned_data.get('permissions') or [])
         unavailable = staff_permission_codes(self.user) - self.available_codes
-        permissions = sorted(selected | unavailable)
+        permissions = expand_staff_permissions_for_save(selected | unavailable)
         self.user.role = 'staff'
         self.user.staff_account_type = self.cleaned_data['account_type']
         self.user.staff_job_title = (self.cleaned_data.get('job_title') or '').strip()

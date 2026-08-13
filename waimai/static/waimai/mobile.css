@@ -4014,3 +4014,27 @@ body.yc-panel-wait-locked {
 @keyframes yc-panel-spin {
     to { transform: rotate(360deg); }
 }
+
+/* 员工权限：业务项连带的订单台勾选锁住 */
+.yc-staff-perm-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.yc-staff-perm-list li {
+    margin-bottom: 8px;
+}
+.yc-staff-perm-list label {
+    font-weight: 500;
+}
+.yc-staff-perm-list input[data-yc-perm-locked="1"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.yc-staff-perm-lock-hint {
+    display: block;
+    margin: 2px 0 0 22px;
+    font-size: 12px;
+    font-weight: 400;
+    color: #888;
+}

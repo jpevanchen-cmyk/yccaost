@@ -1,5 +1,9 @@
 {% load staff_account %}
 {# 目标态子账号：管理职务 / 普通员工 + 自填职务名 + 权限清单 #}
+{% if seller_id %}
+{% staff_perm_lock_data seller_id as yc_staff_perm_lock %}
+{{ yc_staff_perm_lock|json_script:"yc-staff-perm-lock-data" }}
+{% endif %}
 {% include 'waimai/seller/_panel_fold.html' with fold_id='management-staff-create' fold_title='👔 新建管理职务' fold_head_tour='mgmt-staff-head' %}
     <div data-yc-tour="fold-mgmt-staff">
     <p class="card-meta" data-yc-tour="mgmt-staff-intro">

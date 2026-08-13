@@ -190,17 +190,22 @@ def handle_dine_post(request, seller_id):
             from django.http import HttpResponse
 
             from .table_sticker_pdf import (
+                TableStickerFontError,
                 build_table_stickers_pdf,
                 sticker_pdf_filename,
             )
 
             profile = ShopProfile.objects.filter(seller_id=seller_id).first()
-            pdf_bytes = build_table_stickers_pdf(
-                request=request,
-                seller_id=seller_id,
-                tables=sort_shop_tables(tables),
-                shop_profile=profile,
-            )
+            try:
+                pdf_bytes = build_table_stickers_pdf(
+                    request=request,
+                    seller_id=seller_id,
+                    tables=sort_shop_tables(tables),
+                    shop_profile=profile,
+                )
+            except TableStickerFontError as exc:
+                messages.error(request, str(exc))
+                return _seller_redirect('dine', 'table-list')
             resp = HttpResponse(pdf_bytes, content_type='application/pdf')
             resp['Content-Disposition'] = f'attachment; filename="{sticker_pdf_filename(seller_id)}"'
             return resp
@@ -275,17 +280,22 @@ def handle_dine_post(request, seller_id):
             from django.http import HttpResponse
 
             from .table_sticker_pdf import (
+                TableStickerFontError,
                 build_virtual_stickers_pdf,
                 virtual_sticker_pdf_filename,
             )
 
             profile = ShopProfile.objects.filter(seller_id=seller_id).first()
-            pdf_bytes = build_virtual_stickers_pdf(
-                request=request,
-                seller_id=seller_id,
-                codes=sort_virtual_codes(codes),
-                shop_profile=profile,
-            )
+            try:
+                pdf_bytes = build_virtual_stickers_pdf(
+                    request=request,
+                    seller_id=seller_id,
+                    codes=sort_virtual_codes(codes),
+                    shop_profile=profile,
+                )
+            except TableStickerFontError as exc:
+                messages.error(request, str(exc))
+                return _seller_redirect('dine', 'virtual-list')
             resp = HttpResponse(pdf_bytes, content_type='application/pdf')
             resp['Content-Disposition'] = (
                 f'attachment; filename="{virtual_sticker_pdf_filename(seller_id)}"'

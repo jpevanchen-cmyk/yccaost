@@ -93,4 +93,7 @@ window.YC_OPERATION_LOCK = {
 {% if section == 'products' %}
 <script src="{% static 'waimai/product_image_upload.js' %}?v=3"></script>
 {% endif %}
+{% if section == 'workbench' %}
+<script src="{% static 'waimai/staff_permission_lock.js' %}?v=1"></script>
+{% endif %}
 {% endblock %}
