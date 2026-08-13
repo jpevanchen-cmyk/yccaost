@@ -33,6 +33,17 @@ from .home_page_panel_helpers import (
     render_shop_home_settings_panel_html,
     respond_home_panel,
 )
+from .home_page_tier_helpers import (
+    allowed_server_block_types,
+    create_topic_page_blank,
+    create_topic_page_from_hall,
+    delete_topic_page,
+    get_server_page_by_id,
+    resolve_editing_server_page,
+    save_topic_page_settings,
+    server_page_edit_url,
+    server_page_public_path,
+)
 from .scroll_helpers import redirect_with_anchor
 
 
@@ -201,11 +212,71 @@ def handle_home_page_post(request, seller_id: str):
     return None
 
 
-def handle_server_home_page_post(request):
-    """服务器设置 · 保存服务器主页积木"""
-    page = ensure_server_home_page()
+def _server_home_redirect(page):
+    return redirect(server_page_edit_url(page))
 
+
+def _server_home_anchor_redirect(page, scroll: str):
+    return redirect_with_anchor(server_page_edit_url(page), scroll)
+
+
+def handle_server_home_page_post(request):
+    """服务器设置 · 保存服务器主页积木 / 二级页管理"""
+    page = resolve_editing_server_page(request)
+
+    # —— 二级页：新建 / 设置 / 删除 ——
+    if 'create_topic_blank' in request.POST:
+        new_page, err = create_topic_page_blank(
+            title=(request.POST.get('new_title') or '').strip(),
+        )
+        if err:
+            messages.error(request, err)
+            return _server_home_redirect(page)
+        messages.success(request, f'已新建空白二级页（网址 {server_page_public_path(new_page)}）')
+        return _server_home_redirect(new_page)
+
+    if 'create_topic_from_hall' in request.POST:
+        new_page, err = create_topic_page_from_hall(
+            title=(request.POST.get('new_title') or '').strip(),
+        )
+        if err:
+            messages.error(request, err)
+            return _server_home_redirect(page)
+        messages.success(request, f'已从一级大厅复制新增积木（网址 {server_page_public_path(new_page)}）')
+        return _server_home_redirect(new_page)
+
+    if 'save_topic_page_settings' in request.POST:
+        if not page.is_topic:
+            messages.error(request, '只能改二级专题页设置')
+            return _server_home_redirect(page)
+        err = save_topic_page_settings(
+            page,
+            title=(request.POST.get('title') or '').strip(),
+            welcome_body=request.POST.get('welcome_body') or '',
+            welcome_enabled=request.POST.get('welcome_enabled') == '1',
+        )
+        if err:
+            messages.error(request, err)
+        else:
+            messages.success(request, '二级页设置已保存')
+            page.refresh_from_db()
+        return _server_home_redirect(page)
+
+    if 'delete_topic_page' in request.POST:
+        target = resolve_editing_server_page(request)
+        err = delete_topic_page(target)
+        if err:
+            messages.error(request, err)
+            return _server_home_redirect(target)
+        messages.success(request, '已删除该二级页')
+        return redirect('server_settings_home_page')
+
+    # —— 积木：增删改（绑定当前 page）——
     if 'add_server_custom_block' in request.POST:
+        allowed = allowed_server_block_types(page)
+        if allowed is not None and BLOCK_CUSTOM not in allowed:
+            messages.error(request, '本页不能添加自定义积木')
+            return _server_home_redirect(page)
         block = add_server_custom_block(page)
         if block is None:
             msg = f'自定义积木最多 {MAX_SERVER_CUSTOM_BLOCKS} 块，无法再添加'
@@ -215,7 +286,7 @@ def handle_server_home_page_post(request):
             if panel_resp is not None:
                 return panel_resp
             messages.error(request, msg)
-            return redirect('server_settings_home_page')
+            return _server_home_redirect(page)
         msg = '已添加一块自定义积木，请填写内容后保存'
         scroll = block_dom_id(block)
         panel_resp = respond_home_panel(
@@ -223,14 +294,18 @@ def handle_server_home_page_post(request):
             panel_id=SERVER_HOME_BLOCKS_PANEL_ID,
             ok=True,
             message=msg,
-            html=render_server_home_blocks_panel_html(request),
+            html=render_server_home_blocks_panel_html(request, page=page),
             scroll_to=scroll,
         )
         if panel_resp is not None:
             return panel_resp
-        return redirect_with_anchor(reverse('server_settings_home_page'), scroll)
+        return _server_home_anchor_redirect(page, scroll)
 
     if 'add_server_download_block' in request.POST:
+        allowed = allowed_server_block_types(page)
+        if allowed is not None and BLOCK_FILE_DOWNLOAD not in allowed:
+            messages.error(request, '本页不能添加文件下载积木')
+            return _server_home_redirect(page)
         block = add_server_download_block(page)
         if block is None:
             msg = f'文件下载积木最多 {MAX_SERVER_DOWNLOAD_BLOCKS} 块，无法再添加'
@@ -240,7 +315,7 @@ def handle_server_home_page_post(request):
             if panel_resp is not None:
                 return panel_resp
             messages.error(request, msg)
-            return redirect('server_settings_home_page')
+            return _server_home_redirect(page)
         msg = '已添加一块文件下载积木，请上传文件后保存'
         scroll = block_dom_id(block)
         panel_resp = respond_home_panel(
@@ -248,12 +323,12 @@ def handle_server_home_page_post(request):
             panel_id=SERVER_HOME_BLOCKS_PANEL_ID,
             ok=True,
             message=msg,
-            html=render_server_home_blocks_panel_html(request),
+            html=render_server_home_blocks_panel_html(request, page=page),
             scroll_to=scroll,
         )
         if panel_resp is not None:
             return panel_resp
-        return redirect_with_anchor(reverse('server_settings_home_page'), scroll)
+        return _server_home_anchor_redirect(page, scroll)
 
     if 'delete_server_home_block' in request.POST:
         block_id = (request.POST.get('block_id') or '').strip()
@@ -279,7 +354,7 @@ def handle_server_home_page_post(request):
             panel_id=SERVER_HOME_BLOCKS_PANEL_ID,
             ok=ok,
             message=msg,
-            html=render_server_home_blocks_panel_html(request) if ok else '',
+            html=render_server_home_blocks_panel_html(request, page=page) if ok else '',
         )
         if panel_resp is not None:
             return panel_resp
@@ -287,7 +362,7 @@ def handle_server_home_page_post(request):
             messages.success(request, msg)
         else:
             messages.error(request, msg)
-        return redirect('server_settings_home_page')
+        return _server_home_redirect(page)
 
     if 'save_server_home_block' in request.POST:
         block_id = (request.POST.get('block_id') or '').strip()
@@ -300,7 +375,18 @@ def handle_server_home_page_post(request):
             if panel_resp is not None:
                 return panel_resp
             messages.error(request, msg)
-            return redirect('server_settings_home_page')
+            return _server_home_redirect(page)
+
+        allowed = allowed_server_block_types(page)
+        if allowed is not None and block.block_type not in allowed:
+            msg = '本页不允许该类型积木'
+            panel_resp = respond_home_panel(
+                request, panel_id=SERVER_HOME_BLOCKS_PANEL_ID, ok=False, message=msg,
+            )
+            if panel_resp is not None:
+                return panel_resp
+            messages.error(request, msg)
+            return _server_home_redirect(page)
 
         block.title = (request.POST.get('title') or '')[:120]
         block.body = request.POST.get('body') or ''
@@ -309,7 +395,13 @@ def handle_server_home_page_post(request):
             block.link_url = ''
             block.link_label = (request.POST.get('link_label') or '').strip()[:32]
         else:
-            block.link_url = (request.POST.get('link_url') or '').strip()[:500]
+            # 优先「选页」下拉，否则用手填链接
+            pick = (request.POST.get('link_page_id') or '').strip()
+            if pick:
+                target = get_server_page_by_id(pick)
+                block.link_url = server_page_public_path(target)[:500]
+            else:
+                block.link_url = (request.POST.get('link_url') or '').strip()[:500]
             block.link_label = (request.POST.get('link_label') or '').strip()[:32]
         block.nav_label = (request.POST.get('nav_label') or '')[:32]
         block.is_enabled = request.POST.get('is_enabled') == '1'
@@ -331,7 +423,7 @@ def handle_server_home_page_post(request):
             if panel_resp is not None:
                 return panel_resp
             messages.error(request, err)
-            return redirect_with_anchor(reverse('server_settings_home_page'), block_dom_id(block))
+            return _server_home_anchor_redirect(page, block_dom_id(block))
         block.save()
         spec = get_server_block_spec(block.block_type)
         label = spec.label if spec else block.block_type
@@ -342,11 +434,11 @@ def handle_server_home_page_post(request):
             panel_id=SERVER_HOME_BLOCKS_PANEL_ID,
             ok=True,
             message=msg,
-            html=render_server_home_blocks_panel_html(request),
+            html=render_server_home_blocks_panel_html(request, page=page),
             scroll_to=scroll,
         )
         if panel_resp is not None:
             return panel_resp
-        return redirect_with_anchor(reverse('server_settings_home_page'), scroll)
+        return _server_home_anchor_redirect(page, scroll)
 
     return None

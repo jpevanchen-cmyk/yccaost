@@ -21,12 +21,17 @@ installer/output/
 # Django
 db.sqlite3
 db.sqlite3-journal
+db.sqlite3.corrupt*
 *.log
 logs/
 local_settings.py
 media/
 private/
 staticfiles/
+
+# 本地营业备份与调试媒体（不进 Git / 不推送公开仓）
+backup/
+test_media_dbg2/
 
 # 环境与密钥（切勿提交）
 .env

@@ -8,6 +8,7 @@ from waimai import operation_lock_views as views_op_lock
 
 urlpatterns = [
     path('', views.home, name='home'),
+    path('p/<slug:slug>/', views.server_topic_page, name='server_topic_page'),
     path('admin/', admin.site.urls),
     path('directory/', views.directory, name='directory'),
     path('s/<str:shop_code>/home/', views.shop_showcase, name='shop_showcase'),

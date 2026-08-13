@@ -279,10 +279,26 @@ def ensure_home_page_for_seller(seller_id: str, shop_profile=None):
 
 
 def ensure_server_home_page():
-    """确保整机服务器主页与预设块存在"""
+    """确保一级大厅与预设块存在（大厅固定页编号 1）"""
     from .models import ServerHomeBlock, ServerHomePage
 
-    page, _created = ServerHomePage.objects.get_or_create(singleton_id=1)
+    page, _created = ServerHomePage.objects.get_or_create(
+        singleton_id=1,
+        defaults={
+            'page_role': ServerHomePage.PAGE_HALL,
+            'slug': '',
+            'title': '一级大厅',
+            'welcome_body': '',
+            'welcome_enabled': True,
+        },
+    )
+    if page.page_role != ServerHomePage.PAGE_HALL or page.slug:
+        page.page_role = ServerHomePage.PAGE_HALL
+        page.slug = ''
+        if not (page.title or '').strip():
+            page.title = '一级大厅'
+        page.save(update_fields=['page_role', 'slug', 'title', 'updated_at'])
+
     existing = {b.block_type: b for b in page.blocks.all()}
     to_create = []
     for spec in SERVER_PRESET_SPECS:
@@ -377,7 +393,7 @@ def set_server_entry(seller_id: str) -> None:
 
 
 def resolve_entry_home_page():
-    """兼容旧名：现返回服务器主页对象（非店铺主页）"""
+    """兼容旧名：现返回一级大厅"""
     return ensure_server_home_page()
 
 
@@ -399,6 +415,9 @@ def _attach_block_meta(blocks, get_spec_fn):
         b.shows_rich_media = b.block_type not in (
             BLOCK_ORDER_CTA, BLOCK_DIRECTORY, BLOCK_FILE_DOWNLOAD,
         )
+        # 站内路径用本页打开；外链仍新标签
+        link = (b.link_url or '').strip()
+        b.link_is_internal = bool(link.startswith('/'))
         if b.block_type == BLOCK_FILE_DOWNLOAD:
             b.has_download_file = block_has_download_file(b)
             b.download_url = block_download_url(b) if b.has_download_file else ''
@@ -454,16 +473,33 @@ def build_shop_home_view_context(page, request=None) -> dict:
         'order_nav_href': order_nav_href,
         'order_nav_mode': order_nav_mode,
         'brand_title': (shop.shop_name if shop else '店铺主页'),
+        'page_public_path': f'/s/{shop.shop_code}/home/' if shop and shop.shop_code else '/',
+        'show_topic_welcome': False,
+        'topic_welcome_body': '',
+        'topic_welcome_storage_key': '',
+        'is_server_topic': False,
     }
 
 
-def build_server_home_view_context(request=None) -> dict:
-    """组装服务器主页前台上下文（含名录搜索）"""
-    from .models import ShopProfile
+def build_server_home_view_context(request=None, page=None) -> dict:
+    """组装服务器主页前台上下文（大厅或二级专题页）"""
+    from .models import ShopProfile, ServerHomePage
+    from .home_page_tier_helpers import (
+        allowed_server_block_types,
+        server_page_public_path,
+        topic_welcome_should_show,
+    )
 
-    page = ensure_server_home_page()
-    blocks = list(page.blocks.filter(is_enabled=True).order_by('sort_order', 'block_type'))
-    # 所有积木（含自定义）统一按排序数字比大小；数字越小越靠前
+    if page is None:
+        page = ensure_server_home_page()
+    elif page.page_role == ServerHomePage.PAGE_HALL:
+        page = ensure_server_home_page()
+
+    allowed = allowed_server_block_types(page)
+    qs = page.blocks.filter(is_enabled=True)
+    if allowed is not None:
+        qs = qs.filter(block_type__in=allowed)
+    blocks = list(qs.order_by('sort_order', 'block_type'))
     blocks.sort(key=lambda b: (b.sort_order, str(b.block_type)))
     _attach_block_meta(blocks, get_server_block_spec)
 
@@ -472,7 +508,7 @@ def build_server_home_view_context(request=None) -> dict:
         q = (request.GET.get('q') or request.GET.get('search') or '').strip()
 
     directory_shops = []
-    if any(b.block_type == BLOCK_DIRECTORY for b in blocks):
+    if page.is_hall and any(b.block_type == BLOCK_DIRECTORY for b in blocks):
         qs = ShopProfile.objects.filter(is_listed=True).order_by('shop_name')
         if q:
             qs = qs.filter(Q(shop_name__icontains=q) | Q(address__icontains=q))
@@ -492,6 +528,10 @@ def build_server_home_view_context(request=None) -> dict:
     from waimai.server_plugin_runtime import enrich_server_home_context
 
     site = get_site_settings()
+    public_path = server_page_public_path(page)
+    brand = (page.title or '').strip() if page.is_topic else (site.site_name or '本服务器')
+    if page.is_topic and not brand:
+        brand = page.slug or '专题页'
 
     ctx = {
         'home_kind': 'server',
@@ -506,20 +546,31 @@ def build_server_home_view_context(request=None) -> dict:
         'order_url': '',
         'order_nav_href': '#block-directory',
         'order_nav_mode': '',
-        'brand_title': site.site_name or '本服务器',
+        'brand_title': brand,
+        'page_public_path': public_path,
+        'is_server_topic': page.is_topic,
+        'show_topic_welcome': topic_welcome_should_show(page),
+        'topic_welcome_body': (page.welcome_body or '') if topic_welcome_should_show(page) else '',
+        'topic_welcome_storage_key': f'yecao_topic_welcome_{page.pk}' if page.is_topic else '',
     }
-    from .guestbook_helpers import get_guestbook_settings
+    if page.is_hall:
+        from .guestbook_helpers import get_guestbook_settings
 
-    ctx['guestbook_settings'] = get_guestbook_settings()
-    ctx = enrich_server_home_context(ctx)
-    from .onboarding.context import enrich_server_home_onboarding
-    return enrich_server_home_onboarding(ctx)
+        ctx['guestbook_settings'] = get_guestbook_settings()
+        ctx = enrich_server_home_context(ctx)
+        from .onboarding.context import enrich_server_home_onboarding
+        return enrich_server_home_onboarding(ctx)
+
+    ctx['guestbook_settings'] = None
+    return ctx
 
 
 def build_home_view_context(page, request=None) -> dict:
     """兼容旧调用：若是店铺主页则按店铺组装"""
-    from .models import ShopHomePage
+    from .models import ShopHomePage, ServerHomePage
 
     if isinstance(page, ShopHomePage):
         return build_shop_home_view_context(page, request)
+    if isinstance(page, ServerHomePage):
+        return build_server_home_view_context(request, page=page)
     return build_server_home_view_context(request)

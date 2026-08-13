@@ -8,8 +8,11 @@
 {% block content %}
 <nav class="showcase-sticky-nav" aria-label="主页导航">
     <div class="showcase-sticky-inner">
-        <a class="showcase-brand" href="#top">{{ brand_title|default:"入口主页" }}</a>
+        <a class="showcase-brand" href="{% if is_server_topic %}/{% else %}#top{% endif %}">{{ brand_title|default:"入口主页" }}</a>
         <div class="showcase-nav-links">
+            {% if is_server_topic %}
+            <a href="/">回大厅</a>
+            {% endif %}
             {% for item in home_nav_items %}
             <a href="#{{ item.anchor }}">{{ item.label }}</a>
             {% endfor %}
@@ -47,11 +50,11 @@
         <h2 class="showcase-block-title">{{ block.title|default:"店铺名录" }}</h2>
         <div class="showcase-block-main">
         {% include 'waimai/_showcase_block_body.html' with body=block.body only %}
-        <form method="get" action="/" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
+        <form method="get" action="{{ page_public_path|default:'/' }}" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
             <input class="form-input" type="search" name="q" value="{{ directory_query }}" placeholder="按店名或地址搜索" style="flex:1;min-width:160px;">
             <button type="submit" class="btn btn-primary">搜索</button>
             {% if directory_query %}
-            <a class="btn btn-outline" href="/">清除</a>
+            <a class="btn btn-outline" href="{{ page_public_path|default:'/' }}">清除</a>
             {% endif %}
         </form>
         {% if directory_shops %}
@@ -85,7 +88,7 @@
         </div>
     {% else %}
         <h2 class="showcase-block-title">
-            {{ block.title }}{% if block.link_url %}<a class="showcase-block-title-link" href="{{ block.link_url }}" rel="noopener" target="_blank">{{ block.display_link_label }}</a>{% endif %}
+            {{ block.title }}{% if block.link_url %}<a class="showcase-block-title-link" href="{{ block.link_url }}"{% if not block.link_is_internal %} rel="noopener" target="_blank"{% endif %}>{{ block.display_link_label }}</a>{% endif %}
         </h2>
         <div class="showcase-block-main">
         {% if block.display_image_src %}
@@ -113,8 +116,21 @@
 </div>
 
 <button type="button" class="showcase-back-top" id="showcase-back-top" aria-label="回到顶部" hidden>顶部</button>
+
+{% if show_topic_welcome and topic_welcome_body %}
+<dialog class="yc-topic-welcome" id="yc-topic-welcome" data-storage-key="{{ topic_welcome_storage_key }}">
+    <form method="dialog" class="yc-topic-welcome-inner card" style="max-width:420px;margin:auto;padding:16px;">
+        <h2 class="showcase-block-title" style="margin-top:0;">欢迎</h2>
+        <div class="showcase-body" style="white-space:pre-wrap;margin:10px 0 14px;">{{ topic_welcome_body }}</div>
+        <label class="form-check" style="display:block;margin-bottom:12px;">
+            <input type="checkbox" id="yc-topic-welcome-remember" value="1"> 本页不再提示
+        </label>
+        <button type="submit" class="btn btn-primary btn-block" id="yc-topic-welcome-ok">知道了</button>
+    </form>
+</dialog>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'waimai/showcase_home.js' %}?v=7"></script>
+<script src="{% static 'waimai/showcase_home.js' %}?v=8"></script>
 {% endblock %}

@@ -155,4 +155,31 @@
     if (isInteractiveClick(e.target)) return;
     expandBlock(block);
   });
+
+  /* 二级专题页欢迎弹窗：可关；勾选后本页记住不再提示 */
+  var welcome = document.getElementById('yc-topic-welcome');
+  if (welcome && typeof welcome.showModal === 'function') {
+    var key = welcome.getAttribute('data-storage-key') || '';
+    var remembered = false;
+    try {
+      remembered = !!(key && window.localStorage && localStorage.getItem(key) === '1');
+    } catch (err) {
+      remembered = false;
+    }
+    if (!remembered) {
+      try {
+        welcome.showModal();
+      } catch (err2) {
+        welcome.setAttribute('open', '');
+      }
+    }
+    welcome.addEventListener('close', function () {
+      var box = document.getElementById('yc-topic-welcome-remember');
+      if (box && box.checked && key) {
+        try {
+          localStorage.setItem(key, '1');
+        } catch (err3) { /* 忽略 */ }
+      }
+    });
+  }
 })();

@@ -394,24 +394,73 @@ class EmailSendLog(models.Model):
 
 
 class ServerHomePage(models.Model):
-    """服务器主页（整机一份；与店铺主页严格分开）"""
+    """服务器主页：一级大厅（固定 /）+ 可选多个二级专题页（/p/短名/）"""
 
-    singleton_id = models.PositiveSmallIntegerField(
-        primary_key=True, default=1, editable=False, verbose_name='固定编号'
+    PAGE_HALL = 'hall'
+    PAGE_TOPIC = 'topic'
+    PAGE_ROLE_CHOICES = [
+        (PAGE_HALL, '一级大厅'),
+        (PAGE_TOPIC, '二级专题页'),
+    ]
+
+    # 历史字段名保留：大厅固定为 1；二级页用递增编号（不再强制整机只有一行）
+    singleton_id = models.PositiveIntegerField(primary_key=True, verbose_name='页编号')
+    page_role = models.CharField(
+        max_length=16,
+        choices=PAGE_ROLE_CHOICES,
+        default=PAGE_HALL,
+        db_index=True,
+        verbose_name='页角色',
     )
+    slug = models.SlugField(
+        max_length=48,
+        blank=True,
+        default='',
+        verbose_name='短名',
+        help_text='二级页网址用；大厅留空',
+    )
+    title = models.CharField(max_length=80, blank=True, default='', verbose_name='页标题')
+    welcome_body = models.TextField(blank=True, default='', verbose_name='欢迎弹窗正文')
+    welcome_enabled = models.BooleanField(default=True, verbose_name='启用欢迎弹窗')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
     class Meta:
         db_table = 'server_home_page'
         verbose_name = '服务器主页'
         verbose_name_plural = '服务器主页'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['page_role'],
+                condition=models.Q(page_role='hall'),
+                name='uniq_server_home_page_hall',
+            ),
+            models.UniqueConstraint(
+                fields=['slug'],
+                condition=~models.Q(slug=''),
+                name='uniq_server_home_page_slug',
+            ),
+        ]
 
     def save(self, *args, **kwargs):
-        self.singleton_id = 1
+        if self.page_role == self.PAGE_HALL:
+            self.singleton_id = 1
+            self.slug = ''
+            if not (self.title or '').strip():
+                self.title = '一级大厅'
         return super().save(*args, **kwargs)
 
+    @property
+    def is_hall(self) -> bool:
+        return self.page_role == self.PAGE_HALL
+
+    @property
+    def is_topic(self) -> bool:
+        return self.page_role == self.PAGE_TOPIC
+
     def __str__(self):
-        return '本服务器主页'
+        if self.is_hall:
+            return '一级大厅'
+        return f'二级页:{self.slug or self.singleton_id}'
 
 
 class ServerHomeBlock(models.Model):
@@ -480,6 +529,16 @@ class HomeBlockDownloadHit(models.Model):
     ip = models.GenericIPAddressField(blank=True, null=True, db_index=True, verbose_name='IP')
     user_agent = models.CharField(max_length=300, blank=True, default='', verbose_name='浏览器标识')
     clicked_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='点击时间')
+    # 传输结果（连接结束时回填；旧记录可为空）
+    file_size_bytes = models.BigIntegerField(default=0, verbose_name='文件标称大小（字节）')
+    bytes_sent = models.BigIntegerField(default=0, verbose_name='实际发出字节')
+    finished_at = models.DateTimeField(blank=True, null=True, db_index=True, verbose_name='连接结束时间')
+    duration_ms = models.PositiveIntegerField(default=0, verbose_name='持续毫秒')
+    near_complete = models.BooleanField(
+        default=False,
+        verbose_name='接近传完',
+        help_text='发出量接近文件大小；不等于对方一定存盘成功',
+    )
 
     class Meta:
         db_table = 'home_block_download_hit'

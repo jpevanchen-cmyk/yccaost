@@ -2,12 +2,70 @@
 {% block title %}服务器主页{% endblock %}
 {% block owner_content %}
 {% include 'waimai/seller/_panel_fold.html' with fold_id='server-home-intro' fold_title='🖥️ 服务器主页说明' fold_open=True %}
-    <p class="card-meta">打开网站根地址 <code>/</code> 时显示这里的内容。推荐启用「店铺名录」。各店自己的门面在店铺管理里改，不会混进这里。</p>
+    <p class="card-meta">主网址 <code>/</code> 固定进<strong>一级大厅</strong>（完整积木能力）。另可建<strong>二级专题页</strong>，网址形如 <code>/p/p2/</code>（短名由程序自动生成），只放自定义与文件下载，并可设欢迎弹窗。</p>
+    <p class="card-meta" style="margin:8px 0;">留言板仍整站一份，挂在一级大厅；不会随二级页复制。</p>
     <p class="card-meta" style="margin:8px 0;">
         配图上传名额：本账号已用 <strong>{{ photo_used }}</strong> / {{ photo_max }} 张（单张不超过 {{ photo_max_mb }} MB）。
     </p>
-    <p><a class="btn btn-sm btn-outline" href="{{ preview_url }}" target="_blank" rel="noopener">预览根地址</a></p>
+    <p><a class="btn btn-sm btn-outline" href="{{ preview_url }}" target="_blank" rel="noopener">预览当前页</a></p>
 {% include 'waimai/seller/_panel_fold_end.html' %}
+
+{% include 'waimai/seller/_panel_fold.html' with fold_id='server-home-pages' fold_title='📄 页面列表与新建' fold_open=True %}
+    <p class="card-meta" style="margin:0 0 10px;">二级页已用 {{ topic_count }} / {{ max_topic_pages }}。</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        {% for p in server_pages %}
+        <a class="btn btn-sm {% if p.pk == home_page.pk %}btn-primary{% else %}btn-outline{% endif %}"
+           href="{% url 'server_settings_home_page' %}{% if p.is_topic %}?page={{ p.pk }}{% endif %}">
+            {% if p.is_hall %}一级大厅{% else %}{{ p.title|default:p.slug }}{% endif %}
+        </a>
+        {% endfor %}
+    </div>
+
+    {% if can_add_topic_page %}
+    <p class="card-meta" style="margin:0 0 8px;"><strong>新建二级页</strong>（只需填页标题；网址短名由程序自动生成，保证不重复）</p>
+    <form method="post" style="margin-bottom:10px;display:grid;gap:8px;max-width:420px;">
+        {% csrf_token %}
+        <input type="hidden" name="page_id" value="{{ editing_page_id }}">
+        <input class="form-input" type="text" name="new_title" maxlength="80" placeholder="页标题（给人看）" required>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button type="submit" name="create_topic_blank" value="1" class="btn btn-sm btn-outline">空白新建</button>
+            <button type="submit" name="create_topic_from_hall" value="1" class="btn btn-sm btn-primary">从一级复制新增积木</button>
+        </div>
+    </form>
+    <p class="card-meta" style="margin:0;">「从一级复制」只复制大厅里的自定义/文件下载，不复制名录、留言等。</p>
+    {% else %}
+    <p class="card-meta" style="margin:0;">二级页已达上限。</p>
+    {% endif %}
+{% include 'waimai/seller/_panel_fold_end.html' %}
+
+{% if is_editing_topic %}
+{% include 'waimai/seller/_panel_fold.html' with fold_id='server-topic-settings' fold_title='⚙️ 本二级页设置' fold_open=True %}
+    <form method="post" style="display:grid;gap:10px;max-width:560px;">
+        {% csrf_token %}
+        <input type="hidden" name="page_id" value="{{ editing_page_id }}">
+        <input type="hidden" name="save_topic_page_settings" value="1">
+        <label class="form-label">页标题
+            <input class="form-input" type="text" name="title" value="{{ home_page.title }}" maxlength="80" required>
+        </label>
+        <p class="card-meta" style="margin:0;">本页网址（程序生成，不可改）：<code>{{ preview_url }}</code>
+            <a class="btn btn-sm btn-outline" href="{{ preview_url }}" target="_blank" rel="noopener" style="margin-left:8px;">打开</a>
+        </p>
+        <label class="form-check">
+            <input type="checkbox" name="welcome_enabled" value="1" {% if home_page.welcome_enabled %}checked{% endif %}> 进入本页时显示欢迎弹窗
+        </label>
+        <label class="form-label">欢迎弹窗正文（自填；留空则不弹）
+            <textarea class="form-input" name="welcome_body" rows="6" placeholder="写给进入本专题页访客看的说明">{{ home_page.welcome_body }}</textarea>
+        </label>
+        <button type="submit" class="btn btn-primary">保存本页设置</button>
+    </form>
+    <form method="post" style="margin-top:16px;" onsubmit="return confirm('确定删除这个二级页及其积木吗？不可恢复。');">
+        {% csrf_token %}
+        <input type="hidden" name="page_id" value="{{ editing_page_id }}">
+        <input type="hidden" name="delete_topic_page" value="1">
+        <button type="submit" class="btn btn-sm btn-outline">删除本二级页</button>
+    </form>
+{% include 'waimai/seller/_panel_fold_end.html' %}
+{% endif %}
 
 <div id="server-home-blocks-panel" data-yc-panel-id="server-home-blocks-panel">
 {% include 'waimai/owner/_server_home_blocks_panel.html' %}

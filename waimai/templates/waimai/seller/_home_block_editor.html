@@ -3,6 +3,7 @@
     {% csrf_token %}
     <input type="hidden" name="{{ save_block_action_name }}" value="1">
     <input type="hidden" name="block_id" value="{{ block.block_id }}">
+    {% if editing_page_id %}<input type="hidden" name="page_id" value="{{ editing_page_id }}">{% endif %}
 
     <div class="home-block-settings">
         <p class="home-block-settings-label">显示设置</p>
@@ -103,9 +104,21 @@
             <textarea class="form-input home-block-body-input" name="body" rows="8" placeholder="客人在主页上看到的文字" data-yc-tour="home-block-body">{{ block.body }}</textarea>
 
             <div class="home-block-link-box">
+                {% if topic_link_choices %}
+                <div class="home-block-path-row" style="margin-bottom:10px;" data-yc-tour="home-block-link-page">
+                    <span class="home-block-path-label">链到本站页</span>
+                    <select class="form-input home-block-path-input" name="link_page_id">
+                        <option value="">不选（用手填下方地址，或留空）</option>
+                        {% for choice in topic_link_choices %}
+                        <option value="{{ choice.id }}" {% if block.link_url == choice.path %}selected{% endif %}>{{ choice.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <p class="card-meta" style="margin:0 0 8px;">优先用「链到本站页」选二级专题或回大厅；选了就会覆盖下面手填地址。</p>
+                {% endif %}
                 <div class="home-block-path-row" data-yc-tour="home-block-link-url">
                     <span class="home-block-path-label">附加链接</span>
-                    <input class="form-input home-block-path-input" type="text" name="link_url" value="{{ block.link_url }}" maxlength="500" placeholder="可选：粘贴网页地址，以 https:// 开头；会显示在标题旁" inputmode="url" autocomplete="off">
+                    <input class="form-input home-block-path-input" type="text" name="link_url" value="{{ block.link_url }}" maxlength="500" placeholder="可选：本站路径如 /p/短名/，或 https:// 外链" inputmode="url" autocomplete="off">
                 </div>
                 <div class="home-block-path-row" style="margin-top:10px;" data-yc-tour="home-block-link-label">
                     <span class="home-block-path-label">链接文字</span>
@@ -122,6 +135,7 @@
     {% csrf_token %}
     <input type="hidden" name="{{ delete_block_action_name }}" value="1">
     <input type="hidden" name="block_id" value="{{ block.block_id }}">
+    {% if editing_page_id %}<input type="hidden" name="page_id" value="{{ editing_page_id }}">{% endif %}
     <button type="submit" class="btn btn-sm btn-outline">删除本块</button>
 </form>
 {% endif %}

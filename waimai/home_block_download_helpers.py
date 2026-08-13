@@ -1,14 +1,15 @@
-# 服务器主页「文件下载」积木：上传、记账、代发文件
+# 服务器主页「文件下载」积木：上传、记账、代发文件（含传输结果回填）
 
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 from urllib.parse import quote
 
 from django.core.exceptions import ValidationError
 from django.db.models import Count
-from django.http import FileResponse, HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from django.urls import reverse
 from django.utils import timezone
 
@@ -20,6 +21,7 @@ from .models import (
 )
 
 DEFAULT_DOWNLOAD_BUTTON_LABEL = '下载文件'
+_STREAM_CHUNK = 64 * 1024
 
 
 def block_has_download_file(block) -> bool:
@@ -101,19 +103,64 @@ def client_ip(request) -> str | None:
     return raw[:45] if raw else None
 
 
-def record_home_block_download(request, block: ServerHomeBlock) -> None:
-    """写入下载真源；若私人包可用则再记一条访客点击（计入真人）。"""
+def record_home_block_download(request, block: ServerHomeBlock, *, file_size_bytes: int = 0):
+    """写入下载真源（开始时）；返回记账行。私人包可用则再记访客点击。"""
     filename = ''
     if block.download_file and block.download_file.name:
         filename = Path(block.download_file.name).name
-    HomeBlockDownloadHit.objects.create(
+    hit = HomeBlockDownloadHit.objects.create(
         block_id=block.block_id,
         block_title=(block.title or '')[:120],
         original_filename=filename[:255],
         ip=client_ip(request),
         user_agent=(request.META.get('HTTP_USER_AGENT') or '')[:300],
+        file_size_bytes=max(0, int(file_size_bytes or 0)),
+        bytes_sent=0,
     )
     _try_record_visitor_click(request, block, filename)
+    return hit
+
+
+def finalize_download_hit(hit_id, *, bytes_sent: int, started_mono: float) -> None:
+    """连接结束时回填发出量、时长、是否接近传完（幂等：已结束则不再改）。"""
+    duration_ms = max(0, int((time.monotonic() - started_mono) * 1000))
+    bytes_sent = max(0, int(bytes_sent or 0))
+    hit = HomeBlockDownloadHit.objects.filter(pk=hit_id).only(
+        'file_size_bytes', 'finished_at',
+    ).first()
+    if hit is None or hit.finished_at is not None:
+        return
+    file_size = int(hit.file_size_bytes or 0)
+    if file_size > 0:
+        threshold = max(file_size - 1024, int(file_size * 0.99))
+        near = bytes_sent >= threshold
+    else:
+        near = bytes_sent > 0
+    HomeBlockDownloadHit.objects.filter(pk=hit_id, finished_at__isnull=True).update(
+        bytes_sent=bytes_sent,
+        finished_at=timezone.now(),
+        duration_ms=duration_ms,
+        near_complete=near,
+    )
+
+
+def _stream_and_finalize(path: Path, hit_id, file_size: int):
+    """边读边发；无论传完或中途断开，尽量在 finally 回填结果。"""
+    sent = 0
+    started = time.monotonic()
+    try:
+        with path.open('rb') as f:
+            while True:
+                chunk = f.read(_STREAM_CHUNK)
+                if not chunk:
+                    break
+                sent += len(chunk)
+                yield chunk
+    finally:
+        try:
+            finalize_download_hit(hit_id, bytes_sent=sent, started_mono=started)
+        except Exception:
+            pass
 
 
 def _try_record_visitor_click(request, block, filename: str) -> None:
@@ -141,8 +188,46 @@ def _try_record_visitor_click(request, block, filename: str) -> None:
         return
 
 
+def _format_bytes_mb(n: int) -> str:
+    n = max(0, int(n or 0))
+    return f'{n / (1024 * 1024):.2f}'
+
+
+def _format_duration(ms: int) -> str:
+    ms = max(0, int(ms or 0))
+    if ms <= 0:
+        return '—'
+    sec = ms / 1000.0
+    if sec < 60:
+        return f'{sec:.1f} 秒'
+    minutes = int(sec // 60)
+    rem = sec - minutes * 60
+    return f'{minutes} 分 {rem:.0f} 秒'
+
+
+def _format_speed(bytes_sent: int, duration_ms: int) -> str:
+    if duration_ms <= 0 or bytes_sent <= 0:
+        return '—'
+    bps = bytes_sent / (duration_ms / 1000.0)
+    if bps >= 1024 * 1024:
+        return f'{bps / (1024 * 1024):.2f} MB/s'
+    if bps >= 1024:
+        return f'{bps / 1024:.0f} KB/s'
+    return f'{bps:.0f} B/s'
+
+
+def _hit_result_label(hit) -> str:
+    if not hit.finished_at:
+        return '未回填（旧记录或传输中）'
+    if hit.near_complete:
+        return '接近传完'
+    if (hit.bytes_sent or 0) <= 0:
+        return '几乎未传出'
+    return '只传一部分'
+
+
 def summarize_home_block_downloads(*, days: int = 7) -> dict:
-    """近 N 天：总次数 + 按 IP；供私人包访客统计页展示。"""
+    """近 N 天：总次数 + 按 IP + 按积木 + 明细列表。"""
     from datetime import timedelta
 
     cutoff = timezone.now() - timedelta(days=days)
@@ -165,11 +250,30 @@ def summarize_home_block_downloads(*, days: int = 7) -> dict:
         }
         for row in by_block_rows
     ]
-    return {'total': total, 'by_ip': by_ip, 'by_block': by_block}
+    recent = []
+    for hit in qs.order_by('-clicked_at')[:80]:
+        recent.append({
+            'clicked_at': hit.clicked_at,
+            'finished_at': hit.finished_at,
+            'ip': hit.ip or '—',
+            'title': hit.block_title or '（无标题）',
+            'filename': hit.original_filename or '—',
+            'file_mb': _format_bytes_mb(hit.file_size_bytes),
+            'sent_mb': _format_bytes_mb(hit.bytes_sent) if hit.finished_at else '—',
+            'duration': _format_duration(hit.duration_ms) if hit.finished_at else '—',
+            'speed': _format_speed(hit.bytes_sent, hit.duration_ms) if hit.finished_at else '—',
+            'result': _hit_result_label(hit),
+        })
+    return {
+        'total': total,
+        'by_ip': by_ip,
+        'by_block': by_block,
+        'recent': recent,
+    }
 
 
 def serve_home_block_download(request, block_id):
-    """先记账再发文件。"""
+    """先记账再流式发文件；连接结束回填发出量与时长。"""
     block = ServerHomeBlock.objects.filter(
         block_id=block_id,
         block_type='file_download',
@@ -190,10 +294,14 @@ def serve_home_block_download(request, block_id):
             content_type='text/plain; charset=utf-8',
         )
 
-    record_home_block_download(request, block)
+    file_size = path.stat().st_size
+    hit = record_home_block_download(request, block, file_size_bytes=file_size)
     original = Path(block.download_file.name).name
-    response = FileResponse(path.open('rb'), as_attachment=False)
-    response['Content-Type'] = 'application/octet-stream'
+    response = StreamingHttpResponse(
+        _stream_and_finalize(path, hit.hit_id, file_size),
+        content_type='application/octet-stream',
+    )
+    response['Content-Length'] = str(file_size)
     response['Content-Disposition'] = download_content_disposition(original)
 
     new_key = getattr(request, '_yc_new_visitor_cookie', None)

@@ -26,6 +26,14 @@ from .home_page_helpers import (
     get_shop_block_spec,
     list_server_preset_specs,
 )
+from .home_page_tier_helpers import (
+    MAX_SERVER_TOPIC_PAGES,
+    list_server_pages,
+    list_topic_pages,
+    resolve_editing_server_page,
+    server_page_edit_url,
+    server_page_public_path,
+)
 
 # 与模板、panel_refresh.js 一致
 SHOP_HOME_SETTINGS_PANEL_ID = 'home-page-settings-panel'
@@ -86,9 +94,15 @@ def build_shop_home_blocks(request: HttpRequest, seller_id: str, shop_profile=No
     return blocks
 
 
-def build_server_home_blocks() -> list:
-    page = ensure_server_home_page()
+def build_server_home_blocks(page=None) -> list:
+    page = page or ensure_server_home_page()
     blocks = list(page.blocks.order_by('sort_order', 'block_type'))
+    # 二级页后台不展示不允许的类型（若历史误挂则隐藏）
+    from .home_page_tier_helpers import allowed_server_block_types
+
+    allowed = allowed_server_block_types(page)
+    if allowed is not None:
+        blocks = [b for b in blocks if b.block_type in allowed]
     for b in blocks:
         _enrich_server_block(b)
     return blocks
@@ -107,20 +121,37 @@ def _shop_home_common_context(request: HttpRequest, seller_id: str, shop_profile
         'save_block_action_name': 'save_home_block',
         'delete_block_action_name': 'delete_home_block',
         'home_blocks_panel_id': SHOP_HOME_BLOCKS_PANEL_ID,
+        'topic_link_choices': [],
+        'editing_page_id': '',
     }
     ctx.update(photo_quota_hint(request.user))
     return ctx
 
 
-def _server_home_common_context(request: HttpRequest) -> dict:
-    page = ensure_server_home_page()
-    blocks = build_server_home_blocks()
+def _server_home_common_context(request: HttpRequest, page=None) -> dict:
+    page = page or resolve_editing_server_page(request)
+    blocks = build_server_home_blocks(page)
     custom_count = count_server_custom_blocks(page)
     download_count = count_server_download_blocks(page)
+    all_pages = list_server_pages()
+    topics = list_topic_pages()
+    # 选页入口：大厅可链到各二级；二级也可链回大厅或其它二级
+    link_choices = []
+    for p in all_pages:
+        if p.pk == page.pk:
+            continue
+        path = server_page_public_path(p)
+        label = (p.title or '').strip() or (p.slug if p.is_topic else '一级大厅')
+        if p.is_topic:
+            label = f'{label}（{path}）'
+        else:
+            label = f'一级大厅（/）'
+        link_choices.append({'id': str(p.pk), 'label': label, 'path': path})
+
     ctx = {
         'home_page': page,
         'home_blocks': blocks,
-        'preset_specs': list_server_preset_specs(),
+        'preset_specs': list_server_preset_specs() if page.is_hall else [],
         'custom_block_count': custom_count,
         'max_custom_blocks': MAX_SERVER_CUSTOM_BLOCKS,
         'can_add_custom_block': custom_count < MAX_SERVER_CUSTOM_BLOCKS,
@@ -128,10 +159,20 @@ def _server_home_common_context(request: HttpRequest) -> dict:
         'max_download_blocks': MAX_SERVER_DOWNLOAD_BLOCKS,
         'can_add_download_block': download_count < MAX_SERVER_DOWNLOAD_BLOCKS,
         'section': 'server_home',
-        'preview_url': '/',
+        'preview_url': server_page_public_path(page),
         'save_block_action_name': 'save_server_home_block',
         'delete_block_action_name': 'delete_server_home_block',
         'home_blocks_panel_id': SERVER_HOME_BLOCKS_PANEL_ID,
+        'server_pages': all_pages,
+        'topic_pages': topics,
+        'topic_count': len(topics),
+        'max_topic_pages': MAX_SERVER_TOPIC_PAGES,
+        'can_add_topic_page': len(topics) < MAX_SERVER_TOPIC_PAGES,
+        'is_editing_hall': page.is_hall,
+        'is_editing_topic': page.is_topic,
+        'editing_page_id': str(page.pk),
+        'topic_link_choices': link_choices,
+        'page_edit_url': server_page_edit_url(page),
     }
     ctx.update(photo_quota_hint(request.user))
     return ctx
@@ -155,8 +196,8 @@ def render_shop_home_blocks_panel_html(
     )
 
 
-def render_server_home_blocks_panel_html(request: HttpRequest) -> str:
-    ctx = _server_home_common_context(request)
+def render_server_home_blocks_panel_html(request: HttpRequest, page=None) -> str:
+    ctx = _server_home_common_context(request, page=page)
     return render_to_string(
         'waimai/owner/_server_home_blocks_panel.html', ctx, request=request,
     )

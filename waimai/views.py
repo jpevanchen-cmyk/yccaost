@@ -239,7 +239,7 @@ from .session_guard import session_beacon_logout, session_heartbeat  # noqa: E40
 
 
 def home(request):
-    """本服务器主页（拥有者配置；与单店主页严格分开）"""
+    """本服务器一级大厅（拥有者配置；与单店主页严格分开）"""
     from .home_page_helpers import build_server_home_view_context
     from .models import ShopProfile
 
@@ -247,6 +247,20 @@ def home(request):
     if not ShopProfile.objects.exists():
         return render(request, 'waimai/home_empty.html')
     context = build_server_home_view_context(request)
+    return render(request, 'waimai/showcase_home.html', context)
+
+
+def server_topic_page(request, slug):
+    """二级专题页：/p/短名/"""
+    from django.http import Http404
+
+    from .home_page_helpers import build_server_home_view_context
+    from .home_page_tier_helpers import get_topic_page_by_slug
+
+    page = get_topic_page_by_slug(slug)
+    if page is None:
+        raise Http404('找不到该专题页')
+    context = build_server_home_view_context(request, page=page)
     return render(request, 'waimai/showcase_home.html', context)
 
 
