@@ -70,15 +70,12 @@
             <label class="form-label">标题</label>
             <input class="form-input home-block-title-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="显示在主页上的大标题" data-yc-tour="home-block-title">
 
+            <label class="form-label">正文</label>
+            <textarea class="form-input home-block-body-input" name="body" rows="8" placeholder="客人在主页上看到的文字" data-yc-tour="home-block-body">{{ block.body }}</textarea>
+
             <div class="home-block-media-box" data-yc-tour="home-block-upload">
                 <p class="form-label" style="margin-bottom:6px;">配图（可选，本账号已用 {{ photo_used }} / {{ photo_max }} 张）</p>
-                <p class="card-meta" style="margin:0 0 10px;">从手机或电脑直接上传；单张不超过 {{ photo_max_mb }} MB。</p>
-
-                {% if block.display_image_src %}
-                <div class="home-block-img-preview">
-                    <img src="{{ block.display_image_src }}" alt="">
-                </div>
-                {% endif %}
+                <p class="card-meta" style="margin:0 0 10px;">从手机或电脑直接上传；单张不超过 {{ photo_max_mb }} MB。主页上与下面预览相同：先「查看原图」，下为正方形缩略（整张缩小、不裁切）。</p>
 
                 {% if block.image %}
                 <label class="form-check" style="margin:0 0 10px;">
@@ -97,11 +94,9 @@
                            placeholder="从手机/电脑直接上传，单张不超过 {{ photo_max_mb }} MB"
                            title="{% if block.image %}已上传，本站地址：{{ block.image.url }}{% endif %}">
                 </div>
-                <p class="card-meta" style="margin:8px 0 0;">上传后请点「保存本块」。主页正文下方会有「查看原图」按钮。</p>
+                {% include 'waimai/_home_block_image.html' with image_src=block.display_image_src %}
+                <p class="card-meta" style="margin:8px 0 0;">上传后请点「保存本块」。</p>
             </div>
-
-            <label class="form-label">正文</label>
-            <textarea class="form-input home-block-body-input" name="body" rows="8" placeholder="客人在主页上看到的文字" data-yc-tour="home-block-body">{{ block.body }}</textarea>
 
             <div class="home-block-link-box">
                 {% if topic_link_choices %}

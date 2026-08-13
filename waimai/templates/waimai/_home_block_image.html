@@ -1,0 +1,9 @@
+{# 积木配图共用展示：先「查看原图」，下方正方形缩略（完整缩小、不裁切） #}
+{% if image_src %}
+<div class="yc-home-block-image">
+    <a class="btn btn-sm btn-outline yc-home-block-image-orig" href="{{ image_src }}" target="_blank" rel="noopener">查看原图</a>
+    <div class="yc-home-block-image-thumb">
+        <img src="{{ image_src }}" alt="">
+    </div>
+</div>
+{% endif %}

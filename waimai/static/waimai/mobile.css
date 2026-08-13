@@ -3440,12 +3440,33 @@ ul.errorlist li {
     flex-wrap: wrap;
     gap: 8px;
 }
-.showcase-home-page .showcase-block-img {
-    width: 100%;
-    max-height: 160px;
-    object-fit: cover;
+/* 积木配图：前台与后台编辑预览共用（见 _home_block_image.html） */
+.yc-home-block-image {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 8px;
+}
+/* 边长约「查看原图」小按钮宽度的 1.5 倍，正方形 */
+.yc-home-block-image-thumb {
+    width: 9em;
+    height: 9em;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
     border-radius: 8px;
-    margin-bottom: 8px;
+    background: #f3f3f3;
+    border: 1px solid #e8e8e8;
+}
+.yc-home-block-image-thumb img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
     display: block;
 }
 .showcase-home-page .showcase-body {
@@ -3894,15 +3915,6 @@ body.yc-tour-active {
     margin: 12px 0;
     padding: 10px;
     background: #fafafa;
-    border-radius: 8px;
-}
-.home-block-img-preview {
-    margin: 8px 0;
-}
-.home-block-img-preview img {
-    width: 100%;
-    max-height: 220px;
-    object-fit: cover;
     border-radius: 8px;
 }
 .home-block-path-row {
