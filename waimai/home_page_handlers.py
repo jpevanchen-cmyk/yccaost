@@ -377,8 +377,9 @@ def handle_server_home_page_post(request):
             messages.error(request, msg)
             return _server_home_redirect(page)
 
-        allowed = allowed_server_block_types(page)
-        if allowed is not None and block.block_type not in allowed:
+        from .home_page_tier_helpers import page_allows_block_type
+
+        if not page_allows_block_type(page, block.block_type):
             msg = '本页不允许该类型积木'
             panel_resp = respond_home_panel(
                 request, panel_id=SERVER_HOME_BLOCKS_PANEL_ID, ok=False, message=msg,

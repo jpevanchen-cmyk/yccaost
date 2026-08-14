@@ -1,0 +1,74 @@
+{% extends 'waimai/owner/base.html' %}
+{% load static %}
+{% load yc_time %}
+{% block title %}公开留言壁{% endblock %}
+{% block owner_content %}
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h1 style="margin:0 0 8px;font-size:20px;">公开留言壁</h1>
+    <p class="card-meta" style="margin:0;">这里管大厅人人可见的墙，和「留言管理」（私信）不是同一块。隐藏或删除后库里仍留着，大厅上看不到原文、楼号还在。署名可手填；藏/删写下的是说明，正常回是回复。</p>
+</div>
+
+{% if public_wall_posts %}
+    {% for post in public_wall_posts %}
+    <div class="card" style="padding:16px;margin-bottom:14px;">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;">
+            <strong>{{ post.floor_no }} 楼</strong>
+            <span class="card-meta">{{ post.display_name }} · {{ post.created_at|local:"Y-m-d H:i" }}</span>
+            <span class="card-meta">{% if post.status == 'visible' %}正常{% elif post.status == 'hidden' %}已隐藏{% else %}已删除{% endif %}</span>
+        </div>
+        <p style="margin:10px 0 0;white-space:pre-wrap;">{{ post.body }}</p>
+        {% if post.author_user_id %}
+        <p class="card-meta" style="margin:6px 0 0;">登录账号：{{ post.author_user_id }}</p>
+        {% endif %}
+        {% for reply in post.replies.all %}
+        <p class="card-meta" style="margin:8px 0 0;white-space:pre-wrap;">{{ reply.public_heading }} · {{ reply.created_at|local:"m-d H:i" }}：{{ reply.body }}</p>
+        {% endfor %}
+
+        <form method="post" class="seller-form-stack js-public-wall-mod" style="margin-top:12px;">
+            {% csrf_token %}
+            <input type="hidden" name="post_id" value="{{ post.post_id }}">
+            <input type="hidden" name="page" value="{{ public_wall_admin_page|default:1 }}">
+            <input type="hidden" name="idempotency_key" value="">
+            <input type="hidden" name="action" value="" class="js-public-wall-action">
+            <label>对外署名
+                <input class="form-input" type="text" name="signer" maxlength="{{ public_wall_max_signer|default:40 }}" value="{{ public_wall_default_signer|default:'管理员' }}" placeholder="例如：管理员、外卖大叔">
+            </label>
+            <label>楼下内容（可不填；隐藏/删除时也可写原因）
+                <textarea class="form-input" name="note" rows="2" maxlength="{{ public_wall_max_body|default:500 }}" placeholder="例如：因含不当内容已隐藏"></textarea>
+            </label>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
+                <button type="submit" class="btn btn-sm btn-primary" name="action" value="reply">回复</button>
+                {% if post.status != 'hidden' %}
+                <button type="submit" class="btn btn-sm btn-outline" name="action" value="hide">隐藏</button>
+                {% endif %}
+                {% if post.status != 'deleted' %}
+                <button type="submit" class="btn btn-sm btn-outline js-public-wall-delete" name="action" value="delete">删除</button>
+                {% endif %}
+                {% if post.status != 'visible' %}
+                <button type="submit" class="btn btn-sm btn-green" name="action" value="restore">恢复显示</button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    {% endfor %}
+{% else %}
+<div class="card" style="padding:16px;">
+    <p class="card-meta">还没有公开留言。</p>
+</div>
+{% endif %}
+
+{% if public_wall_pager and public_wall_pager.has_other_pages %}
+<div class="work-list-pagination" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px;">
+    <span class="card-meta">共 {{ public_wall_pager.count }} 条 · 第 {{ public_wall_pager.number }}/{{ public_wall_pager.num_pages }} 页</span>
+    {% if public_wall_pager.prev_url %}
+    <a href="{{ public_wall_pager.prev_url }}" class="btn btn-sm btn-outline">上一页</a>
+    {% endif %}
+    {% if public_wall_pager.next_url %}
+    <a href="{{ public_wall_pager.next_url }}" class="btn btn-sm btn-outline">下一页</a>
+    {% endif %}
+</div>
+{% endif %}
+
+<script src="{% static 'waimai/idempotency_client.js' %}"></script>
+<script src="{% static 'waimai/public_wall_admin.js' %}?v=2"></script>
+{% endblock %}

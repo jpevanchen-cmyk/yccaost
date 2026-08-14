@@ -26,7 +26,8 @@
 {% include 'waimai/seller/_panel_fold.html' with fold_id='custom-blocks-toolbar' fold_title='➕ 自定义积木（添加）' %}
     <p class="card-meta" style="margin:0 0 10px;">
         已用 {{ custom_block_count }} / {{ max_custom_blocks }} 块。新加的块会出现在最下面。
-        {% if is_editing_hall %}可用「链到本站页」把访客带到二级专题。{% endif %}
+        {% if is_editing_hall %}可用「链到本站页」把访客带到二级专题或互动社区。{% endif %}
+        {% if is_editing_community %}可用「链到本站页」链回大厅或其它专题。{% endif %}
     </p>
     {% if can_add_custom_block %}
     <form method="post" style="display:inline;" data-yc-panel="{{ home_blocks_panel_id }}">

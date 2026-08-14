@@ -47,6 +47,14 @@
             <p class="card-meta" style="margin:8px 0 0;">名录块自带搜索与店铺列表；一般不用配图和附加链接。</p>
             <input type="hidden" name="link_url" value="{{ block.link_url }}">
             <input type="hidden" name="link_label" value="{{ block.link_label }}">
+            {% elif block.block_type == 'public_wall' %}
+            <label class="form-label">标题</label>
+            <input class="form-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="野草公开留言壁">
+            <label class="form-label">说明文字</label>
+            <textarea class="form-input home-block-body-input" name="body" rows="4" placeholder="可写一段墙上的介绍，也可留空">{{ block.body }}</textarea>
+            <p class="card-meta" style="margin:8px 0 0;">这是人人可见的公开墙，和「联系我们」不是同一块。一般不用配图和附加链接。</p>
+            <input type="hidden" name="link_url" value="{{ block.link_url }}">
+            <input type="hidden" name="link_label" value="{{ block.link_label }}">
             {% elif block.block_type == 'file_download' %}
             <label class="form-label">标题</label>
             <input class="form-input" type="text" name="title" value="{{ block.title }}" maxlength="120" placeholder="例如：下载本地营业安装包">

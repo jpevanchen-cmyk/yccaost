@@ -2,7 +2,7 @@
 {% block title %}留言 {{ thread.public_code }}{% endblock %}
 {% block content %}
 <div class="card" style="padding:16px;margin-bottom:14px;">
-    <p><a href="{{ home_url }}#block-contact_us">← 返回主页留言板</a></p>
+        <p><a href="{{ home_url }}#block-contact_us">← 返回留言板</a></p>
     <h1 style="margin:8px 0;font-size:18px;">留言编号 {{ thread.public_code }}</h1>
     <p class="card-meta">与 {{ thread.guest_display_name|default:"游客" }} 的对话</p>
     {% if thread_notice %}

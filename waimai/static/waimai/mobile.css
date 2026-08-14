@@ -46,6 +46,28 @@ a {
     z-index: 300;
 }
 
+/* 服务器设置：顶栏标题 + 分区按钮整块吸顶（复用 .site-top） */
+.owner-settings-page .site-top {
+    background: var(--yc-card);
+    border-bottom: 1px solid var(--yc-border);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.owner-settings-page .site-header {
+    box-shadow: none;
+    border-bottom: none;
+}
+
+.owner-settings-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 4px 16px 12px;
+    background: var(--yc-card);
+}
+
 .site-header {
     display: flex;
     align-items: center;
@@ -3230,6 +3252,30 @@ ul.errorlist li {
         background: var(--yc-card);
         border-bottom: 1px solid var(--yc-border);
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    }
+
+    /* 服务器设置：宽屏标题与按钮同一行，省掉标题独占的那一行 */
+    .owner-settings-page .site-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 8px 12px;
+        padding: 8px 16px 10px;
+    }
+
+    .owner-settings-page .site-header {
+        flex: 0 0 auto;
+        min-height: auto;
+        padding: 4px 0;
+        border: none;
+        box-shadow: none;
+    }
+
+    .owner-settings-nav {
+        flex: 1 1 280px;
+        max-width: none;
+        margin: 0;
+        padding: 0;
     }
 
     .site-header {

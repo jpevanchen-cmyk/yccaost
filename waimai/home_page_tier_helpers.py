@@ -12,15 +12,19 @@ from django.db.models import Max
 from django.urls import reverse
 
 from .home_page_helpers import (
+    BLOCK_CONTACT_US,
     BLOCK_CUSTOM,
     BLOCK_FILE_DOWNLOAD,
+    BLOCK_PUBLIC_WALL,
+    COMMUNITY_ONLY_BLOCK_TYPES,
     MAX_SERVER_CUSTOM_BLOCKS,
     MAX_SERVER_DOWNLOAD_BLOCKS,
     ensure_server_home_page,
 )
 
-# 二级页数量上限（防乱建）
+# 二级页数量上限（防乱建；含唯一的互动社区页）
 MAX_SERVER_TOPIC_PAGES = 20
+COMMUNITY_PAGE_TITLE = '野草互动社区'
 
 # 短名：小写字母数字与连字符；禁止首尾连字符
 _SLUG_RE = re.compile(r'^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$')
@@ -76,17 +80,20 @@ def validate_topic_slug(slug: str, *, exclude_page_id=None) -> str:
 
 
 def list_server_pages():
-    """大厅在前，其后按编号排列二级页"""
-    ensure_server_home_page()
+    """大厅在前，互动社区次之，其后按编号排列其它二级页"""
+    ensure_community_page()
     from .models import ServerHomePage
 
     hall = ServerHomePage.objects.filter(page_role=ServerHomePage.PAGE_HALL).first()
+    community = ServerHomePage.objects.filter(page_role=ServerHomePage.PAGE_COMMUNITY).first()
     topics = list(
         ServerHomePage.objects.filter(page_role=ServerHomePage.PAGE_TOPIC).order_by('singleton_id')
     )
     pages = []
     if hall:
         pages.append(hall)
+    if community:
+        pages.append(community)
     pages.extend(topics)
     return pages
 
@@ -94,9 +101,11 @@ def list_server_pages():
 def list_topic_pages():
     from .models import ServerHomePage
 
-    ensure_server_home_page()
+    ensure_community_page()
     return list(
-        ServerHomePage.objects.filter(page_role=ServerHomePage.PAGE_TOPIC).order_by('singleton_id')
+        ServerHomePage.objects.filter(
+            page_role__in=(ServerHomePage.PAGE_TOPIC, ServerHomePage.PAGE_COMMUNITY),
+        ).order_by('singleton_id')
     )
 
 
@@ -119,12 +128,14 @@ def get_topic_page_by_slug(slug: str):
     if not slug:
         return None
     return ServerHomePage.objects.filter(
-        page_role=ServerHomePage.PAGE_TOPIC, slug=slug,
+        page_role__in=(ServerHomePage.PAGE_TOPIC, ServerHomePage.PAGE_COMMUNITY),
+        slug=slug,
     ).first()
 
 
 def resolve_editing_server_page(request):
     """从 POST/GET 解析当前正在编辑的服务器页；默认大厅"""
+    ensure_community_page()
     raw = (request.POST.get('page_id') or request.GET.get('page') or '').strip()
     if raw:
         return get_server_page_by_id(raw)
@@ -132,10 +143,39 @@ def resolve_editing_server_page(request):
 
 
 def allowed_server_block_types(page) -> frozenset | None:
-    """该页允许的积木类型；大厅返回 None 表示不额外限制（含插件积木）"""
+    """该页允许的积木类型；大厅返回 None 表示不额外限制（含插件积木，但不含互动社区专属块）"""
     if page is None or getattr(page, 'is_hall', True) or page.page_role == 'hall':
         return None
+    if getattr(page, 'is_community', False) or page.page_role == 'community':
+        return frozenset({
+            BLOCK_CUSTOM, BLOCK_FILE_DOWNLOAD, BLOCK_CONTACT_US, BLOCK_PUBLIC_WALL,
+        })
     return frozenset({BLOCK_CUSTOM, BLOCK_FILE_DOWNLOAD})
+
+
+def page_allows_block_type(page, block_type: str) -> bool:
+    """某页能不能挂这种积木。留言板/公开墙只允许互动社区。"""
+    code = (block_type or '').strip()
+    if code in COMMUNITY_ONLY_BLOCK_TYPES:
+        return bool(page and getattr(page, 'is_community', False))
+    allowed = allowed_server_block_types(page)
+    if allowed is None:
+        return True
+    return code in allowed
+
+
+def community_page_public_path() -> str:
+    """互动社区前台网址。"""
+    return server_page_public_path(ensure_community_page())
+
+
+def community_page_anchor_url(anchor: str) -> str:
+    """互动社区页上某一块的定位。"""
+    path = community_page_public_path() or '/'
+    if not path.endswith('/'):
+        path = f'{path}/'
+    name = (anchor or '').strip().lstrip('#')
+    return f'{path}#{name}' if name else path
 
 
 def _next_page_id() -> int:
@@ -161,6 +201,75 @@ def allocate_unique_topic_slug(page_id: int) -> str:
     return f'p{page_id}-{uuid.uuid4().hex[:8]}'
 
 
+def _ensure_community_preset_blocks(page) -> None:
+    """互动社区页上补齐留言板、公开墙两块（已有则不动）。"""
+    from .home_page_helpers import SERVER_PRESET_SPECS, _default_server_content
+    from .models import ServerHomeBlock
+
+    existing = {b.block_type: b for b in page.blocks.all()}
+    to_create = []
+    for spec in SERVER_PRESET_SPECS:
+        if spec.code not in COMMUNITY_ONLY_BLOCK_TYPES:
+            continue
+        if spec.code in existing:
+            continue
+        title, body = _default_server_content(spec.code)
+        to_create.append(ServerHomeBlock(
+            block_id=uuid.uuid4(),
+            home_page=page,
+            block_type=spec.code,
+            title=title,
+            body=body,
+            is_enabled=spec.default_enabled,
+            show_in_nav=spec.default_show_in_nav,
+            sort_order=spec.default_sort,
+            nav_label=spec.default_nav_label,
+        ))
+    if to_create:
+        ServerHomeBlock.objects.bulk_create(to_create)
+
+
+def _move_community_blocks_from_hall(hall, community) -> None:
+    """把大厅上的留言板/公开墙改挂到互动社区；不复制数据。"""
+    for code in COMMUNITY_ONLY_BLOCK_TYPES:
+        comm_block = community.blocks.filter(block_type=code).first()
+        hall_blocks = list(hall.blocks.filter(block_type=code))
+        for hall_block in hall_blocks:
+            if comm_block is None:
+                hall_block.home_page = community
+                hall_block.save(update_fields=['home_page'])
+                comm_block = hall_block
+            elif hall_block.pk != comm_block.pk:
+                hall_block.delete()
+
+
+@transaction.atomic
+def ensure_community_page():
+    """保证整站只有一页「野草互动社区」，并把两块从大厅搬走。"""
+    from .models import ServerHomePage
+
+    hall = ensure_server_home_page()
+    page = ServerHomePage.objects.filter(page_role=ServerHomePage.PAGE_COMMUNITY).first()
+    if page is None:
+        page_id = _next_page_id()
+        slug = allocate_unique_topic_slug(page_id)
+        page = ServerHomePage(
+            singleton_id=page_id,
+            page_role=ServerHomePage.PAGE_COMMUNITY,
+            slug=slug,
+            title=COMMUNITY_PAGE_TITLE,
+            welcome_body='',
+            welcome_enabled=True,
+        )
+        page.save()
+    elif not (page.title or '').strip():
+        page.title = COMMUNITY_PAGE_TITLE
+        page.save(update_fields=['title', 'updated_at'])
+    _move_community_blocks_from_hall(hall, page)
+    _ensure_community_preset_blocks(page)
+    return page
+
+
 def _copy_file_field(src_field, dest_instance, attr_name: str) -> None:
     """把源文件字段内容复制到目标实例（新文件名）"""
     if not src_field:
@@ -184,8 +293,8 @@ def create_topic_page_blank(*, title: str) -> tuple[object | None, str]:
     """空白新建二级页；短名由程序生成。成功返回 (page, '')，失败返回 (None, 原因)"""
     from .models import ServerHomePage
 
-    ensure_server_home_page()
-    if ServerHomePage.objects.filter(page_role=ServerHomePage.PAGE_TOPIC).count() >= MAX_SERVER_TOPIC_PAGES:
+    ensure_community_page()
+    if ServerHomePage.objects.exclude(page_role=ServerHomePage.PAGE_HALL).count() >= MAX_SERVER_TOPIC_PAGES:
         return None, f'二级页最多 {MAX_SERVER_TOPIC_PAGES} 个，无法再新建'
 
     page_id = _next_page_id()
@@ -263,8 +372,10 @@ def delete_topic_page(page) -> str:
     """删除二级页；大厅不可删。成功返回空串"""
     from .models import ServerHomePage
 
-    if page is None or page.page_role != ServerHomePage.PAGE_TOPIC:
+    if page is None or not getattr(page, 'is_topic', False):
         return '只能删除二级专题页'
+    if getattr(page, 'is_community', False):
+        return '野草互动社区不能删除'
     # 先清文件字段，再删行
     for block in page.blocks.all():
         if block.image:
@@ -286,7 +397,7 @@ def save_topic_page_settings(page, *, title: str, welcome_body: str, welcome_ena
     """保存二级页设置（短名只读，不接受手改）；失败返回人话"""
     from .models import ServerHomePage
 
-    if page is None or page.page_role != ServerHomePage.PAGE_TOPIC:
+    if page is None or not getattr(page, 'is_topic', False):
         return '只能改二级专题页设置'
 
     page.title = (title or '').strip()[:80] or (page.title or page.slug or '专题页')

@@ -15,7 +15,11 @@ from .tray_backup_helpers import (
     start_post_startup_backup_health_thread,
     start_scheduled_backup_thread,
 )
-from .tray_config_helpers import fetch_launcher_config, project_root
+from .tray_config_helpers import (
+    apply_detected_lan_from_tray,
+    fetch_launcher_config,
+    project_root,
+)
 from .tray_password_helpers import (
     apply_tray_password_settings,
     exit_password_required,
@@ -125,6 +129,10 @@ class YecaoTrayApp:
         self._pwd_exit_var = None
         self._pwd_old_entry = None
         self._pwd_new_entry = None
+        self._lan_saved_label = None
+        self._lan_detected_label = None
+        self._lan_match_label = None
+        self._lan_hint_label = None
         self._stopping = False
         self._backup_stop = threading.Event()
         self._instance_lock = InstallSingleInstanceLock(self.root_dir)
@@ -180,8 +188,8 @@ class YecaoTrayApp:
 
         win = tk.Tk()
         win.title('野草系统 · 本地营业控制台')
-        win.geometry('560x640')
-        win.minsize(480, 520)
+        win.geometry('560x760')
+        win.minsize(480, 620)
         win.protocol('WM_DELETE_WINDOW', self.hide_status_window)
 
         outer = ttk.Frame(win, padding=16)
@@ -203,11 +211,38 @@ class YecaoTrayApp:
         self._status_label = ttk.Label(status_box, text='正在启动…', wraplength=500)
         self._status_label.pack(anchor='w')
 
+        lan_box = ttk.LabelFrame(outer, text='店内地址（手机/桌码用）', padding=10)
+        lan_box.pack(fill='x', pady=(0, 10))
+        self._lan_saved_label = ttk.Label(lan_box, text='已保存：—', wraplength=500)
+        self._lan_saved_label.pack(anchor='w')
+        self._lan_detected_label = ttk.Label(lan_box, text='当前探测：—', wraplength=500)
+        self._lan_detected_label.pack(anchor='w', pady=(2, 0))
+        self._lan_match_label = ttk.Label(lan_box, text='是否一致：—', wraplength=500)
+        self._lan_match_label.pack(anchor='w', pady=(2, 0))
+        self._lan_hint_label = ttk.Label(lan_box, text='', wraplength=500)
+        self._lan_hint_label.pack(anchor='w', pady=(2, 6))
+        lan_row1 = ttk.Frame(lan_box)
+        lan_row1.pack(fill='x', pady=2)
+        ttk.Button(lan_row1, text='复制店内地址', command=self.copy_lan_address).pack(
+            side='left', padx=(0, 8),
+        )
+        ttk.Button(lan_row1, text='用店内地址打开', command=self.open_lan_browser).pack(
+            side='left', padx=(0, 8),
+        )
+        lan_row2 = ttk.Frame(lan_box)
+        lan_row2.pack(fill='x', pady=2)
+        ttk.Button(lan_row2, text='检测当前 IP', command=self.detect_lan).pack(
+            side='left', padx=(0, 8),
+        )
+        ttk.Button(lan_row2, text='一键更新为当前', command=self.apply_detected_lan).pack(
+            side='left',
+        )
+
         action_box = ttk.LabelFrame(outer, text='常用操作', padding=10)
         action_box.pack(fill='x', pady=(0, 10))
         row1 = ttk.Frame(action_box)
         row1.pack(fill='x', pady=2)
-        ttk.Button(row1, text='打开营业地址', command=self.open_browser).pack(
+        ttk.Button(row1, text='本机打开后台', command=self.open_browser).pack(
             side='left', padx=(0, 8),
         )
         ttk.Button(row1, text='检查端口占用', command=self.check_port_usage).pack(
@@ -253,6 +288,7 @@ class YecaoTrayApp:
         )
 
         self._refresh_password_panel()
+        self._refresh_lan_panel()
         self.status_window = win
         return win
 
@@ -291,15 +327,141 @@ class YecaoTrayApp:
         if self.icon is not None:
             self.icon.notify('已最小化到托盘', '野草仍在后台营业')
 
+    def _refresh_lan_panel(self) -> None:
+        cfg = self.config or {}
+        saved = (cfg.get('lan_base_url') or '').strip() or '（还没有保存）'
+        detected = (cfg.get('detected_lan') or '').strip()
+        if cfg.get('detect_failed') or not detected:
+            detected = '（测不到）'
+        if cfg.get('detect_failed'):
+            match_text = '是否一致：测不到，无法对比'
+            match_color = '#b8860b'
+        elif cfg.get('match'):
+            match_text = '是否一致：一致'
+            match_color = '#2e7d32'
+        else:
+            match_text = '是否一致：不一致'
+            match_color = '#b8860b'
+        hint = (cfg.get('lan_message') or '').strip()
+        if self._lan_saved_label is not None:
+            self._lan_saved_label.config(text='已保存：' + saved)
+        if self._lan_detected_label is not None:
+            self._lan_detected_label.config(text='当前探测：' + detected)
+        if self._lan_match_label is not None:
+            self._lan_match_label.config(text=match_text, foreground=match_color)
+        if self._lan_hint_label is not None:
+            self._lan_hint_label.config(text=hint)
+
+    def _notify_lan_mismatch_if_needed(self) -> None:
+        cfg = self.config or {}
+        if cfg.get('match') or cfg.get('detect_failed'):
+            return
+        msg = (cfg.get('lan_message') or '店内地址与当前探测不一致').strip()
+        self._set_status_text(msg)
+        if self.icon is not None:
+            try:
+                self.icon.notify(msg, '野草')
+            except Exception:
+                pass
+
     def open_browser(self, _icon=None, _item=None) -> None:
         def _open() -> None:
             self.config = fetch_launcher_config(self.root_dir)
+            self._refresh_lan_panel()
             webbrowser.open(
                 self.config.get('open_url') or 'http://127.0.0.1:8000/accounts/login/',
             )
-            self._set_status_text('已打开营业地址')
+            self._set_status_text('已用本机地址打开后台')
 
         self._ui(_open)
+
+    def open_lan_browser(self, _icon=None, _item=None) -> None:
+        def _open() -> None:
+            from tkinter import messagebox
+
+            self.config = fetch_launcher_config(self.root_dir)
+            self._refresh_lan_panel()
+            lan = (self.config.get('lan_base_url') or '').strip()
+            parent = self._ensure_status_window()
+            if not lan:
+                messagebox.showinfo(
+                    '店内地址',
+                    '还没有保存店内地址。请先检测并一键更新，或到堂食营业里填写。',
+                    parent=parent,
+                )
+                return
+            webbrowser.open(lan.rstrip('/') + '/accounts/login/')
+            self._set_status_text('已用店内地址打开（请在同一店内网试）')
+
+        self._ui(_open)
+
+    def copy_lan_address(self, _icon=None, _item=None) -> None:
+        def _copy() -> None:
+            from tkinter import messagebox
+
+            self.config = fetch_launcher_config(self.root_dir)
+            self._refresh_lan_panel()
+            lan = (self.config.get('lan_base_url') or '').strip()
+            parent = self._ensure_status_window()
+            if not lan:
+                messagebox.showinfo('店内地址', '还没有可复制的店内地址。', parent=parent)
+                return
+            parent.clipboard_clear()
+            parent.clipboard_append(lan)
+            self._set_status_text('已复制店内地址')
+
+        self._ui(_copy)
+
+    def detect_lan(self, _icon=None, _item=None) -> None:
+        def _run() -> None:
+            self._set_status_text('正在检测当前店内号…')
+            self.config = fetch_launcher_config(self.root_dir)
+            self._refresh_lan_panel()
+            self._set_status_text(self.config.get('lan_message') or '检测完成')
+
+        self._ui(_run)
+
+    def apply_detected_lan(self, _icon=None, _item=None) -> None:
+        def _run() -> None:
+            from tkinter import messagebox
+
+            parent = self._ensure_status_window()
+            self.config = fetch_launcher_config(self.root_dir)
+            self._refresh_lan_panel()
+            detected = (self.config.get('detected_lan') or '').strip()
+            if self.config.get('detect_failed') or not detected:
+                messagebox.showinfo(
+                    '无法一键更新',
+                    self.config.get('lan_message')
+                    or '测不到当前号，未改已保存的店内地址。',
+                    parent=parent,
+                )
+                return
+            saved = (self.config.get('lan_base_url') or '').strip() or '（空）'
+            ask = messagebox.askyesno(
+                '确认更新店内地址',
+                '将把店内地址改成当前探测结果。\n\n'
+                f'已保存：{saved}\n'
+                f'当前探测：{detected}\n\n'
+                '不会偷偷改。若桌上贴的码还是旧号，更新后请重打。\n'
+                '确定要更新吗？',
+                parent=parent,
+            )
+            if not ask:
+                return
+            self._set_status_text('正在更新店内地址…')
+            result = apply_detected_lan_from_tray(self.root_dir)
+            self.config = fetch_launcher_config(self.root_dir)
+            self._refresh_lan_panel()
+            msg = (result.get('message') or result.get('lan_message') or '').strip()
+            if result.get('ok') is False:
+                messagebox.showerror('未更新', msg or '更新失败。', parent=parent)
+                self._set_status_text(msg or '未更新店内地址')
+            else:
+                messagebox.showinfo('已更新', msg or '店内地址已更新。', parent=parent)
+                self._set_status_text(msg or '店内地址已更新')
+
+        self._ui(_run)
 
     def check_port_usage(self, _icon=None, _item=None) -> None:
         """查看端口占用，并可结束「其它」本项目 runserver（不杀当前自己的）。"""
@@ -467,6 +629,7 @@ class YecaoTrayApp:
 
         if ok:
             self.open_browser()
+            self._notify_lan_mismatch_if_needed()
             # 首次启动先藏到托盘；需要时右键/左键打开控制台
             self.status_window.withdraw()
         else:

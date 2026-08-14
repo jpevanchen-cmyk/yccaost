@@ -78,6 +78,8 @@
         </div>
     {% elif block.block_type == 'contact_us' %}
         {% include 'waimai/guestbook/contact_us_block.html' with block=block %}
+    {% elif block.block_type == 'public_wall' %}
+        {% include 'waimai/public_wall/wall_block.html' with block=block %}
     {% elif block.block_type == 'file_download' %}
         <h2 class="showcase-block-title">{{ block.title|default:"下载" }}</h2>
         <div class="showcase-block-main">

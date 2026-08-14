@@ -285,7 +285,6 @@ def finalize_v1_setup(draft: dict[str, Any]) -> tuple[User, dict[str, Any]]:
     site.site_name = shop_name
     site.v1_setup_completed = True
     site.v1_listen_port = listen_port
-    site.v1_lan_base_url = lan_base_url
     site.v1_backup_dir = backup_dir
     site.install_mode = INSTALL_MODE_V1_LOCAL
     site.save(
@@ -293,7 +292,6 @@ def finalize_v1_setup(draft: dict[str, Any]) -> tuple[User, dict[str, Any]]:
             'site_name',
             'v1_setup_completed',
             'v1_listen_port',
-            'v1_lan_base_url',
             'v1_backup_dir',
             'install_mode',
             'updated_at',

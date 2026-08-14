@@ -137,18 +137,14 @@ def http_base_is_loopback(url: str) -> bool:
 def resolve_shop_access_base_url(request, seller_id: str) -> str:
     """
     店内设备可访问的根地址（工作台码、桌贴等共用）。
-    优先：经营设置局域网 → V1 站点局域网 → 支付里的公网根地址 → 当前请求主机。
+    优先：堂食局域网真源 → 支付里的公网根地址 → 当前请求主机。
     任一为回环（127/localhost）则跳过；都不可用则返回空串（禁止用 127 冒充店内地址）。
     """
-    lan = (getattr(get_operating_settings(seller_id), 'table_lan_base_url', '') or '').strip().rstrip('/')
-    if lan and not http_base_is_loopback(lan):
+    from .lan_base_helpers import get_shop_lan_base_url
+
+    lan = get_shop_lan_base_url(seller_id)
+    if lan:
         return lan
-
-    from .owner_helpers import get_site_settings
-
-    v1 = (getattr(get_site_settings(), 'v1_lan_base_url', '') or '').strip().rstrip('/')
-    if v1 and not http_base_is_loopback(v1):
-        return v1
 
     from .payments import get_payment_settings
 

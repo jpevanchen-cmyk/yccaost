@@ -2,8 +2,8 @@
 {% block title %}服务器主页{% endblock %}
 {% block owner_content %}
 {% include 'waimai/seller/_panel_fold.html' with fold_id='server-home-intro' fold_title='🖥️ 服务器主页说明' fold_open=True %}
-    <p class="card-meta">主网址 <code>/</code> 固定进<strong>一级大厅</strong>（完整积木能力）。另可建<strong>二级专题页</strong>，网址形如 <code>/p/p2/</code>（短名由程序自动生成），只放自定义与文件下载，并可设欢迎弹窗。</p>
-    <p class="card-meta" style="margin:8px 0;">留言板仍整站一份，挂在一级大厅；不会随二级页复制。</p>
+    <p class="card-meta">主网址 <code>/</code> 固定进<strong>一级大厅</strong>。另可建<strong>二级专题页</strong>（网址由程序生成）。留言板和公开留言壁挂在唯一的<strong>野草互动社区</strong>页，仍可在该页加自定义/下载；大厅不写死入口，可用「链到本站页」自行做入口。</p>
+    <p class="card-meta" style="margin:8px 0;">留言板、公开墙各整站一份，不会随其它二级页复制。互动社区页不能删除、不能再建第二页。</p>
     <p class="card-meta" style="margin:8px 0;">
         配图上传名额：本账号已用 <strong>{{ photo_used }}</strong> / {{ photo_max }} 张（单张不超过 {{ photo_max_mb }} MB）。
     </p>
@@ -16,7 +16,7 @@
         {% for p in server_pages %}
         <a class="btn btn-sm {% if p.pk == home_page.pk %}btn-primary{% else %}btn-outline{% endif %}"
            href="{% url 'server_settings_home_page' %}{% if p.is_topic %}?page={{ p.pk }}{% endif %}">
-            {% if p.is_hall %}一级大厅{% else %}{{ p.title|default:p.slug }}{% endif %}
+            {% if p.is_hall %}一级大厅{% elif p.is_community %}{{ p.title|default:"野草互动社区" }}{% else %}{{ p.title|default:p.slug }}{% endif %}
         </a>
         {% endfor %}
     </div>
@@ -32,7 +32,7 @@
             <button type="submit" name="create_topic_from_hall" value="1" class="btn btn-sm btn-primary">从一级复制新增积木</button>
         </div>
     </form>
-    <p class="card-meta" style="margin:0;">「从一级复制」只复制大厅里的自定义/文件下载，不复制名录、留言等。</p>
+    <p class="card-meta" style="margin:0;">「从一级复制」只复制大厅里的自定义/文件下载，不复制名录；也不会复制互动社区。</p>
     {% else %}
     <p class="card-meta" style="margin:0;">二级页已达上限。</p>
     {% endif %}
@@ -58,12 +58,16 @@
         </label>
         <button type="submit" class="btn btn-primary">保存本页设置</button>
     </form>
+    {% if not is_editing_community %}
     <form method="post" style="margin-top:16px;" onsubmit="return confirm('确定删除这个二级页及其积木吗？不可恢复。');">
         {% csrf_token %}
         <input type="hidden" name="page_id" value="{{ editing_page_id }}">
         <input type="hidden" name="delete_topic_page" value="1">
         <button type="submit" class="btn btn-sm btn-outline">删除本二级页</button>
     </form>
+    {% else %}
+    <p class="card-meta" style="margin-top:16px;">野草互动社区是整站唯一页，不能删除。</p>
+    {% endif %}
 {% include 'waimai/seller/_panel_fold_end.html' %}
 {% endif %}
 

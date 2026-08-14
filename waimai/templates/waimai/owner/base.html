@@ -5,17 +5,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}服务器设置{% endblock %} - {{ site_brand_name|default:"野草系统" }}</title>
-    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=62">
+    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=64">
 </head>
-<body>
+<body class="owner-settings-page">
 <div class="site-top">
     <header class="site-header">
         <a class="site-brand" href="{% url 'server_settings' %}">⚙️ 服务器设置</a>
         <div class="site-user">{{ user.username }}</div>
     </header>
-</div>
-<main class="site-main" style="max-width:720px;margin:0 auto;padding:16px;">
-    <nav style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+    {# 与顶栏包在一起吸顶：滚动时按钮排始终在上面 #}
+    <nav class="owner-settings-nav" aria-label="服务器设置分区">
         <a class="btn btn-sm {% if section == 'index' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings' %}">总览</a>
         <a class="btn btn-sm {% if section == 'branding' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_branding' %}">站点品牌</a>
         <a class="btn btn-sm {% if section == 'compliance' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_compliance' %}">备案信息</a>
@@ -24,6 +23,7 @@
         {% if not v1_local_mode %}
         <a class="btn btn-sm {% if section == 'server_home' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_home_page' %}">服务器主页</a>
         <a class="btn btn-sm {% if section == 'guestbook' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_guestbook' %}">留言管理</a>
+        <a class="btn btn-sm {% if section == 'public_wall' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_public_wall' %}">公开留言壁</a>
         {% endif %}
         {% for item in server_plugin_nav %}
         <a class="btn btn-sm {% if section == item.section %}btn-primary{% else %}btn-outline{% endif %}" href="{% url item.url_name %}">{{ item.label }}</a>
@@ -31,6 +31,8 @@
         <a class="btn btn-sm btn-outline" href="{% if v1_local_mode %}{% url 'login' %}{% else %}/{% endif %}" target="_blank" rel="noopener">预览根地址</a>
         <a class="btn btn-sm btn-outline" href="{% url 'seller_panel' %}">回店铺管理</a>
     </nav>
+</div>
+<main class="site-main" style="max-width:720px;margin:0 auto;padding:16px;">
     {% block owner_content %}{% endblock %}
 </main>
     {% include 'waimai/_flash_modal.html' %}
@@ -48,7 +50,7 @@
     </script>
     <script src="{% static 'waimai/session_guard.js' %}?v=6"></script>
     {% endif %}
-    <script src="{% static 'waimai/seller_panel_fold.js' %}?v=7"></script>
+    <script src="{% static 'waimai/seller_panel_fold.js' %}?v=8"></script>
     <script src="{% static 'waimai/panel_refresh.js' %}?v=20"></script>
     <script src="{% static 'waimai/home_block_editor.js' %}?v=2"></script>
 </body>

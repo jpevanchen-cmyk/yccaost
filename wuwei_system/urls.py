@@ -3,6 +3,7 @@ from django.urls import path, include
 
 from waimai import views
 from waimai import owner_views as views_owner
+from waimai import public_wall_views as views_public_wall
 from waimai import v1_setup_views as views_v1
 from waimai import operation_lock_views as views_op_lock
 
@@ -68,7 +69,13 @@ urlpatterns = [
         views_owner.server_settings_guestbook_thread,
         name='server_settings_guestbook_thread',
     ),
+    path(
+        'server-settings/public-wall/',
+        views_public_wall.server_settings_public_wall,
+        name='server_settings_public_wall',
+    ),
     path('guestbook/post/', views_owner.guestbook_post, name='guestbook_post'),
+    path('public-wall/post/', views_public_wall.public_wall_post, name='public_wall_post'),
     path('guestbook/open/', views_owner.guestbook_open_search, name='guestbook_open_search'),
     path(
         'guestbook/t/<str:public_code>/',

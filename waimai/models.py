@@ -398,9 +398,11 @@ class ServerHomePage(models.Model):
 
     PAGE_HALL = 'hall'
     PAGE_TOPIC = 'topic'
+    PAGE_COMMUNITY = 'community'
     PAGE_ROLE_CHOICES = [
         (PAGE_HALL, '一级大厅'),
         (PAGE_TOPIC, '二级专题页'),
+        (PAGE_COMMUNITY, '野草互动社区'),
     ]
 
     # 历史字段名保留：大厅固定为 1；二级页用递增编号（不再强制整机只有一行）
@@ -435,6 +437,11 @@ class ServerHomePage(models.Model):
                 name='uniq_server_home_page_hall',
             ),
             models.UniqueConstraint(
+                fields=['page_role'],
+                condition=models.Q(page_role='community'),
+                name='uniq_server_home_page_community',
+            ),
+            models.UniqueConstraint(
                 fields=['slug'],
                 condition=~models.Q(slug=''),
                 name='uniq_server_home_page_slug',
@@ -454,12 +461,19 @@ class ServerHomePage(models.Model):
         return self.page_role == self.PAGE_HALL
 
     @property
+    def is_community(self) -> bool:
+        return self.page_role == self.PAGE_COMMUNITY
+
+    @property
     def is_topic(self) -> bool:
-        return self.page_role == self.PAGE_TOPIC
+        """二级页：普通专题 + 互动社区（共用 /p/短名/ 与欢迎弹窗）"""
+        return self.page_role in (self.PAGE_TOPIC, self.PAGE_COMMUNITY)
 
     def __str__(self):
         if self.is_hall:
             return '一级大厅'
+        if self.is_community:
+            return (self.title or '').strip() or '野草互动社区'
         return f'二级页:{self.slug or self.singleton_id}'
 
 
@@ -1998,3 +2012,5 @@ class IdempotencyRecord(models.Model):
 
 # 留言板（正式功能 · 表名沿用 owner_guestbook_*）
 from .guestbook_models import GuestbookMessage, GuestbookSettings, GuestbookThread  # noqa: E402,F401
+# 公开留言壁（与私信分轨）
+from .public_wall_models import PublicWallPost, PublicWallReply  # noqa: E402,F401

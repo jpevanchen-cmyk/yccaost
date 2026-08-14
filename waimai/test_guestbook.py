@@ -7,6 +7,7 @@ from waimai.guestbook_code_helpers import generate_public_code, is_valid_public_
 from waimai.guestbook_helpers import hash_guest_password, verify_guest_password
 from waimai.guestbook_models import GuestbookThread
 from waimai.home_page_helpers import BLOCK_CONTACT_US, ensure_server_home_page
+from waimai.home_page_tier_helpers import community_page_public_path, ensure_community_page
 from waimai.models import ShopProfile
 
 User = get_user_model()
@@ -63,15 +64,20 @@ class GuestbookBlockTests(TestCase):
         )
 
     def test_contact_us_block_exists(self):
-        page = ensure_server_home_page()
-        self.assertTrue(page.blocks.filter(block_type=BLOCK_CONTACT_US).exists())
+        hall = ensure_server_home_page()
+        community = ensure_community_page()
+        self.assertFalse(hall.blocks.filter(block_type=BLOCK_CONTACT_US).exists())
+        self.assertTrue(community.blocks.filter(block_type=BLOCK_CONTACT_US).exists())
 
     def test_homepage_shows_contact_block(self):
-        ensure_server_home_page()
+        ensure_community_page()
         resp = self.client.get('/')
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'guestbook-new-form')
-        self.assertContains(resp, '输入编号继续沟通')
+        self.assertNotContains(resp, 'guestbook-new-form')
+        resp2 = self.client.get(community_page_public_path())
+        self.assertEqual(resp2.status_code, 200)
+        self.assertContains(resp2, 'guestbook-new-form')
+        self.assertContains(resp2, '输入编号继续沟通')
 
 
 class GuestbookOpenTests(TestCase):

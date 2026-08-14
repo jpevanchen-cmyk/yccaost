@@ -72,6 +72,41 @@ def _virtual_has_open_session(code) -> bool:
 
 def handle_dine_post(request, seller_id):
     """饮食插件堂食页 POST（分时段 / 等待 / 拼桌 / 桌台）"""
+    if request.POST.get('apply_detected_lan') == '1':
+        from django.contrib import messages as _messages
+
+        from waimai.idempotency_helpers import idempotency_scope, run_idempotent
+        from waimai.lan_base_helpers import (
+            apply_detected_lan_base_url,
+            json_lan_payload,
+            lan_sync_ui_allowed,
+            wants_json,
+        )
+
+        def _apply_lan():
+            if not lan_sync_ui_allowed(request):
+                payload = {
+                    'ok': False,
+                    'message': '当前环境不提供一键更新店内地址（避免把云内网号写进桌码）。',
+                }
+                if wants_json(request):
+                    return json_lan_payload(payload, status=403)
+                _messages.error(request, payload['message'])
+                return _seller_redirect('dine', 'dining-settings')
+            ok, msg, payload = apply_detected_lan_base_url(seller_id)
+            payload['ok'] = ok
+            payload['message'] = msg
+            if wants_json(request):
+                return json_lan_payload(payload, status=200 if ok else 400)
+            (_messages.success if ok else _messages.error)(request, msg)
+            return _seller_redirect('dine', 'dining-settings')
+
+        return run_idempotent(
+            request,
+            idempotency_scope('lan_apply', seller_id),
+            _apply_lan,
+        )
+
     if 'save_operating' in request.POST:
         settings = get_operating_settings(seller_id)
         form = ShopOperatingSettingsForm(request.POST, instance=settings)

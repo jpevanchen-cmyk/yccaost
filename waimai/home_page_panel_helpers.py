@@ -11,6 +11,8 @@ from .home_page_helpers import (
     BLOCK_DIRECTORY,
     BLOCK_FILE_DOWNLOAD,
     BLOCK_ORDER_CTA,
+    BLOCK_PUBLIC_WALL,
+    COMMUNITY_ONLY_BLOCK_TYPES,
     MAX_SERVER_CUSTOM_BLOCKS,
     MAX_SERVER_DOWNLOAD_BLOCKS,
     MAX_SHOP_CUSTOM_BLOCKS,
@@ -41,6 +43,16 @@ SHOP_HOME_BLOCKS_PANEL_ID = 'home-page-blocks-panel'
 SERVER_HOME_BLOCKS_PANEL_ID = 'server-home-blocks-panel'
 
 
+def _server_preset_specs_for_page(page) -> list:
+    """大厅不展示留言板/公开墙说明书；互动社区只展示这两块。"""
+    specs = list(list_server_preset_specs())
+    if page is None or page.is_hall:
+        return [s for s in specs if s.code not in COMMUNITY_ONLY_BLOCK_TYPES]
+    if page.is_community:
+        return [s for s in specs if s.code in COMMUNITY_ONLY_BLOCK_TYPES]
+    return []
+
+
 def _enrich_shop_block(block) -> None:
     block.spec = get_shop_block_spec(block.block_type)
     block.dom_id = block_dom_id(block)
@@ -67,7 +79,7 @@ def _enrich_server_block(block) -> None:
     block.is_download_block = block.block_type == BLOCK_FILE_DOWNLOAD
     block.display_image_src = block_display_image_src(block)
     block.shows_rich_media = block.block_type not in (
-        BLOCK_ORDER_CTA, BLOCK_DIRECTORY, BLOCK_FILE_DOWNLOAD,
+        BLOCK_ORDER_CTA, BLOCK_DIRECTORY, BLOCK_FILE_DOWNLOAD, BLOCK_PUBLIC_WALL,
     )
     if block.is_custom:
         block.fold_title = (block.title or '').strip() or '自定义积木'
@@ -101,7 +113,9 @@ def build_server_home_blocks(page=None) -> list:
     from .home_page_tier_helpers import allowed_server_block_types
 
     allowed = allowed_server_block_types(page)
-    if allowed is not None:
+    if page.is_hall:
+        blocks = [b for b in blocks if b.block_type not in COMMUNITY_ONLY_BLOCK_TYPES]
+    elif allowed is not None:
         blocks = [b for b in blocks if b.block_type in allowed]
     for b in blocks:
         _enrich_server_block(b)
@@ -151,7 +165,7 @@ def _server_home_common_context(request: HttpRequest, page=None) -> dict:
     ctx = {
         'home_page': page,
         'home_blocks': blocks,
-        'preset_specs': list_server_preset_specs() if page.is_hall else [],
+        'preset_specs': _server_preset_specs_for_page(page),
         'custom_block_count': custom_count,
         'max_custom_blocks': MAX_SERVER_CUSTOM_BLOCKS,
         'can_add_custom_block': custom_count < MAX_SERVER_CUSTOM_BLOCKS,
@@ -170,6 +184,7 @@ def _server_home_common_context(request: HttpRequest, page=None) -> dict:
         'can_add_topic_page': len(topics) < MAX_SERVER_TOPIC_PAGES,
         'is_editing_hall': page.is_hall,
         'is_editing_topic': page.is_topic,
+        'is_editing_community': page.is_community,
         'editing_page_id': str(page.pk),
         'topic_link_choices': link_choices,
         'page_edit_url': server_page_edit_url(page),

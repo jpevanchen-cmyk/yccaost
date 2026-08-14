@@ -1,0 +1,57 @@
+{% load static %}
+{% load yc_time %}
+<h2 class="showcase-block-title">{{ block.title|default:"野草公开留言壁" }}</h2>
+<div class="showcase-block-main">
+    {% include 'waimai/_showcase_block_body.html' with body=block.body only %}
+
+    <form id="public-wall-form" class="seller-form-stack" method="post" action="{% url 'public_wall_post' %}" style="margin-bottom:16px;">
+        {% csrf_token %}
+        <input type="hidden" name="idempotency_key" value="">
+        <label for="public-wall-nickname">显示名（可不填）
+            <input id="public-wall-nickname" class="form-input" type="text" name="nickname" maxlength="{{ public_wall_max_nickname|default:80 }}" placeholder="{% if user.is_authenticated %}不填则用账号名{% else %}不填则显示「匿名游客」{% endif %}">
+        </label>
+        {% if user.is_authenticated %}
+        <label class="form-check" style="display:block;margin:8px 0;">
+            <input type="checkbox" name="is_anonymous" value="1"> 匿名发布（墙上显示「匿名」）
+        </label>
+        {% endif %}
+        <label for="public-wall-body">留言（最多 {{ public_wall_max_body|default:500 }} 字）
+            <textarea id="public-wall-body" class="form-input" name="body" rows="4" required maxlength="{{ public_wall_max_body|default:500 }}" placeholder="想说的话…"></textarea>
+        </label>
+        <button type="submit" class="btn btn-green" id="public-wall-submit">贴上墙</button>
+        <p class="card-meta" style="margin:8px 0 0;">同一人 10 分钟只能贴 1 条，每天最多 15 条。墙上人人可见。</p>
+    </form>
+
+    {% for post in public_wall_posts %}
+    <div class="public-wall-floor" style="border-bottom:1px solid #eee;padding:12px 0;">
+        <div>
+            <strong>{{ post.floor_no }} 楼</strong>
+            <span class="card-meta" style="margin-left:8px;">{{ post.display_name }} · {{ post.created_at|local:"m-d H:i" }}</span>
+        </div>
+        {% if post.status == 'visible' %}
+        <p style="margin:8px 0 0;white-space:pre-wrap;">{{ post.body }}</p>
+        {% else %}
+        <p class="card-meta" style="margin:8px 0 0;">{{ post.status_public_notice }}</p>
+        {% endif %}
+        {% for reply in post.replies.all %}
+        <p class="card-meta" style="margin:8px 0 0;white-space:pre-wrap;">{{ reply.public_heading }}：{{ reply.body }}</p>
+        {% endfor %}
+    </div>
+    {% empty %}
+    <p class="card-meta">还没有公开留言。</p>
+    {% endfor %}
+
+    {% if public_wall_pager and public_wall_pager.has_other_pages %}
+    <div class="work-list-pagination" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;">
+        <span class="card-meta">共 {{ public_wall_pager.count }} 条 · 第 {{ public_wall_pager.number }}/{{ public_wall_pager.num_pages }} 页</span>
+        {% if public_wall_pager.prev_url %}
+        <a href="{{ public_wall_pager.prev_url }}" class="btn btn-sm btn-outline">上一页</a>
+        {% endif %}
+        {% if public_wall_pager.next_url %}
+        <a href="{{ public_wall_pager.next_url }}" class="btn btn-sm btn-outline">下一页</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+<script src="{% static 'waimai/idempotency_client.js' %}"></script>
+<script src="{% static 'waimai/public_wall.js' %}?v=1"></script>

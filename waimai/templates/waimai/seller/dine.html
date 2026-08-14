@@ -116,6 +116,25 @@
                 {% for err in operating_form.lan_port.errors %}<p class="msg-err">{{ err }}</p>{% endfor %}
                 {% if operating_form.instance.table_lan_base_url %}
                 <p class="card-meta" style="margin:10px 0 0;">当前保存为：<code id="lan-saved-url">{{ operating_form.instance.table_lan_base_url }}</code></p>
+                {% else %}
+                <p class="card-meta" style="margin:10px 0 0;">当前保存为：<code id="lan-saved-url">（还没有保存）</code></p>
+                {% endif %}
+                {% if lan_sync_ui and lan_compare %}
+                <div id="lan-compare-box" style="margin-top:12px;">
+                    <p class="card-meta" style="margin:0;">已保存：<code id="lan-saved-compare">{{ lan_compare.saved_lan|default:"（空）" }}</code></p>
+                    <p class="card-meta" style="margin:4px 0 0;">当前探测：<code id="lan-detected-compare">{{ lan_compare.detected_lan|default:"（测不到）" }}</code></p>
+                    <p id="lan-match-line" class="card-meta" style="margin:4px 0 0;{% if not lan_compare.match %}color:#b8860b;font-weight:600;{% endif %}">
+                        是否一致：{% if lan_compare.detect_failed %}测不到，无法对比{% elif lan_compare.match %}一致{% else %}不一致{% endif %}
+                    </p>
+                    <p id="lan-compare-msg" class="card-meta" style="margin:6px 0 0;">{{ lan_compare.message }}</p>
+                    <p style="margin:10px 0 0;">
+                        <button type="button" class="btn btn-outline btn-sm" id="lan-detect-btn">检测当前 IP</button>
+                        {% if not onboarding_preview %}
+                        <button type="button" class="btn btn-outline btn-sm" id="lan-apply-btn">一键更新为当前</button>
+                        {% endif %}
+                    </p>
+                    <p id="lan-ajax-err" class="msg-err" hidden style="margin-top:8px;"></p>
+                </div>
                 {% endif %}
             </div>
             <div class="hard-rule-block" style="border-color:#90a4ae;background:#f7fafb;" data-yc-tour="dine-wait-time-rules">
@@ -238,6 +257,161 @@
                 list.appendChild(row);
                 bindRemove(row.querySelector('.wait-time-rule-remove'));
             });
+        })();
+        (function () {
+            var detectBtn = document.getElementById('lan-detect-btn');
+            var applyBtn = document.getElementById('lan-apply-btn');
+            if (!detectBtn && !applyBtn) return;
+            var form = (detectBtn || applyBtn).closest('form');
+            function csrfToken() {
+                var el = form && form.querySelector('[name=csrfmiddlewaretoken]');
+                return el ? el.value : '';
+            }
+            function showErr(msg) {
+                var box = document.getElementById('lan-ajax-err');
+                if (!box) return;
+                if (!msg) {
+                    box.hidden = true;
+                    box.textContent = '';
+                    return;
+                }
+                box.hidden = false;
+                box.textContent = msg;
+            }
+            function setText(id, text) {
+                var el = document.getElementById(id);
+                if (el) el.textContent = text || '';
+            }
+            function fillCompare(data) {
+                if (!data) return;
+                var saved = data.saved_lan || '（空）';
+                var detected = data.detected_lan || '（测不到）';
+                setText('lan-saved-url', data.saved_lan || '（还没有保存）');
+                setText('lan-saved-compare', saved);
+                setText('lan-detected-compare', detected);
+                var matchLine = document.getElementById('lan-match-line');
+                if (matchLine) {
+                    if (data.detect_failed) {
+                        matchLine.textContent = '是否一致：测不到，无法对比';
+                        matchLine.style.color = '#b8860b';
+                        matchLine.style.fontWeight = '600';
+                    } else if (data.match) {
+                        matchLine.textContent = '是否一致：一致';
+                        matchLine.style.color = '';
+                        matchLine.style.fontWeight = '';
+                    } else {
+                        matchLine.textContent = '是否一致：不一致';
+                        matchLine.style.color = '#b8860b';
+                        matchLine.style.fontWeight = '600';
+                    }
+                }
+                setText('lan-compare-msg', data.message || '');
+                var hidden = document.getElementById('id_table_lan_base_url');
+                if (hidden && data.saved_lan) hidden.value = data.saved_lan;
+                fillOctets(data.saved_lan || '');
+            }
+            function fillOctets(url) {
+                if (!url) return;
+                try {
+                    var parsed = new URL(url);
+                    var host = parsed.hostname || '';
+                    var port = parsed.port || '8000';
+                    var parts = host.split('.');
+                    var mode = document.getElementById('id_lan_mode');
+                    if (parts.length === 4 && parts.every(function (p) { return /^\d{1,3}$/.test(p); })) {
+                        if (mode) {
+                            mode.value = 'ip';
+                            mode.dispatchEvent(new Event('change'));
+                        }
+                        ['id_lan_ip1', 'id_lan_ip2', 'id_lan_ip3', 'id_lan_ip4'].forEach(function (id, i) {
+                            var el = document.getElementById(id);
+                            if (el) el.value = parts[i];
+                        });
+                    } else if (host) {
+                        if (mode) {
+                            mode.value = 'name';
+                            mode.dispatchEvent(new Event('change'));
+                        }
+                        var hostEl = document.getElementById('id_lan_hostname');
+                        if (hostEl) hostEl.value = host;
+                    }
+                    var portEl = document.getElementById('id_lan_port');
+                    if (portEl) portEl.value = port;
+                } catch (e) {}
+            }
+            function readJson(resp) {
+                if (resp.status === 403) {
+                    return Promise.reject(new Error('安全校验失败，请刷新页面再试。'));
+                }
+                return resp.json().then(function (data) {
+                    if (!resp.ok && data && data.message) {
+                        return Promise.reject(new Error(data.message));
+                    }
+                    if (!resp.ok) {
+                        return Promise.reject(new Error('操作失败，请稍后重试。'));
+                    }
+                    return data;
+                }, function () {
+                    return Promise.reject(new Error(resp.ok ? '返回内容看不懂。' : '操作失败，请稍后重试。'));
+                });
+            }
+            if (detectBtn) {
+                detectBtn.addEventListener('click', function () {
+                    showErr('');
+                    detectBtn.disabled = true;
+                    fetch('?lan_compare=1', {
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    }).then(readJson).then(function (data) {
+                        fillCompare(data);
+                    }).catch(function (err) {
+                        showErr((err && err.message) || '检测失败。');
+                    }).then(function () {
+                        detectBtn.disabled = false;
+                    });
+                });
+            }
+            if (applyBtn) {
+                applyBtn.addEventListener('click', function () {
+                    if (!window.confirm('将把店内地址改成当前探测结果。已印桌贴若含旧号须重打。确定更新吗？')) {
+                        return;
+                    }
+                    showErr('');
+                    applyBtn.disabled = true;
+                    var fd = new FormData();
+                    fd.append('csrfmiddlewaretoken', csrfToken());
+                    fd.append('apply_detected_lan', '1');
+                    var headers = {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken(),
+                    };
+                    var key = '';
+                    if (window.YcIdempotency) {
+                        key = window.YcIdempotency.newKey();
+                        headers = window.YcIdempotency.applyToHeaders(headers, key);
+                        window.YcIdempotency.applyToFormData(fd, key);
+                    }
+                    fetch('', {
+                        method: 'POST',
+                        body: fd,
+                        headers: headers,
+                        credentials: 'same-origin',
+                    }).then(readJson).then(function (data) {
+                        fillCompare(data);
+                        if (data && data.message) {
+                            setText('lan-compare-msg', data.message);
+                        }
+                    }).catch(function (err) {
+                        showErr((err && err.message) || '更新失败。');
+                    }).then(function () {
+                        applyBtn.disabled = false;
+                    });
+                });
+            }
         })();
         </script>
     </div>

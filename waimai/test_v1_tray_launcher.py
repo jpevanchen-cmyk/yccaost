@@ -80,6 +80,7 @@ class LauncherConfigCommandTests(TestCase):
         self.assertIn('listen_port', data)
         self.assertIn('open_url', data)
         self.assertEqual(data['listen_port'], 8000)
+        self.assertTrue(data['open_url'].startswith('http://127.0.0.1:'))
 
     def test_backup_on_exit_skipped_on_memory_db(self):
         from waimai.v1_backup_helpers import database_is_file_based

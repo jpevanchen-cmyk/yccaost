@@ -2183,6 +2183,21 @@ def seller_panel_section(request, section):
             html = render_seller_cash_manage_panel_html(request, seller_id)
             return panel_refresh_ok(html=html, panel_id='cash-manage-panel-body', message='')
 
+    if (
+        request.method == 'GET'
+        and section == 'dine'
+        and request.GET.get('lan_compare') == '1'
+    ):
+        from .lan_base_helpers import (
+            compare_saved_and_detected,
+            json_lan_payload,
+            lan_sync_ui_allowed,
+        )
+
+        payload = compare_saved_and_detected(seller_id)
+        payload['sync_ui'] = lan_sync_ui_allowed(request)
+        return json_lan_payload(payload)
+
     if request.method == 'POST':
         if section == 'operation_lock':
             from .operation_lock_settings_helpers import handle_operation_lock_settings_post
@@ -2361,11 +2376,16 @@ def seller_panel_section(request, section):
             (not operating.closed_for_today) and (not operating.pause_new_orders)
         )
     elif section == 'dine':
+        from .lan_base_helpers import compare_saved_and_detected, lan_sync_ui_allowed
         from .models import ShopTable, VirtualTableCode
         operating = get_operating_settings(seller_id)
         context['operating'] = operating
         context['operating_form'] = ShopOperatingSettingsForm(instance=operating)
         context['wait_time_rules'] = list(operating.wait_time_rules.all())
+        context['lan_sync_ui'] = lan_sync_ui_allowed(request)
+        context['lan_compare'] = (
+            compare_saved_and_detected(seller_id) if context['lan_sync_ui'] else None
+        )
         tables = sort_shop_tables(list(ShopTable.objects.filter(seller_id=seller_id)))
         for t in tables:
             t.scan_path = build_table_scan_path(seller_id, t.qr_token)

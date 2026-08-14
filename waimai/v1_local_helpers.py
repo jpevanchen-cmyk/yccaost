@@ -22,6 +22,7 @@ V1_BLOCKED_PATH_PREFIXES = (
     '/register',
     '/shop-register',
     '/guestbook',
+    '/public-wall',
     '/experience',
     '/directory',
     '/showcase',
@@ -32,6 +33,7 @@ V1_BLOCKED_PATH_PREFIXES = (
     '/owner-hub',
     '/server-settings/home',
     '/server-settings/guestbook',
+    '/server-settings/public-wall',
     '/owner/server-home',
 )
 

@@ -19,6 +19,7 @@ BLOCK_ORDER_CTA = 'order_cta'
 BLOCK_DIRECTORY = 'directory'
 BLOCK_YECAO_INTRO = 'yecao_intro'
 BLOCK_CONTACT_US = 'contact_us'
+BLOCK_PUBLIC_WALL = 'public_wall'
 BLOCK_FILE_DOWNLOAD = 'file_download'
 BLOCK_CUSTOM = 'custom'
 
@@ -38,7 +39,12 @@ SHOP_EDITABLE_BLOCK_TYPES = frozenset(SHOP_EDITOR_PRESET_TYPES | {BLOCK_CUSTOM})
 SHOP_LEGACY_BLOCK_TYPES = frozenset({BLOCK_HERO, BLOCK_HOURS, BLOCK_ADDRESS})
 SHOP_AUTO_BLOCK_TYPES = SHOP_LEGACY_BLOCK_TYPES
 # 服务器主页专用（店主后台不出现）
-SERVER_ONLY_BLOCK_TYPES = frozenset({BLOCK_DIRECTORY, BLOCK_YECAO_INTRO, BLOCK_FILE_DOWNLOAD})
+SERVER_ONLY_BLOCK_TYPES = frozenset({
+    BLOCK_DIRECTORY, BLOCK_YECAO_INTRO, BLOCK_FILE_DOWNLOAD, BLOCK_PUBLIC_WALL,
+    BLOCK_CONTACT_US,
+})
+# 只挂唯一二级页「野草互动社区」，不挂大厅、不挂其它专题页
+COMMUNITY_ONLY_BLOCK_TYPES = frozenset({BLOCK_CONTACT_US, BLOCK_PUBLIC_WALL})
 
 
 @dataclass(frozen=True)
@@ -101,6 +107,10 @@ SERVER_PRESET_SPECS: tuple[BlockTypeSpec, ...] = (
     BlockTypeSpec(
         BLOCK_CONTACT_US, '联系我们', '联系', True, True, 50, True,
         '展示对外联系方式并接收访客留言；名称与邮箱在「留言管理」中填写', 'server',
+    ),
+    BlockTypeSpec(
+        BLOCK_PUBLIC_WALL, '野草公开留言壁', '留言壁', True, True, 52, True,
+        '人人可见的公开墙；与「联系我们」私信分开，不共用一张表', 'server',
     ),
 )
 
@@ -302,6 +312,8 @@ def ensure_server_home_page():
     existing = {b.block_type: b for b in page.blocks.all()}
     to_create = []
     for spec in SERVER_PRESET_SPECS:
+        if spec.code in COMMUNITY_ONLY_BLOCK_TYPES:
+            continue
         if spec.code in existing:
             continue
         title, body = _default_server_content(spec.code)
@@ -347,6 +359,8 @@ def _default_server_content(block_type: str) -> tuple[str, str]:
         )
     if block_type == BLOCK_CONTACT_US:
         return '联系我们', ''
+    if block_type == BLOCK_PUBLIC_WALL:
+        return '野草公开留言壁', ''
     return '', ''
 
 
@@ -413,7 +427,7 @@ def _attach_block_meta(blocks, get_spec_fn):
         b.display_link_label = block_display_link_label(b)
         # 与前台 showcase 一致：进入店铺/名录/下载块不用配图与附加链接那套
         b.shows_rich_media = b.block_type not in (
-            BLOCK_ORDER_CTA, BLOCK_DIRECTORY, BLOCK_FILE_DOWNLOAD,
+            BLOCK_ORDER_CTA, BLOCK_DIRECTORY, BLOCK_FILE_DOWNLOAD, BLOCK_PUBLIC_WALL,
         )
         # 站内路径用本页打开；外链仍新标签
         link = (b.link_url or '').strip()
@@ -486,6 +500,7 @@ def build_server_home_view_context(request=None, page=None) -> dict:
     from .models import ShopProfile, ServerHomePage
     from .home_page_tier_helpers import (
         allowed_server_block_types,
+        ensure_community_page,
         server_page_public_path,
         topic_welcome_should_show,
     )
@@ -495,9 +510,13 @@ def build_server_home_view_context(request=None, page=None) -> dict:
     elif page.page_role == ServerHomePage.PAGE_HALL:
         page = ensure_server_home_page()
 
+    ensure_community_page()
+
     allowed = allowed_server_block_types(page)
     qs = page.blocks.filter(is_enabled=True)
-    if allowed is not None:
+    if page.is_hall:
+        qs = qs.exclude(block_type__in=COMMUNITY_ONLY_BLOCK_TYPES)
+    elif allowed is not None:
         qs = qs.filter(block_type__in=allowed)
     blocks = list(qs.order_by('sort_order', 'block_type'))
     blocks.sort(key=lambda b: (b.sort_order, str(b.block_type)))
@@ -553,15 +572,25 @@ def build_server_home_view_context(request=None, page=None) -> dict:
         'topic_welcome_body': (page.welcome_body or '') if topic_welcome_should_show(page) else '',
         'topic_welcome_storage_key': f'yecao_topic_welcome_{page.pk}' if page.is_topic else '',
     }
-    if page.is_hall:
+    if page.is_community:
         from .guestbook_helpers import get_guestbook_settings
+        from .public_wall_helpers import build_public_wall_home_context
 
         ctx['guestbook_settings'] = get_guestbook_settings()
+        ctx.update(build_public_wall_home_context(request))
+        return ctx
+
+    if page.is_hall:
+        ctx['guestbook_settings'] = None
+        ctx['public_wall_posts'] = []
+        ctx['public_wall_pager'] = None
         ctx = enrich_server_home_context(ctx)
         from .onboarding.context import enrich_server_home_onboarding
         return enrich_server_home_onboarding(ctx)
 
     ctx['guestbook_settings'] = None
+    ctx['public_wall_posts'] = []
+    ctx['public_wall_pager'] = None
     return ctx
 
 

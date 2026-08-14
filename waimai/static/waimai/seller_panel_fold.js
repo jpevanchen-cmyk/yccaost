@@ -3,6 +3,7 @@
  * 1）根据网址锚点自动展开对应区块
  * 2）手风琴：同层只开一块；嵌套组（data-yc-fold-group）内互不影响外层
  * 3）多开区（data-yc-fold-multi）：区内卡片可同时展开，互不自动收起
+ * 4）全关区（data-yc-fold-close-all）：ESC、点卡片外空白 → 区内全部收起
  */
 (function () {
     function allFolds() {
@@ -92,8 +93,42 @@
         bindAccordionInScope(document);
     }
 
+    function closeFoldsIn(root) {
+        if (!root) return;
+        root.querySelectorAll('details.seller-panel-fold').forEach(function (fold) {
+            fold.open = false;
+        });
+    }
+
+    function closeAllMarkedRegions() {
+        document.querySelectorAll('[data-yc-fold-close-all]').forEach(closeFoldsIn);
+    }
+
+    function bindCloseAll() {
+        if (document.documentElement.dataset.ycFoldCloseAllBound === '1') return;
+        document.documentElement.dataset.ycFoldCloseAllBound = '1';
+        document.addEventListener('keydown', function (ev) {
+            if (ev.key !== 'Escape' && ev.key !== 'Esc') return;
+            closeAllMarkedRegions();
+        });
+        document.addEventListener('click', function (ev) {
+            var target = ev.target;
+            if (!target || !target.closest) return;
+            if (target.closest('details.seller-panel-fold')) return;
+            var region = target.closest('[data-yc-fold-close-all]');
+            if (region) {
+                closeFoldsIn(region);
+                return;
+            }
+            if (target === document.body || target.tagName === 'MAIN' || (target.classList && target.classList.contains('site-main'))) {
+                closeAllMarkedRegions();
+            }
+        });
+    }
+
     window.ycOpenSellerFoldForHash = openSellerFoldForHash;
     window.ycRebindSellerPanelFold = bindAccordionInScope;
     bindAccordion();
+    bindCloseAll();
     openSellerFoldForHash();
 })();

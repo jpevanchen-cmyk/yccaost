@@ -66,7 +66,8 @@ def guestbook_post(request):
         else:
             messages.error(request, payload.get('error') or '提交失败')
         anchor = (request.POST.get('return_anchor') or 'block-contact_us').strip()
-        return redirect(f'/#{anchor}')
+        from .home_page_tier_helpers import community_page_anchor_url
+        return redirect(community_page_anchor_url(anchor))
 
     response = run_guestbook_post_idempotent(request, execute)
     return apply_guestbook_actor_cookie(request, response)
@@ -127,6 +128,8 @@ def guestbook_thread_public(request, public_code: str):
         )
         page_ui = guestbook_thread_page_ui(thread)
 
+    from .home_page_tier_helpers import community_page_public_path
+
     return render(request, 'waimai/guestbook/thread_public.html', {
         'thread': thread,
         'messages_list': messages_list,
@@ -136,7 +139,7 @@ def guestbook_thread_public(request, public_code: str):
         'thread_notice': page_ui.get('notice', ''),
         'thread_notice_level': page_ui.get('notice_level', ''),
         'show_email_update': page_ui.get('show_email_update', False),
-        'home_url': '/',
+        'home_url': community_page_public_path(),
     })
 
 
@@ -145,19 +148,20 @@ def guestbook_thread_public(request, public_code: str):
 def guestbook_open_search(request):
     """留言板内按编号搜索跳转"""
     from .guestbook_code_helpers import is_valid_public_code_format, normalize_public_code
+    from .home_page_tier_helpers import community_page_anchor_url
 
     code = normalize_public_code(request.POST.get('public_code') or '')
     if not code:
         messages.error(request, '请输入留言编号')
-        return redirect('/#block-contact_us')
+        return redirect(community_page_anchor_url('block-contact_us'))
     if not is_valid_public_code_format(code):
         messages.error(request, '留言编号格式不正确，应为 YC-月日-8位字母数字')
-        return redirect('/#block-contact_us')
+        return redirect(community_page_anchor_url('block-contact_us'))
     from .guestbook_models import GuestbookThread
 
     if not GuestbookThread.objects.filter(public_code=code).exists():
         messages.error(request, '找不到该留言编号，请核对是否输入正确')
-        return redirect('/#block-contact_us')
+        return redirect(community_page_anchor_url('block-contact_us'))
     return redirect('guestbook_thread_public', public_code=code)
 
 
