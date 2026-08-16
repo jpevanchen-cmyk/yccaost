@@ -64,14 +64,27 @@
             <input class="form-input" type="text" name="link_label" value="{{ block.link_label }}" maxlength="32" placeholder="留空则显示「下载文件」">
             <div class="home-block-media-box" style="margin-top:12px;">
                 <p class="form-label" style="margin-bottom:6px;">下载文件</p>
-                <p class="card-meta" style="margin:0 0 10px;">支持 exe / zip / pdf / msi / 7z / rar，单文件不超过 80 MB。未上传时主页不显示下载按钮。</p>
+                <p class="card-meta" style="margin:0 0 10px;">支持 exe / zip / pdf / msi / 7z / rar，单文件不超过 80 MB。未挂文件时主页不显示下载按钮。从电脑上传仍可用；也可点选服务器投放盒里已有的文件（会复制一份到本块，清除本块不会删投放盒原件）。</p>
                 {% if block.has_download_file and block.download_file %}
                 <p class="card-meta" style="margin:0 0 8px;">当前文件：{{ block.download_file.name }}</p>
                 <label class="form-check" style="margin:0 0 10px;">
-                    <input type="checkbox" name="clear_block_download" value="1"> 清除已上传的文件
+                    <input type="checkbox" name="clear_block_download" value="1"> 清除已挂到本块的文件
                 </label>
                 {% endif %}
+                <p class="form-label" style="margin:8px 0 6px;">从电脑上传</p>
                 <input class="form-input" type="file" name="block_download" accept=".exe,.zip,.pdf,.msi,.7z,.rar">
+                <p class="form-label" style="margin:12px 0 6px;">或从投放盒点选（media/downloads 平铺）</p>
+                <select class="form-input" name="pick_server_download">
+                    <option value="">不点选（沿用上面上传，或保持当前文件）</option>
+                    {% for fname in server_download_library_files %}
+                    <option value="{{ fname }}">{{ fname }}</option>
+                    {% endfor %}
+                </select>
+                {% if server_download_library_files %}
+                <p class="card-meta" style="margin:6px 0 0;">同时选了电脑文件时，以电脑上传为准。点选保存后，本块会有一份副本。</p>
+                {% else %}
+                <p class="card-meta" style="margin:6px 0 0;">投放盒还是空的。请把文件平铺放到服务器 media/downloads 文件夹（不要再套一层编号文件夹）。</p>
+                {% endif %}
             </div>
             <input type="hidden" name="link_url" value="">
             {% else %}

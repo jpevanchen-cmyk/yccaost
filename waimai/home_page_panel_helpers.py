@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.http import HttpRequest
 from django.template.loader import render_to_string
 
+from .home_block_download_helpers import list_download_library_files
 from .home_block_media import block_display_image_src, photo_quota_hint
 from .home_page_helpers import (
     BLOCK_CUSTOM,
@@ -139,6 +140,7 @@ def _shop_home_common_context(request: HttpRequest, seller_id: str, shop_profile
         'editing_page_id': '',
     }
     ctx.update(photo_quota_hint(request.user))
+    ctx['server_download_library_files'] = []
     return ctx
 
 
@@ -190,6 +192,7 @@ def _server_home_common_context(request: HttpRequest, page=None) -> dict:
         'page_edit_url': server_page_edit_url(page),
     }
     ctx.update(photo_quota_hint(request.user))
+    ctx['server_download_library_files'] = list_download_library_files()
     return ctx
 
 

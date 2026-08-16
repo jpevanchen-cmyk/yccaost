@@ -3415,12 +3415,16 @@ ul.errorlist li {
 /* —— 展示主页（A.10）—— */
 .showcase-home-page .showcase-sticky-nav {
     position: sticky;
-    top: 0;
+    /* 有全站顶栏时贴在顶栏下面；高度由脚本写入 --yc-site-top-h */
+    top: var(--yc-site-top-h, var(--yc-header-h));
     z-index: 40;
     background: rgba(255, 255, 255, 0.96);
     border-bottom: 1px solid var(--yc-border, #e5e5e5);
     margin: -8px -12px 16px;
     padding: 10px 12px;
+}
+body.shop-work-site .showcase-home-page .showcase-sticky-nav {
+    top: 0;
 }
 .showcase-sticky-inner {
     display: flex;
@@ -3463,11 +3467,14 @@ ul.errorlist li {
     padding: 12px 14px;
     box-sizing: border-box;
     overflow: visible;
+    scroll-margin-top: var(--yc-showcase-title-clear, calc(var(--yc-header-h, 52px) + 64px));
 }
 .showcase-home-page .showcase-block-title {
     margin: 0 0 8px;
     font-size: 17px;
     line-height: 1.35;
+    /* 无脚本时的兜底：标题不要钻进顶栏；精确高度由脚本写入变量 */
+    scroll-margin-top: var(--yc-showcase-title-clear, calc(var(--yc-header-h, 52px) + 64px));
 }
 .showcase-home-page .showcase-block-title-link {
     color: #1976d2;
@@ -3577,7 +3584,7 @@ ul.errorlist li {
     overflow: visible;
     position: relative;
     padding-bottom: 12px;
-    scroll-margin-top: calc(var(--yc-header-h, 52px) + 56px);
+    scroll-margin-top: var(--yc-showcase-title-clear, calc(var(--yc-header-h, 52px) + 64px));
     box-shadow: 0 0 0 2px rgba(230, 126, 34, 0.28);
     cursor: default;
 }

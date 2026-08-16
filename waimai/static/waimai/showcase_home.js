@@ -1,5 +1,79 @@
 /* 展示主页：吸顶导航、回顶部、半屏裁切与原位置展开/收起 */
 (function () {
+  /* 标题与挡住内容的顶栏之间留一小缝，避免贴死或重叠 */
+  var TITLE_GAP_PX = 8;
+
+  function siteTopEl() {
+    return document.querySelector('.site-top');
+  }
+
+  function showcaseNavEl() {
+    return document.querySelector('.showcase-home-page .showcase-sticky-nav');
+  }
+
+  /* 量全站顶栏 + 主页导航条实际高度（换行变高也能跟上） */
+  function overlayClearPx() {
+    var topBar = siteTopEl();
+    var nav = showcaseNavEl();
+    var topH = topBar ? Math.round(topBar.getBoundingClientRect().height) : 0;
+    var navH = nav ? Math.round(nav.getBoundingClientRect().height) : 0;
+    document.documentElement.style.setProperty('--yc-site-top-h', topH + 'px');
+    var clear = topH + navH + TITLE_GAP_PX;
+    document.documentElement.style.setProperty('--yc-showcase-title-clear', clear + 'px');
+    return clear;
+  }
+
+  function blockTitleEl(block) {
+    if (!block) return null;
+    var kids = block.children;
+    var i;
+    for (i = 0; i < kids.length; i += 1) {
+      if (kids[i].classList && kids[i].classList.contains('showcase-block-title')) {
+        return kids[i];
+      }
+    }
+    return block.querySelector('.showcase-block-title');
+  }
+
+  /* 把积木标题停在挡住内容的条下面，中间留 TITLE_GAP_PX */
+  function scrollBlockTitleIntoPlace(block, behavior) {
+    if (!block) return;
+    var title = blockTitleEl(block) || block;
+    var clear = overlayClearPx();
+    var rect = title.getBoundingClientRect();
+    var targetY = window.scrollY + rect.top - clear;
+    if (targetY < 0) targetY = 0;
+    window.scrollTo({ top: targetY, behavior: behavior || 'smooth' });
+  }
+
+  function blockFromHash() {
+    var hash = (window.location.hash || '').replace(/^#/, '');
+    if (!hash || hash === 'top') return null;
+    var el = document.getElementById(hash);
+    if (!el) return null;
+    if (el.classList.contains('showcase-block')) return el;
+    return el.closest('.showcase-block');
+  }
+
+  function tryHashScroll(behavior) {
+    var block = blockFromHash();
+    if (!block) return;
+    var welcome = document.getElementById('yc-topic-welcome');
+    if (welcome && welcome.open) {
+      welcome.addEventListener(
+        'close',
+        function () {
+          scrollBlockTitleIntoPlace(block, behavior || 'smooth');
+        },
+        { once: true }
+      );
+      return;
+    }
+    scrollBlockTitleIntoPlace(block, behavior);
+  }
+
+  overlayClearPx();
+
   var btn = document.getElementById('showcase-back-top');
   if (btn) {
     function onScroll() {
@@ -74,7 +148,7 @@
     var bar = block.querySelector('.showcase-expand-bar');
     if (bar) setExpandBarLabel(bar, block, true);
     expandedBlock = block;
-    block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollBlockTitleIntoPlace(block, 'smooth');
   }
 
   function toggleBlock(block) {
@@ -130,12 +204,50 @@
     fn();
   }
 
-  whenReady(applyHeightRules);
+  whenReady(function () {
+    overlayClearPx();
+    applyHeightRules();
+    tryHashScroll('auto');
+  });
 
   var resizeTimer;
   window.addEventListener('resize', function () {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(applyHeightRules, 120);
+    resizeTimer = setTimeout(function () {
+      overlayClearPx();
+      applyHeightRules();
+    }, 120);
+  });
+
+  /* 点吸顶导航里的积木锚点：拦住浏览器默认「贴屏幕最顶」，改对准标题 */
+  document.addEventListener('click', function (e) {
+    if (!document.body.classList.contains('showcase-home-page')) return;
+    if (document.body.classList.contains('yc-tour-active')) return;
+    var a = e.target && e.target.closest ? e.target.closest('.showcase-nav-links a') : null;
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    if (href.charAt(0) !== '#') return;
+    var id = href.slice(1);
+    if (!id || id === 'top') return;
+    var target = document.getElementById(id);
+    if (!target) return;
+    var block = target.classList.contains('showcase-block')
+      ? target
+      : target.closest('.showcase-block');
+    if (!block) return;
+    e.preventDefault();
+    var next = '#' + id;
+    if (window.location.hash !== next && window.history && window.history.pushState) {
+      window.history.pushState(null, '', next);
+    } else if (window.location.hash !== next) {
+      window.location.hash = next;
+    }
+    scrollBlockTitleIntoPlace(block, 'smooth');
+  });
+
+  window.addEventListener('hashchange', function () {
+    if (document.body.classList.contains('yc-tour-active')) return;
+    tryHashScroll('smooth');
   });
 
   /* Esc 收起当前展开的积木 */

@@ -22,6 +22,8 @@ from .models import (
 
 DEFAULT_DOWNLOAD_BUTTON_LABEL = '下载文件'
 _STREAM_CHUNK = 64 * 1024
+# 投放盒：平铺原文件名，供设置里点选；与积木隔间（home_downloads）分开
+DOWNLOAD_LIBRARY_DIRNAME = 'downloads'
 
 
 def block_has_download_file(block) -> bool:
@@ -54,20 +56,78 @@ def download_content_disposition(original_name: str) -> str:
     )
 
 
+def download_library_dir() -> Path:
+    """投放盒目录：media/downloads（平铺，不含子文件夹）。"""
+    from django.conf import settings
+
+    path = Path(settings.MEDIA_ROOT) / DOWNLOAD_LIBRARY_DIRNAME
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def list_download_library_files() -> list[str]:
+    """投放盒里人能看懂的文件名，只认允许的类型。"""
+    folder = download_library_dir()
+    names: list[str] = []
+    try:
+        entries = list(folder.iterdir())
+    except OSError:
+        return []
+    for item in entries:
+        if not item.is_file():
+            continue
+        if item.name.startswith('.'):
+            continue
+        ext = item.suffix.lstrip('.').lower()
+        if ext not in ALLOWED_HOME_BLOCK_DOWNLOAD_EXT:
+            continue
+        names.append(item.name)
+    names.sort(key=lambda s: s.casefold())
+    return names
+
+
+def resolve_download_library_file(filename: str) -> Path | None:
+    """只允许投放盒根下的一个文件名，禁止跳出目录。"""
+    raw = (filename or '').replace('\\', '/').rsplit('/', 1)[-1].strip()
+    if not raw or raw in {'.', '..'} or raw.startswith('.'):
+        return None
+    folder = download_library_dir().resolve()
+    candidate = (folder / raw).resolve()
+    try:
+        candidate.relative_to(folder)
+    except ValueError:
+        return None
+    if not candidate.is_file():
+        return None
+    ext = candidate.suffix.lstrip('.').lower()
+    if ext not in ALLOWED_HOME_BLOCK_DOWNLOAD_EXT:
+        return None
+    return candidate
+
+
 def apply_home_block_download_from_post(block, request) -> str | None:
     """
-    处理上传/清除下载附件。成功返回 None；失败返回白话错误。
+    处理上传 / 点选投放盒 / 清除。成功返回 None；失败返回白话错误。
+    同时带了电脑文件时，以电脑上传为准（现有上传方式不动）。
     """
     clear = request.POST.get('clear_block_download') == '1'
     uploaded = request.FILES.get('block_download')
+    picked = (request.POST.get('pick_server_download') or '').strip()
 
-    if clear and not uploaded:
+    if uploaded:
+        return _attach_uploaded_file(block, uploaded)
+
+    if picked:
+        return _attach_library_copy(block, picked)
+
+    if clear:
         _clear_download_file(block)
         return None
 
-    if not uploaded:
-        return None
+    return None
 
+
+def _attach_uploaded_file(block, uploaded) -> str | None:
     name = (getattr(uploaded, 'name', '') or '').lower()
     ext = name.rsplit('.', 1)[-1] if '.' in name else ''
     if ext not in ALLOWED_HOME_BLOCK_DOWNLOAD_EXT:
@@ -76,14 +136,55 @@ def apply_home_block_download_from_post(block, request) -> str | None:
         validate_home_block_download_size(uploaded)
     except ValidationError as exc:
         return '; '.join(exc.messages) if hasattr(exc, 'messages') else str(exc)
+    _replace_block_download(block, uploaded)
+    return None
 
+
+def _attach_library_copy(block, filename: str) -> str | None:
+    """把投放盒里的文件复制到本块隔间；不删投放盒原件。"""
+    from django.core.files import File
+
+    src = resolve_download_library_file(filename)
+    if src is None:
+        return '投放盒里找不到这个文件。请确认已平铺放在 media/downloads 下，且类型允许。'
+    try:
+        size = src.stat().st_size
+    except OSError:
+        return '读不到投放盒里的这个文件，请稍后再试。'
+
+    class _SizeHolder:
+        def __init__(self, n: int):
+            self.size = n
+
+    try:
+        validate_home_block_download_size(_SizeHolder(size))
+    except ValidationError as exc:
+        return '; '.join(exc.messages) if hasattr(exc, 'messages') else str(exc)
+
+    try:
+        with src.open('rb') as fh:
+            wrapped = File(fh, name=src.name)
+            _replace_block_download(block, wrapped)
+    except OSError:
+        return '复制投放盒文件失败，请稍后再试。'
+    return None
+
+
+def _replace_block_download(block, file_obj) -> None:
+    """换本块挂的文件；只动隔间，不动投放盒。"""
     if block.download_file:
         try:
             block.download_file.delete(save=False)
         except Exception:
             pass
-    block.download_file = uploaded
-    return None
+    name = getattr(file_obj, 'name', None) or 'file.bin'
+    name = str(name).replace('\\', '/').rsplit('/', 1)[-1]
+    if hasattr(file_obj, 'seek'):
+        try:
+            file_obj.seek(0)
+        except Exception:
+            pass
+    block.download_file.save(name, file_obj, save=False)
 
 
 def _clear_download_file(block) -> None:
