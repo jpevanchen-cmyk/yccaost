@@ -531,6 +531,12 @@ def build_experience_order_detail_context(request, order_id) -> dict[str, Any] |
         'delivery_fee': order.get_delivery_fee_amount(),
         'delivery_fee_detail': fee_detail,
         'viewer_role': 'seller',
+        'timeout_ctx': {
+            'show_countdown': False,
+            'timeout_message': '',
+            'pay_locked': False,
+            'shop_hint': '',
+        },
         'order_messages': order_messages,
         'can_order_chat': False,
         'show_contact_guest': True,

@@ -10,6 +10,7 @@
     <h2 class="page-title" style="font-size:20px;">💳 待支付</h2>
     <p class="card-meta">订单号：{{ order.get_display_order_no }}</p>
     <p class="pay-amount">¥{{ order.total_amount }}</p>
+    {% include 'waimai/_pending_pay_timeout.html' with timeout_lock_selector="button[type=submit], .btn-primary" %}
 
     {% if messages %}
         {% for message in messages %}
@@ -53,7 +54,7 @@
             </li>
             {% endfor %}
         </ul>
-        <button type="submit" class="btn btn-primary btn-block" style="margin-top:16px;">下一步</button>
+        <button type="submit" class="btn btn-primary btn-block" style="margin-top:16px;"{% if timeout_ctx.pay_locked %} disabled{% endif %}>下一步</button>
     </form>
     {% endif %}
 
@@ -78,4 +79,7 @@
     });
 })();
 </script>
+{% if timeout_ctx and timeout_ctx.show_countdown %}
+<script src="{% static 'waimai/pending_pay_countdown.js' %}"></script>
+{% endif %}
 {% endblock %}

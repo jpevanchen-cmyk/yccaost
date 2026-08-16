@@ -3,7 +3,12 @@
 {% block title %}微信扫码收款 - 野草系统{% endblock %}
 
 {% block page_back %}
-<a href="{% url 'waiter_pay_order' order.order_id %}" class="page-back-btn">← 换支付方式</a>
+<form method="post" action="{% url 'waiter_pay_order' order.order_id %}" id="abandon-wechat-form" style="display:inline;">
+    {% csrf_token %}
+    <input type="hidden" name="abandon_wechat" value="1">
+    <input type="hidden" name="idempotency_key" id="abandon-wechat-idempotency-key" value="">
+    <button type="submit" class="page-back-btn" id="abandon-wechat-btn">← 换支付方式</button>
+</form>
 {% endblock %}
 
 {% block content %}
@@ -52,6 +57,20 @@
     }
     setInterval(poll, 3000);
     poll();
+})();
+</script>
+<script src="{% static 'waimai/idempotency_client.js' %}"></script>
+<script>
+(function () {
+    var form = document.getElementById('abandon-wechat-form');
+    var keyInput = document.getElementById('abandon-wechat-idempotency-key');
+    if (!form) return;
+    if (keyInput && window.YcIdempotency) keyInput.value = window.YcIdempotency.newKey();
+    form.addEventListener('submit', function (ev) {
+        if (!window.confirm('放弃后这张微信收款码将不能再付。若已经扫过请先等结果。确定放弃当前微信支付吗？')) {
+            ev.preventDefault();
+        }
+    });
 })();
 </script>
 {% endblock %}

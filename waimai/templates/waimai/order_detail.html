@@ -40,6 +40,7 @@
         · 合计 <strong style="color:var(--yc-orange);font-size:18px;">¥{{ order.total_amount }}</strong>
     </p>
     {% if order.payment_status == 'pending_payment' %}
+        {% include 'waimai/_pending_pay_timeout.html' with timeout_lock_selector=".btn-wechat" %}
         {% if viewer_role == 'buyer' or viewer_role == 'guest' %}
         {% if order.is_basic_order and order.payment_method == 'cash' %}
     <p class="msg-ok" style="margin-top:14px;">{{ order_shell.cash_payment_hint }}</p>
@@ -47,10 +48,14 @@
     <p class="msg-ok" style="margin-top:14px;">{{ order_shell.cash_payment_hint }}</p>
         {% elif order.is_cash_awaiting_confirm %}
     <p class="msg-ok" style="margin-top:14px;">{{ order_shell.cash_payment_hint }}</p>
-        {% elif viewer_role == 'buyer' %}
+        {% elif viewer_role == 'buyer' and not timeout_ctx.pay_locked %}
     <a class="btn btn-wechat btn-block" style="margin-top:14px;" href="{% url 'pay_order' order.order_id %}">去支付</a>
+        {% elif viewer_role == 'buyer' and timeout_ctx.pay_locked %}
+    <a class="btn btn-wechat btn-block" style="margin-top:14px;opacity:0.5;pointer-events:none;" aria-disabled="true">去支付</a>
         {% endif %}
         {% endif %}
+    {% elif timeout_ctx.timeout_message %}
+        {% include 'waimai/_pending_pay_timeout.html' %}
     {% endif %}
 </div>
 
@@ -371,4 +376,11 @@
         {% if onboarding_readonly %}
         {% include 'waimai/onboarding/_readonly_guard.html' %}
         {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if timeout_ctx and timeout_ctx.show_countdown %}
+{% load static %}
+<script src="{% static 'waimai/pending_pay_countdown.js' %}"></script>
+{% endif %}
 {% endblock %}

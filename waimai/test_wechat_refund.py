@@ -85,6 +85,16 @@ class WechatRefundTests(TestCase):
     def test_owner_can_cancel_paid_wechat_order(self):
         self.assertTrue(shop_can_cancel_order(self.seller, self.order))
 
+    def test_wechat_goods_body_uses_shop_name(self):
+        from waimai.payments.wechat_native import wechat_order_goods_body
+
+        body = wechat_order_goods_body(self.order)
+        self.assertTrue(body.startswith('野草订单-退款测试店 '))
+        self.assertIn(self.order.get_display_order_no(), body)
+        desc = wechat_order_goods_body(self.order, refund=True)
+        self.assertIn('退款测试店', desc)
+        self.assertTrue(desc.endswith('取消退款') or '取消退款' in desc)
+
     @patch('waimai.payments.wechat_refund_helpers._post_xml_secapi')
     def test_request_refund_success_updates_order_and_ledger(self, mock_post):
         mock_post.return_value = {

@@ -1,0 +1,9 @@
+{% if timeout_ctx %}
+{% if timeout_ctx.timeout_message %}
+<p class="msg-err" style="margin-top:14px;">{{ timeout_ctx.timeout_message }}</p>
+{% elif timeout_ctx.show_countdown %}
+<p class="msg-ok" style="margin-top:14px;" data-yc-pay-countdown data-remain-sec="{{ timeout_ctx.remaining_seconds }}" data-lock-selector="{{ timeout_lock_selector }}">
+    <span data-yc-pay-countdown-label>请尽快完成支付</span>
+</p>
+{% endif %}
+{% endif %}

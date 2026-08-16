@@ -1054,8 +1054,17 @@ class BuyOrder(models.Model):
         max_length=8,
         blank=True,
         default='',
-        choices=[('buyer', '买家'), ('shop', '店家')],
+        choices=[('buyer', '买家'), ('shop', '店家'), ('system', '系统')],
         verbose_name='取消方',
+    )
+    pending_pay_deadline = models.DateTimeField(
+        blank=True, null=True, db_index=True, verbose_name='待支付截止时间',
+    )
+    pending_pay_limit_minutes = models.PositiveIntegerField(
+        blank=True, null=True, verbose_name='本单待支付时限（分钟）',
+    )
+    late_pay_last_query_at = models.DateTimeField(
+        blank=True, null=True, verbose_name='取消后最近一次向支付机构查单时间',
     )
     cancel_note = models.CharField(max_length=500, blank=True, default='', verbose_name='取消说明')
     table_session = models.ForeignKey(
@@ -1402,6 +1411,11 @@ class ShopPaymentSettings(models.Model):
         max_length=255, blank=True, default='',
         verbose_name='店铺公网网址',
         help_text='如 https://你的域名.com ，用于拼微信异步通知地址；无公网时可先留空，用轮询查单',
+    )
+    pending_pay_timeout_minutes = models.PositiveIntegerField(
+        default=30,
+        verbose_name='待支付超时（分钟）',
+        help_text='仅微信/演示等先付单。默认 30；最少 5、最多 1440（24 小时）。只影响新单。',
     )
     enable_cashier = models.BooleanField(default=False, verbose_name='启用实体收银台')
     cashier_page_size = models.PositiveSmallIntegerField(default=10, verbose_name='收银台每页条数')

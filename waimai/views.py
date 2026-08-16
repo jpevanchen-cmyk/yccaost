@@ -896,8 +896,20 @@ def shop_work_order(request, shop_code, order_id):
 
     from .payments import poll_wechat_refund
     from .payments.wechat_refund_helpers import shop_cancel_refund_hint
+    from .pending_payment_timeout_helpers import (
+        build_timeout_page_context,
+        followup_query_cancelled_order,
+        is_overdue,
+        is_timeout_candidate,
+        process_overdue_order,
+    )
+
+    if is_timeout_candidate(order) and is_overdue(order):
+        process_overdue_order(order)
+        order.refresh_from_db()
 
     if order.order_status == 'cancelled' or order.payment_status == 'paid':
+        followup_query_cancelled_order(order, force=True)
         poll_wechat_refund(order)
         order.refresh_from_db()
 
@@ -926,6 +938,7 @@ def shop_work_order(request, shop_code, order_id):
         'can_shop_cancel': can_shop_cancel,
         'shop_has_chat_history': shop_has_cancel_communication(order),
         'shop_cancel_refund_hint': shop_cancel_refund_hint(order),
+        'timeout_ctx': build_timeout_page_context(order),
         'back_url': build_shop_work_path(code, view='orders'),
         'shop_work_logout_url': reverse('shop_work_logout', kwargs={'shop_code': code}),
         'workbench_shell': build_workbench_shell(seller_id),
@@ -1136,6 +1149,18 @@ def _execute_waiter_pay_order_post(request, order):
     from .waiter_handlers import handle_waiter_pay_post
     from .waiter_helpers import sync_waiter_service_status
 
+    if request.POST.get('abandon_wechat'):
+        from .pending_payment_timeout_helpers import abandon_wechat_for_switch
+
+        ok, msg = abandon_wechat_for_switch(order)
+        if not ok:
+            if msg:
+                messages.error(request, msg)
+            return redirect('waiter_pay_order', order_id=order.order_id)
+        return redirect(
+            f"{reverse('waiter_pay_order', kwargs={'order_id': order.order_id})}?choose=1"
+        )
+
     result = handle_waiter_pay_post(request, order, _client_ip(request))
     if not result.ok:
         messages.error(request, result.message)
@@ -1202,7 +1227,8 @@ def waiter_pay_order(request, order_id):
     ctx = build_pay_page_context(order)
     ctx['waiter_pay_mode'] = True
     pending = ctx.get('pending_wechat_record')
-    if pending and pending.code_url:
+    want_choose = request.GET.get('choose') == '1'
+    if pending and pending.code_url and not want_choose:
         ctx['code_url'] = pending.code_url
         ctx['out_trade_no'] = pending.out_trade_no
         ctx['use_notify'] = bool((ctx['payment_settings'].public_site_url or '').strip())
@@ -2647,6 +2673,7 @@ def _execute_place_order(request):
         get_waiter_table_order_meta,
         is_waiter_table_order_active,
     )
+    from .pending_payment_timeout_helpers import pending_pay_stamp_fields
 
     seller_id = (request.POST.get('seller_id') or 'seller_001').strip()
     is_logged_buyer = (
@@ -2773,6 +2800,7 @@ def _execute_place_order(request):
                     table_label=table_label,
                     order_kind=order_kind,
                     guest_nickname=guest_nickname,
+                    **pending_pay_stamp_fields(seller_id),
                 )
 
             action, order = place_or_merge_table_main_order(
@@ -2816,6 +2844,7 @@ def _execute_place_order(request):
             table_label=table_label,
             order_kind=order_kind,
             guest_nickname=guest_nickname,
+            **pending_pay_stamp_fields(seller_id),
         )
 
     set_shop_cart(request.session, seller_id, {})
@@ -2865,7 +2894,21 @@ def _execute_place_order(request):
 
 
 def _execute_pay_order_post(request, order):
-    """支付页 POST：选支付方式（幂等第 7 步 · 由 run_idempotent 包裹）。"""
+    """支付页 POST：选支付方式或放弃当前微信（幂等第 7 步 · 由 run_idempotent 包裹）。"""
+    if request.POST.get('abandon_wechat'):
+        from .pending_payment_timeout_helpers import abandon_wechat_for_switch
+
+        ok, msg = abandon_wechat_for_switch(order)
+        if not ok:
+            if msg:
+                messages.error(request, msg)
+            if order.payment_status == 'paid':
+                if order.is_guest_order():
+                    return redirect('order_detail', order_id=order.order_id)
+                return redirect('order_history')
+            return redirect('pay_order', order_id=order.order_id)
+        return redirect(f"{reverse('pay_order', kwargs={'order_id': order.order_id})}?choose=1")
+
     method = request.POST.get('payment_method', '').strip()
     result = initiate_payment(order, method, _client_ip(request))
     if not result.ok:
@@ -2896,6 +2939,25 @@ def pay_order(request, order_id):
         if request.user.is_authenticated:
             return redirect('order_history')
         return redirect('login')
+
+    if request.method != 'POST':
+        from .pending_payment_timeout_helpers import (
+            is_overdue,
+            is_timeout_candidate,
+            process_overdue_order,
+            timeout_public_message,
+        )
+
+        if is_timeout_candidate(order) and is_overdue(order):
+            process_overdue_order(order)
+            order.refresh_from_db()
+        if order.order_status == 'cancelled':
+            messages.error(request, timeout_public_message(order) if order.cancel_side == 'system' else '订单已取消，请重新下单。')
+            return redirect('order_detail', order_id=order.order_id)
+        if order.payment_status == 'paid':
+            if order.is_guest_order():
+                return redirect('order_detail', order_id=order.order_id)
+            return redirect('order_history')
 
     # 带幂等键的 POST 须先重放，避免首单已付清后被「非待支付」挡在外面
     if request.method == 'POST' and extract_idempotency_key(request):
@@ -2929,8 +2991,13 @@ def pay_order(request, order_id):
             request, order, lambda: _execute_pay_order_post(request, order),
         )
 
+    from .pending_payment_timeout_helpers import build_timeout_page_context
+
+    ctx['timeout_ctx'] = build_timeout_page_context(order)
+
     pending = ctx.get('pending_wechat_record')
-    if pending and pending.code_url:
+    want_choose = request.GET.get('choose') == '1'
+    if pending and pending.code_url and not want_choose:
         ctx['code_url'] = pending.code_url
         ctx['out_trade_no'] = pending.out_trade_no
         ctx['use_notify'] = bool((ctx['payment_settings'].public_site_url or '').strip())
@@ -2951,10 +3018,48 @@ def pay_order_status(request, order_id):
         return JsonResponse({'paid': False}, status=403)
     if order.payment_status == 'paid':
         return JsonResponse({'paid': True})
+    from .pending_payment_timeout_helpers import (
+        is_overdue,
+        is_timeout_candidate,
+        process_overdue_order,
+        timeout_public_message,
+    )
+
+    if is_timeout_candidate(order) and is_overdue(order):
+        action, msg = process_overdue_order(order)
+        order.refresh_from_db()
+        if order.payment_status == 'paid':
+            return JsonResponse({'paid': True})
+        if order.order_status == 'cancelled' or action == 'cancelled':
+            from .pending_payment_timeout_helpers import followup_query_cancelled_order
+
+            followup_query_cancelled_order(order, force=True)
+            order.refresh_from_db()
+            if order.payment_status == 'paid':
+                return JsonResponse({'paid': True})
+            return JsonResponse({
+                'paid': False,
+                'cancelled': True,
+                'message': msg or timeout_public_message(order),
+            })
+    if order.order_status == 'cancelled':
+        from .pending_payment_timeout_helpers import followup_query_cancelled_order
+
+        followup_query_cancelled_order(order, force=True)
+        order.refresh_from_db()
+        return JsonResponse({
+            'paid': False,
+            'cancelled': True,
+            'message': timeout_public_message(order) if order.cancel_side == 'system' else '订单已取消，请重新下单。',
+        })
     if order.payment_method == 'wechat':
         poll_wechat_payment(order)
         order.refresh_from_db()
-    return JsonResponse({'paid': order.payment_status == 'paid'})
+    return JsonResponse({
+        'paid': order.payment_status == 'paid',
+        'cancelled': order.order_status == 'cancelled',
+        'message': timeout_public_message(order) if order.order_status == 'cancelled' and order.cancel_side == 'system' else '',
+    })
 
 
 @csrf_exempt
@@ -3191,6 +3296,16 @@ def order_detail(request, order_id):
         BuyOrder.objects.select_related('delivery_order', 'table_session'),
         order_id=order_id,
     )
+    from .pending_payment_timeout_helpers import (
+        build_timeout_page_context,
+        is_overdue,
+        is_timeout_candidate,
+        process_overdue_order,
+    )
+
+    if is_timeout_candidate(order) and is_overdue(order):
+        process_overdue_order(order)
+        order.refresh_from_db()
 
     # 堂食游客：凭进行中的桌台会话查看本单（结账翻台后会话关闭即不可见）
     table_sess = get_buyer_table_session(request, order.seller_id)
@@ -3286,7 +3401,9 @@ def order_detail(request, order_id):
     from .payments import poll_wechat_refund
     from .payments.wechat_refund_helpers import shop_cancel_refund_hint
 
-    if user and getattr(user, 'role', '') == 'seller' and order.seller_id == user.username:
+    if order.order_status == 'cancelled' or (
+        user and getattr(user, 'role', '') == 'seller' and order.seller_id == user.username
+    ):
         poll_wechat_refund(order)
         order.refresh_from_db()
 
@@ -3367,5 +3484,6 @@ def order_detail(request, order_id):
         'shop_work_back_url': '',
         'guest_shop_back_url': f'/shop/?seller_id={order.seller_id}' if viewer_role == 'guest' else '',
         'fund_ledger_rows': fund_ledger_rows,
+        'timeout_ctx': build_timeout_page_context(order),
         **qr_ctx,
     })

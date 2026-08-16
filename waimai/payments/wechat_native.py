@@ -10,11 +10,12 @@ from urllib.request import Request, urlopen
 from django.utils import timezone
 from waimai.time_helpers import now_local_wall
 
-from ..models import BuyOrder, PaymentRecord, ShopPaymentSettings
+from ..models import BuyOrder, PaymentRecord, ShopPaymentSettings, ShopProfile
 from .base import PaymentInitResult
 
 WECHAT_UNIFIEDORDER_URL = 'https://api.mch.weixin.qq.com/pay/unifiedorder'
 WECHAT_ORDERQUERY_URL = 'https://api.mch.weixin.qq.com/pay/orderquery'
+WECHAT_CLOSEORDER_URL = 'https://api.mch.weixin.qq.com/pay/closeorder'
 
 
 def _nonce_str(length=32):
@@ -79,6 +80,35 @@ def _notify_url(settings: ShopPaymentSettings) -> str:
     return f'{base}/pay/wechat/notify/'
 
 
+def wechat_order_goods_body(order, *, refund: bool = False) -> str:
+    """
+    提交给微信的商品说明：野草订单-当前店铺名称 对外订单号。
+    退款时再加「取消退款」。超长按微信限制截断。
+    """
+    name = (
+        ShopProfile.objects.filter(seller_id=order.seller_id)
+        .values_list('shop_name', flat=True)
+        .first()
+        or (order.seller_id or '')
+        or '本店'
+    )
+    name = str(name).strip() or '本店'
+    text = f'野草订单-{name} {order.get_display_order_no()}'
+    if refund:
+        text = f'{text}取消退款'
+        return text[:80]
+    return _clip_utf8(text, 127)
+
+
+def _clip_utf8(text: str, max_bytes: int) -> str:
+    """按字节截断，避免中文被微信拒收。"""
+    if len(text.encode('utf-8')) <= max_bytes:
+        return text
+    while text and len(text.encode('utf-8')) > max_bytes:
+        text = text[:-1]
+    return text
+
+
 def _make_out_trade_no(order: BuyOrder) -> str:
     """商户订单号（微信要求 32 字符内）"""
     return order.order_id.hex[:32]
@@ -114,6 +144,10 @@ def _get_or_create_pending_record(order: BuyOrder) -> PaymentRecord:
 
 def create_native_payment(order: BuyOrder, settings: ShopPaymentSettings, client_ip: str) -> PaymentInitResult:
     """调用微信统一下单，返回扫码链接"""
+    from ..pending_payment_timeout_helpers import WECHAT_QR_RATE_MESSAGE, wechat_qr_rate_limited
+
+    if wechat_qr_rate_limited(order):
+        return PaymentInitResult(ok=False, message=WECHAT_QR_RATE_MESSAGE)
     if not settings.wechat_config_ready():
         return PaymentInitResult(ok=False, message='微信商户参数未配置完整，请联系店家')
 
@@ -124,7 +158,7 @@ def create_native_payment(order: BuyOrder, settings: ShopPaymentSettings, client
         'appid': settings.wechat_app_id.strip(),
         'mch_id': settings.wechat_mch_id.strip(),
         'nonce_str': _nonce_str(),
-        'body': f'野草订单{order.get_display_order_no()}',
+        'body': wechat_order_goods_body(order),
         'out_trade_no': record.out_trade_no,
         'total_fee': str(_amount_fen(order.total_amount)),
         'spbill_create_ip': client_ip or '127.0.0.1',
@@ -193,6 +227,27 @@ def query_wechat_order(record: PaymentRecord, settings: ShopPaymentSettings) -> 
     return _post_xml(WECHAT_ORDERQUERY_URL, params)
 
 
+def close_wechat_order(record: PaymentRecord, settings: ShopPaymentSettings) -> dict:
+    """向微信请求关掉这一张未付收款（APIv2 关单）。"""
+    params = {
+        'appid': settings.wechat_app_id.strip(),
+        'mch_id': settings.wechat_mch_id.strip(),
+        'out_trade_no': record.out_trade_no,
+        'nonce_str': _nonce_str(),
+    }
+    params['sign'] = _sign_params(params, settings.wechat_api_key.strip())
+    return _post_xml(WECHAT_CLOSEORDER_URL, params)
+
+
+def mark_wechat_record_closed_locally(record: PaymentRecord) -> None:
+    """本机作废这张码；商户单号留下，取消后仍可追问。"""
+    if record.status == 'success':
+        return
+    record.status = 'closed'
+    record.code_url = ''
+    record.save(update_fields=['status', 'code_url', 'updated_at'])
+
+
 def apply_wechat_success(record: PaymentRecord, provider_trade_no: str, notify_payload: dict | None = None):
     """流水与订单标记为已支付（幂等）"""
     from .service import confirm_order_paid
@@ -208,6 +263,33 @@ def apply_wechat_success(record: PaymentRecord, provider_trade_no: str, notify_p
     record.save()
 
     order = record.buy_order
+    order.refresh_from_db()
+    # 已取消是终态：晚到账不救活，改走自动退
+    if order.order_status == 'cancelled' or order.payment_status == 'cancelled':
+        from ..pending_payment_timeout_helpers import handle_late_wechat_on_cancelled_order
+
+        from ..fund_ledger_hooks import record_wechat_payment_success
+
+        record_wechat_payment_success(
+            order,
+            out_trade_no=record.out_trade_no,
+            source='wechat_notify_after_cancel',
+            operator='system',
+        )
+        handle_late_wechat_on_cancelled_order(order)
+        return
+    if order.payment_status == 'paid':
+        from ..pending_payment_timeout_helpers import handle_extra_wechat_when_order_already_paid
+        from ..fund_ledger_hooks import record_wechat_payment_success
+
+        record_wechat_payment_success(
+            order,
+            out_trade_no=record.out_trade_no,
+            source='wechat_notify_extra_when_paid',
+            operator='system',
+        )
+        handle_extra_wechat_when_order_already_paid(order)
+        return
     if order.payment_status != 'paid':
         confirm_order_paid(order, 'wechat', paid_at=record.paid_at)
     from ..fund_ledger_hooks import record_wechat_payment_success

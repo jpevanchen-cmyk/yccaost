@@ -81,7 +81,6 @@
             微信异步通知地址（配置公网网址后自动使用）：<br>
             <code>{% if payment_form.instance.public_site_url %}{{ payment_form.instance.public_site_url|cut:"/" }}/pay/wechat/notify/{% else %}（填写公网网址后显示）{% endif %}</code>
         </p>
-        <button type="submit" name="save_payment_settings" value="1" class="btn btn-primary btn-block" data-yc-tour="payment-save">保存支付设置</button>
     </form>
 
     {% if wechat_cert_display.can_clear %}
@@ -93,5 +92,6 @@
         <p class="field-hint" style="margin:8px 0 0;">不用微信退款时可在此删除；不必手动进文件夹删，避免误删别的文件。</p>
     </form>
     {% endif %}
+    <button type="submit" form="payment-settings-form-el" name="save_payment_settings" value="1" class="btn btn-green btn-block" style="margin-top:12px;" data-yc-tour="payment-save">保存支付设置</button>
 </div>
 {% endblock %}

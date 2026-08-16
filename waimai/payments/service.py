@@ -39,8 +39,11 @@ def _ensure_catalog_sales_for_cash(order: BuyOrder) -> PaymentInitResult | None:
 
 
 def confirm_order_paid(order: BuyOrder, payment_method: str, paid_at=None):
-    """订单标记为已支付；主体订单不调用饮食履约。"""
+    """订单标记为已支付；主体订单不调用饮食履约。已取消单不救活。"""
     from ..menu_helpers import release_catalog_sales_for_order, try_apply_catalog_sales_for_order
+
+    if order.order_status == 'cancelled' or order.payment_status == 'cancelled':
+        return
 
     if payment_method == 'wechat_simulate':
         release_catalog_sales_for_order(order)
@@ -82,6 +85,13 @@ def build_pay_page_context(order: BuyOrder) -> dict:
     """支付页所需上下文"""
     settings = get_payment_settings(order.seller_id)
     options = build_buyer_pay_options(settings, order=order)
+    from ..pending_payment_timeout_helpers import WECHAT_QR_RATE_MESSAGE, wechat_qr_rate_limited
+
+    if wechat_qr_rate_limited(order):
+        for opt in options:
+            if opt.code == 'wechat' and opt.enabled:
+                opt.enabled = False
+                opt.hint = WECHAT_QR_RATE_MESSAGE
 
     pending_wechat = (
         order.payment_records.filter(payment_method='wechat', status='pending')
@@ -101,6 +111,12 @@ def build_pay_page_context(order: BuyOrder) -> dict:
 
 def initiate_payment(order: BuyOrder, method: str, client_ip: str) -> PaymentInitResult:
     """买家选定支付方式后，路由到对应插头"""
+    from ..pending_payment_timeout_helpers import enforce_pending_pay_or_message
+
+    can_pay, timeout_msg = enforce_pending_pay_or_message(order)
+    if not can_pay:
+        return PaymentInitResult(ok=False, message=timeout_msg or '订单已取消，请重新下单。')
+
     settings = get_payment_settings(order.seller_id)
     options = {o.code: o for o in build_buyer_pay_options(settings, order=order)}
 

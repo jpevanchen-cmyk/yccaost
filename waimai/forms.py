@@ -477,6 +477,7 @@ class ShopPaymentSettingsForm(forms.ModelForm):
             'enable_wechat',
             'enable_cash',
             'enable_cod',
+            'pending_pay_timeout_minutes',
             'enable_cashier',
             'cashier_page_size',
             'wechat_mch_id',
@@ -489,6 +490,7 @@ class ShopPaymentSettingsForm(forms.ModelForm):
             'enable_wechat': '开启微信支付（真扣款）',
             'enable_cash': '开启现金支付',
             'enable_cod': '允许外卖现金货到付款',
+            'pending_pay_timeout_minutes': '待支付超时（分钟）',
             'enable_cashier': '启用实体收银台',
             'cashier_page_size': '收银台每页显示条数',
             'wechat_mch_id': '微信商户号',
@@ -500,11 +502,13 @@ class ShopPaymentSettingsForm(forms.ModelForm):
             'wechat_api_key': forms.PasswordInput(render_value=True),
             'public_site_url': forms.URLInput(attrs={'placeholder': 'https://'}),
             'cashier_page_size': forms.Select(choices=[(10, '10 条'), (20, '20 条')]),
+            'pending_pay_timeout_minutes': forms.NumberInput(attrs={'min': 5, 'max': 1440}),
         }
         help_texts = {
             'public_site_url': '用于微信自动通知；未部署公网时可留空，买家扫码页将自动轮询查单。',
             'enable_simulate': '正式上线前请关闭，避免顾客误用演示支付。',
             'enable_cod': '开启后，外卖顾客可选「现金货到付款」：店家先备货派单，骑手送达时收现金。关闭则外卖不显示现金。',
+            'pending_pay_timeout_minutes': '客人下单后须在此时限内付完（微信/演示）。默认 30 分钟；最少 5、最多 1440。只影响新单。',
             'enable_cashier': '开启后，店铺工作台出现「收银台」Tab，供现场收当天待支付订单。',
             'cashier_page_size': '仅影响工作台收银台列表分页，与订单管理无关。',
         }
@@ -513,6 +517,11 @@ class ShopPaymentSettingsForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for name in ('wechat_apiclient_cert_upload', 'wechat_apiclient_key_upload'):
             self.fields[name].widget.attrs.setdefault('accept', '.pem')
+
+    def clean_pending_pay_timeout_minutes(self):
+        from .pending_payment_timeout_helpers import clamp_timeout_minutes
+
+        return clamp_timeout_minutes(self.cleaned_data.get('pending_pay_timeout_minutes'))
 
     def clean_wechat_apiclient_cert_upload(self):
         uploaded = self.cleaned_data.get('wechat_apiclient_cert_upload')

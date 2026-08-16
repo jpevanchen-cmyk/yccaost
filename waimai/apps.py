@@ -42,6 +42,24 @@ class WaimaiConfig(AppConfig):
             dispatch_uid='yc_load_lan_hosts_once',
         )
 
+        def _start_pending_pay_scanner_once(**kwargs):
+            from django.conf import settings as dj_settings
+
+            if getattr(dj_settings, '_yc_pending_pay_scanner_started', False):
+                return
+            dj_settings._yc_pending_pay_scanner_started = True
+            try:
+                from .pending_payment_timeout_helpers import maybe_start_pending_pay_scanner
+
+                maybe_start_pending_pay_scanner()
+            except Exception:
+                pass
+
+        request_started.connect(
+            _start_pending_pay_scanner_once,
+            dispatch_uid='yc_pending_pay_scanner_once',
+        )
+
         # V1 文件库：连库后自动 WAL + busy_timeout（仅 v1_local_mode 生效）
         connection_created.connect(
             on_connection_created,

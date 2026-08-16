@@ -18,6 +18,8 @@ KIND_BUYER_ORDER_MSG = 'buyer_order_msg'
 KIND_BUYER_CASH_SHORTFALL = 'buyer_cash_shortfall'
 KIND_GUESTBOOK_REPLY = 'guestbook_reply'
 KIND_LOGIN_LOCKED = 'login_locked'
+KIND_BUYER_TIMEOUT_REFUND = 'buyer_timeout_refund'
+KIND_SHOP_TIMEOUT_REFUND = 'shop_timeout_refund'
 KIND_TEST = 'test_email'
 
 

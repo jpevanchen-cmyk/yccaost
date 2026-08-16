@@ -25,6 +25,9 @@
         · {{ order.get_fulfillment_display_short }}
         · 合计 <strong style="color:var(--yc-orange);font-size:18px;">¥{{ order.total_amount }}</strong>
     </p>
+    {% if timeout_ctx.shop_hint %}
+    <p class="msg-err" style="margin-top:14px;">{{ timeout_ctx.shop_hint }}</p>
+    {% endif %}
 </div>
 
 {% include 'waimai/_order_cashier_qr_block.html' %}

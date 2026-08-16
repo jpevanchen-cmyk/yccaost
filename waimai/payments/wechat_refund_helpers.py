@@ -17,6 +17,7 @@ from .wechat_native import (
     _post_xml,
     _sign_params,
     _to_xml,
+    wechat_order_goods_body,
 )
 
 WECHAT_REFUND_URL = 'https://api.mch.weixin.qq.com/secapi/pay/refund'
@@ -95,7 +96,7 @@ def request_wechat_refund(
         'out_refund_no': record.out_refund_no,
         'total_fee': str(total_fen),
         'refund_fee': str(total_fen),
-        'refund_desc': f'野草订单{order.get_display_order_no()}取消退款'[:80],
+        'refund_desc': wechat_order_goods_body(order, refund=True),
         'op_user_id': settings.wechat_mch_id.strip(),
     }
     params['sign'] = _sign_params(params, settings.wechat_api_key.strip())
@@ -197,7 +198,13 @@ def apply_wechat_refund_success(
     record.save(update_fields=['refund_status', 'refund_payload', 'refunded_at', 'updated_at'])
 
     order = record.buy_order
-    if order.payment_status != 'refunded':
+    # 现金已付清后又来一笔微信：只退微信，主单保持已付
+    keep_paid = (
+        order.payment_status == 'paid'
+        and (order.payment_method or '') == 'cash'
+        and order.order_status != 'cancelled'
+    )
+    if not keep_paid and order.payment_status != 'refunded':
         order.payment_status = 'refunded'
         order.save(update_fields=['payment_status', 'updated_at'])
 
@@ -210,6 +217,10 @@ def apply_wechat_refund_success(
         source='wechat_refund_query',
         operator=operator,
     )
+    if order.cancel_side == 'system':
+        from ..pending_payment_timeout_helpers import notify_timeout_refund_update
+
+        notify_timeout_refund_update(order, kind='success')
 
 
 def try_sync_wechat_refund(record: PaymentRecord, settings: ShopPaymentSettings) -> bool:
@@ -246,8 +257,10 @@ def try_sync_wechat_refund(record: PaymentRecord, settings: ShopPaymentSettings)
 
 
 def order_needs_wechat_refund(order: BuyOrder) -> bool:
-    """是否须走微信原路退款（已微信到账且尚未退完）"""
-    if order.payment_method != 'wechat' or order.payment_status != 'paid':
+    """是否须走微信原路退款（已微信到账且尚未退完；含超时取消后到账）"""
+    if (order.payment_method or '') != 'wechat':
+        return False
+    if order.payment_status not in ('paid', 'cancelled') and order.order_status != 'cancelled':
         return False
     record = get_wechat_success_record(order)
     return bool(record and record.refund_status != 'success')
