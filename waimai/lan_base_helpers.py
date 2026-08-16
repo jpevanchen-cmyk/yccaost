@@ -78,6 +78,14 @@ def lan_urls_match(saved: str, detected: str) -> bool:
     return a == b
 
 
+def request_is_loopback(request: HttpRequest | None = None) -> bool:
+    """是否本机自己访问（控制台问后台用）。"""
+    if request is None:
+        return False
+    addr = (request.META.get('REMOTE_ADDR') or '').strip()
+    return addr in ('127.0.0.1', '::1')
+
+
 def lan_sync_ui_allowed(request: HttpRequest | None = None) -> bool:
     """
     是否展示检测/一键：V1 安装包，或开发机（开着调试）。

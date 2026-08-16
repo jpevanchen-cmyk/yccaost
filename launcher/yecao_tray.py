@@ -46,6 +46,53 @@ except ImportError:  # pragma: no cover - 运行环境缺依赖时给出白话�
     pystray = None
 
 
+def _install_vertical_scroll(win):
+    """控制台窗口：内容超出高度时可往下滚，右侧出滚动条。"""
+    import tkinter as tk
+    from tkinter import ttk
+
+    canvas = tk.Canvas(win, highlightthickness=0, borderwidth=0)
+    try:
+        canvas.configure(background=win.cget('bg'))
+    except Exception:
+        pass
+    scrollbar = ttk.Scrollbar(win, orient='vertical', command=canvas.yview)
+    canvas.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side='right', fill='y')
+    canvas.pack(side='left', fill='both', expand=True)
+
+    inner = ttk.Frame(canvas, padding=16)
+    inner_id = canvas.create_window((0, 0), window=inner, anchor='nw')
+
+    def _sync_scrollregion(_event=None):
+        canvas.configure(scrollregion=canvas.bbox('all'))
+
+    def _sync_inner_width(event):
+        canvas.itemconfigure(inner_id, width=event.width)
+        _sync_scrollregion()
+
+    inner.bind('<Configure>', _sync_scrollregion)
+    canvas.bind('<Configure>', _sync_inner_width)
+
+    def _on_mousewheel(event):
+        if not canvas.winfo_exists():
+            return
+        delta = int(getattr(event, 'delta', 0) or 0)
+        if delta == 0:
+            return
+        canvas.yview_scroll(int(-1 * (delta / 120)), 'units')
+
+    def _bind_wheel(widget):
+        widget.bind('<MouseWheel>', _on_mousewheel)
+        for child in widget.winfo_children():
+            _bind_wheel(child)
+
+    canvas.bind('<MouseWheel>', _on_mousewheel)
+    win.bind('<MouseWheel>', _on_mousewheel)
+    # 子控件造好后再调用 bind_wheel，避免点在按钮上滚不动
+    return canvas, inner, _bind_wheel, _sync_scrollregion
+
+
 def _log_tray_fatal(message: str) -> None:
     """pythonw 无控制台时，把致命错误写入日志文件。"""
     try:
@@ -123,6 +170,7 @@ class YecaoTrayApp:
         self.config = fetch_launcher_config(self.root_dir)
         self.icon: pystray.Icon | None = None
         self.status_window = None
+        self._status_sync_scroll = None
         self._status_label = None
         self._pwd_status_label = None
         self._pwd_startup_var = None
@@ -138,9 +186,34 @@ class YecaoTrayApp:
         self._instance_lock = InstallSingleInstanceLock(self.root_dir)
         self._show_watch_stop = threading.Event()
 
+    def _lan_listen_port(self):
+        """本机后台正在用的端口；还没起来则不指定。"""
+        if getattr(self.server, 'running', False):
+            return int(self.server.port)
+        return None
+
+    def _reload_lan_config(self) -> dict:
+        """问店内地址：优先正在跑的后台（与堂食同一套）。"""
+        self.config = fetch_launcher_config(
+            self.root_dir, listen_port=self._lan_listen_port(),
+        )
+        self._refresh_lan_panel()
+        return self.config
+
+    def _refresh_status_scroll(self) -> None:
+        """店内地址文案变长后，把可滚动范围补全。"""
+        fn = self._status_sync_scroll
+        if fn is None:
+            return
+        try:
+            fn()
+        except Exception:
+            pass
+
     def _set_status_text(self, text: str) -> None:
         if self._status_label is not None:
             self._status_label.config(text=text)
+            self._refresh_status_scroll()
 
     def _ui(self, fn) -> None:
         """把界面动作丢回状态窗口主线程（托盘线程里点菜单时用）。"""
@@ -188,12 +261,14 @@ class YecaoTrayApp:
 
         win = tk.Tk()
         win.title('野草系统 · 本地营业控制台')
-        win.geometry('560x760')
-        win.minsize(480, 620)
+        screen_h = int(win.winfo_screenheight() or 760)
+        win_h = min(760, max(420, screen_h - 120))
+        win.geometry(f'560x{win_h}')
+        win.minsize(480, 360)
         win.protocol('WM_DELETE_WINDOW', self.hide_status_window)
 
-        outer = ttk.Frame(win, padding=16)
-        outer.pack(fill='both', expand=True)
+        _canvas, outer, bind_wheel, sync_scroll = _install_vertical_scroll(win)
+        self._status_sync_scroll = sync_scroll
 
         ttk.Label(
             outer,
@@ -259,7 +334,7 @@ class YecaoTrayApp:
         ttk.Button(row2, text='退出野草', command=self.quit_app).pack(side='left')
 
         pwd_box = ttk.LabelFrame(outer, text='启动 / 退出密码（可选）', padding=10)
-        pwd_box.pack(fill='both', expand=True, pady=(0, 4))
+        pwd_box.pack(fill='x', pady=(0, 4))
         self._pwd_status_label = ttk.Label(pwd_box, text=self._password_summary_text(), wraplength=500)
         self._pwd_status_label.pack(anchor='w', pady=(0, 6))
         ttk.Label(
@@ -289,6 +364,12 @@ class YecaoTrayApp:
 
         self._refresh_password_panel()
         self._refresh_lan_panel()
+        bind_wheel(outer)
+        try:
+            win.update_idletasks()
+            sync_scroll()
+        except Exception:
+            pass
         self.status_window = win
         return win
 
@@ -314,6 +395,7 @@ class YecaoTrayApp:
             win = self._ensure_status_window()
             win.deiconify()
             win.lift()
+            self._refresh_status_scroll()
             try:
                 win.focus_force()
             except Exception:
@@ -351,6 +433,7 @@ class YecaoTrayApp:
             self._lan_match_label.config(text=match_text, foreground=match_color)
         if self._lan_hint_label is not None:
             self._lan_hint_label.config(text=hint)
+        self._refresh_status_scroll()
 
     def _notify_lan_mismatch_if_needed(self) -> None:
         cfg = self.config or {}
@@ -366,8 +449,7 @@ class YecaoTrayApp:
 
     def open_browser(self, _icon=None, _item=None) -> None:
         def _open() -> None:
-            self.config = fetch_launcher_config(self.root_dir)
-            self._refresh_lan_panel()
+            self._reload_lan_config()
             webbrowser.open(
                 self.config.get('open_url') or 'http://127.0.0.1:8000/accounts/login/',
             )
@@ -379,8 +461,7 @@ class YecaoTrayApp:
         def _open() -> None:
             from tkinter import messagebox
 
-            self.config = fetch_launcher_config(self.root_dir)
-            self._refresh_lan_panel()
+            self._reload_lan_config()
             lan = (self.config.get('lan_base_url') or '').strip()
             parent = self._ensure_status_window()
             if not lan:
@@ -399,8 +480,7 @@ class YecaoTrayApp:
         def _copy() -> None:
             from tkinter import messagebox
 
-            self.config = fetch_launcher_config(self.root_dir)
-            self._refresh_lan_panel()
+            self._reload_lan_config()
             lan = (self.config.get('lan_base_url') or '').strip()
             parent = self._ensure_status_window()
             if not lan:
@@ -414,10 +494,28 @@ class YecaoTrayApp:
 
     def detect_lan(self, _icon=None, _item=None) -> None:
         def _run() -> None:
+            from tkinter import messagebox
+
+            parent = self._ensure_status_window()
             self._set_status_text('正在检测当前店内号…')
-            self.config = fetch_launcher_config(self.root_dir)
-            self._refresh_lan_panel()
-            self._set_status_text(self.config.get('lan_message') or '检测完成')
+            cfg = self._reload_lan_config()
+            saved = (cfg.get('lan_base_url') or '').strip() or '（还没有保存）'
+            detected_raw = (cfg.get('detected_lan') or '').strip()
+            detected = detected_raw or '（测不到）'
+            msg = (cfg.get('lan_message') or '').strip()
+            failed = bool(cfg.get('detect_failed')) or not detected_raw
+            if failed:
+                title = '没有测到店内号'
+                status = msg or '没有测到店内号。请到堂食营业里查看，或确认本机后台已启动。'
+            else:
+                title = '检测结果'
+                status = msg or ('当前探测：' + detected)
+            messagebox.showinfo(
+                title,
+                f'已保存：{saved}\n当前探测：{detected}\n\n{status}',
+                parent=parent,
+            )
+            self._set_status_text(status)
 
         self._ui(_run)
 
@@ -426,8 +524,7 @@ class YecaoTrayApp:
             from tkinter import messagebox
 
             parent = self._ensure_status_window()
-            self.config = fetch_launcher_config(self.root_dir)
-            self._refresh_lan_panel()
+            self._reload_lan_config()
             detected = (self.config.get('detected_lan') or '').strip()
             if self.config.get('detect_failed') or not detected:
                 messagebox.showinfo(
@@ -450,9 +547,10 @@ class YecaoTrayApp:
             if not ask:
                 return
             self._set_status_text('正在更新店内地址…')
-            result = apply_detected_lan_from_tray(self.root_dir)
-            self.config = fetch_launcher_config(self.root_dir)
-            self._refresh_lan_panel()
+            result = apply_detected_lan_from_tray(
+                self.root_dir, listen_port=self._lan_listen_port(),
+            )
+            self._reload_lan_config()
             msg = (result.get('message') or result.get('lan_message') or '').strip()
             if result.get('ok') is False:
                 messagebox.showerror('未更新', msg or '更新失败。', parent=parent)
@@ -470,7 +568,7 @@ class YecaoTrayApp:
             from tkinter import messagebox
 
             parent = self._ensure_status_window()
-            self.config = fetch_launcher_config(self.root_dir)
+            self._reload_lan_config()
             port = int(self.server.port or self.config.get('listen_port') or 8000)
             protect = protect_pids_for_owned_server(
                 self.server.child_pid if self.server.running else None,
@@ -545,6 +643,7 @@ class YecaoTrayApp:
                 except Exception:
                     pass
                 self.status_window = None
+                self._status_sync_scroll = None
             if self.icon is not None:
                 self.icon.stop()
 

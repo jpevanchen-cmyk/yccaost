@@ -43,6 +43,7 @@ V1_MIDDLEWARE_SKIP_PREFIXES = (
     '/media/',
     '/accounts/session/',
     '/pay/wechat/notify/',
+    '/v1-local/tray/',
 )
 
 _v1_install_mode_cache: str | None = None

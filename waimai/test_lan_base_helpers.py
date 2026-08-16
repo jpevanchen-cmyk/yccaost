@@ -166,3 +166,56 @@ class DineLanCompareAjaxTests(TestCase):
         resp = self.client.get(self.dine_url)
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, '一键更新为当前')
+
+
+@override_settings(DEBUG=True, YECAO_V1_LOCAL_MODE=True)
+class TrayLanLoopbackTests(TestCase):
+    def setUp(self):
+        self.bundle = create_test_shop_bundle(username='tray_lan_boss')
+        self.url = reverse('v1_tray_lan')
+
+    def test_get_matches_dine_helpers(self):
+        apply_shop_lan_base_url(self.bundle.seller.username, 'http://192.168.3.120:8000')
+        with patch(
+            'waimai.lan_base_helpers.detect_current_lan_base_url',
+            return_value='http://192.168.3.99:8000',
+        ):
+            resp = self.client.get(self.url, HTTP_ACCEPT='application/json')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['saved_lan'], 'http://192.168.3.120:8000')
+        self.assertEqual(data['detected_lan'], 'http://192.168.3.99:8000')
+        self.assertEqual(data['lan_base_url'], 'http://192.168.3.120:8000')
+        self.assertFalse(data['match'])
+
+    def test_rejects_non_loopback(self):
+        resp = self.client.get(self.url, REMOTE_ADDR='203.0.113.9')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_post_apply_writes_true_source(self):
+        with patch(
+            'waimai.lan_base_helpers.detect_current_lan_base_url',
+            return_value='http://192.168.3.77:8000',
+        ):
+            resp = self.client.post(self.url, HTTP_ACCEPT='application/json')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertTrue(resp.json().get('ok'))
+        op = get_operating_settings(self.bundle.seller.username)
+        self.assertEqual(op.table_lan_base_url, 'http://192.168.3.77:8000')
+
+    def test_fetch_config_fallback_same_helpers(self):
+        from launcher.tray_config_helpers import fetch_launcher_config
+        from waimai.v1_local_helpers import path_skips_v1_middleware
+
+        self.assertTrue(path_skips_v1_middleware('/v1-local/tray/lan/'))
+        apply_shop_lan_base_url(self.bundle.seller.username, 'http://192.168.3.120:8000')
+        with patch('launcher.tray_config_helpers._try_http_lan', return_value=None):
+            with patch(
+                'waimai.lan_base_helpers.detect_current_lan_base_url',
+                return_value='http://192.168.3.99:8000',
+            ):
+                cfg = fetch_launcher_config(listen_port=1)
+        self.assertEqual(cfg['lan_base_url'], 'http://192.168.3.120:8000')
+        self.assertEqual(cfg['detected_lan'], 'http://192.168.3.99:8000')
+        self.assertFalse(cfg['match'])
+        self.assertTrue(cfg.get('lan_message'))

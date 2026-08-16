@@ -5,6 +5,7 @@ from waimai import views
 from waimai import owner_views as views_owner
 from waimai import public_wall_views as views_public_wall
 from waimai import v1_setup_views as views_v1
+from waimai import v1_tray_lan_views as views_v1_tray
 from waimai import operation_lock_views as views_op_lock
 
 urlpatterns = [
@@ -140,6 +141,7 @@ urlpatterns = [
         name='seller_order_cashier_qr_print',
     ),
     path('experience/', include('waimai.onboarding.urls')),
+    path('v1-local/tray/lan/', views_v1_tray.v1_tray_lan, name='v1_tray_lan'),
     path('v1-local/setup/', views_v1.v1_setup_entry, name='v1_setup_entry'),
     path(
         'v1-local/setup/pick-backup-dir/',

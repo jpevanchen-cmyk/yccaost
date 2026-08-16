@@ -11,7 +11,8 @@
   2）用 Inno Setup 打开 yecao_v1.iss → 编译
 
 三、产物在哪
-installer\output\野草本地营业_V1_安装包.exe
+installer\output\野草本地营业_V1.01_安装包.exe
+（版本号与文件名须与 docs\V1版本迭代说明.md、yecao_v1.iss 一致；以后改版先改迭代说明再打包）
 
 四、装包里有什么
 - 程序代码

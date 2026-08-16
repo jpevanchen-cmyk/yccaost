@@ -194,6 +194,8 @@ class V1SetupRedirectMiddleware:
         )
 
         path = request.path or ''
+        if path.startswith('/v1-local/tray/'):
+            return self.get_response(request)
         if path_is_v1_setup(path):
             from .v1_setup_helpers import touch_v1_setup_session
 

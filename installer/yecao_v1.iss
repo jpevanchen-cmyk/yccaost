@@ -4,7 +4,7 @@
 
 #define MyAppName "野草本地营业"
 #define MyAppNameEn "YecaoST"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.01"
 #define MyAppPublisher "野草系统"
 #define MyAppURL "https://yichbo.com"
 #define MyAppExeName "启动野草.bat"
@@ -23,7 +23,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=output
-OutputBaseFilename=野草本地营业_V1_安装包
+OutputBaseFilename=野草本地营业_V1.01_安装包
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

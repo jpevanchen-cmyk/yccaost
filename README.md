@@ -17,6 +17,7 @@
 - GitHub 发行版：<https://github.com/jpevanchen-cmyk/yccaost/releases/tag/v1.0.0-local-beta>   
 - 官网主页 <https://yichbo.com/> 上也有下载入口
 - 装好后看：[`docs/V1本地营业用户说明书.md`](docs/V1本地营业用户说明书.md)
+- 各版本增加了什么：[`docs/V1版本迭代说明.md`](docs/V1版本迭代说明.md)（**1.01** 本机已打出；挂网前下载到的仍是 **1.0**）
 
 ---
 
