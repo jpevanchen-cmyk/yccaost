@@ -235,61 +235,110 @@ def maybe_notify(subject: str, body: str) -> None:
         logger.exception('体验机通知邮件发送失败')
 
 
-def purge_experience_data() -> dict:
-    """清空所有体验帐户及相关体验店数据；不动官方小店与正式号；不删留言/访客统计。"""
+def _experience_shop_seller_ids(official_ids: set[str]) -> list[str]:
+    """体验号名下的非官方店。开店后仍是买家的，也要靠店铺资料认店。"""
+    from .account_helpers import ECO_ROLES
+    from .models import ShopProfile, User
+
+    eco_names = list(
+        User.objects.filter(
+            is_experience=True,
+            is_permanent=False,
+            role__in=ECO_ROLES,
+        )
+        .exclude(username__in=official_ids)
+        .values_list('username', flat=True)
+    )
+    return list(
+        ShopProfile.objects.filter(is_official=False, seller_id__in=eco_names)
+        .exclude(seller_id__in=official_ids)
+        .values_list('seller_id', flat=True)
+    )
+
+
+def _delete_experience_shop_records(seller_ids: list[str]) -> None:
+    """拆掉体验店本体：菜、桌、主页、设置等。留言/访客统计不在这里。"""
     from .models import (
-        BuyOrder,
-        DeliveryOrder,
+        CashRemittanceRequest,
         Dish,
+        DishDisplayCodeOccupied,
         MenuProfile,
         ShopDeliverySettings,
         ShopHomePage,
         ShopOperatingSettings,
         ShopPaymentSettings,
         ShopProfile,
-        User,
+        ShopTable,
+        StaffAttendanceLog,
+        TableSession,
+        VirtualTableCode,
     )
 
-    official_ids = set(
-        ShopProfile.objects.filter(is_official=True).values_list('seller_id', flat=True)
-    )
-    exp_sellers = list(
-        User.objects.filter(is_experience=True, role='seller', is_permanent=False)
-        .exclude(username__in=official_ids)
-        .values_list('username', flat=True)
-    )
-    # 非官方且店主为体验号的店，也清掉（防漏标）
-    extra_shops = list(
-        ShopProfile.objects.filter(is_official=False)
-        .exclude(seller_id__in=official_ids)
-        .filter(seller_id__in=User.objects.filter(is_experience=True, is_permanent=False).values_list('username', flat=True))
-        .values_list('seller_id', flat=True)
-    )
-    exp_sellers = list(dict.fromkeys([*exp_sellers, *extra_shops]))
-
-    stats = {'shops': 0, 'users': 0, 'orders': 0}
-    order_qs = BuyOrder.objects.filter(seller_id__in=exp_sellers)
-    stats['orders'] = order_qs.count()
-    DeliveryOrder.objects.filter(buy_order__seller_id__in=exp_sellers).delete()
-    order_qs.delete()
-
-    for sid in exp_sellers:
+    for sid in seller_ids:
+        TableSession.objects.filter(seller_id=sid).delete()
+        ShopTable.objects.filter(seller_id=sid).delete()
+        VirtualTableCode.objects.filter(seller_id=sid).delete()
+        StaffAttendanceLog.objects.filter(seller_id=sid).delete()
+        CashRemittanceRequest.objects.filter(seller_id=sid).delete()
+        DishDisplayCodeOccupied.objects.filter(seller_id=sid).delete()
         Dish.objects.filter(seller_id=sid).delete()
         MenuProfile.objects.filter(seller_id=sid).delete()
         ShopHomePage.objects.filter(seller_id=sid).delete()
         ShopDeliverySettings.objects.filter(seller_id=sid).delete()
         ShopPaymentSettings.objects.filter(seller_id=sid).delete()
         ShopOperatingSettings.objects.filter(seller_id=sid).delete()
-    stats['shops'] = ShopProfile.objects.filter(seller_id__in=exp_sellers, is_official=False).count()
-    ShopProfile.objects.filter(seller_id__in=exp_sellers, is_official=False).delete()
+    ShopProfile.objects.filter(seller_id__in=seller_ids, is_official=False).delete()
 
-    buyer_names = list(
-        User.objects.filter(is_experience=True, role='buyer', is_permanent=False).values_list('username', flat=True)
+
+def purge_experience_data() -> dict:
+    """
+    体验日清：拆掉体验店并摘掉店主帽子，保留体验账号与客人资格。
+    不动官方小店与正式号；不删留言/访客统计；不删他们在官方小店买过的单。
+    可安全重跑（店已拆则无事可做）。
+    """
+    from django.db import transaction
+
+    from .account_helpers import ECO_ROLES
+    from .models import BuyOrder, DeliveryOrder, ShopProfile, User
+
+    official_ids = set(
+        ShopProfile.objects.filter(is_official=True).values_list('seller_id', flat=True)
     )
-    BuyOrder.objects.filter(buyer_id__in=buyer_names).delete()
+    exp_sellers = _experience_shop_seller_ids(official_ids)
+    stats = {'shops': 0, 'staff': 0, 'hats': 0, 'orders': 0, 'users': 0}
 
-    stats['users'] = User.objects.filter(is_experience=True, is_permanent=False).count()
-    User.objects.filter(is_experience=True, is_permanent=False).delete()
+    with transaction.atomic():
+        order_qs = BuyOrder.objects.filter(seller_id__in=exp_sellers)
+        stats['orders'] = order_qs.count()
+        DeliveryOrder.objects.filter(buy_order__seller_id__in=exp_sellers).delete()
+        order_qs.delete()
+
+        stats['shops'] = ShopProfile.objects.filter(
+            seller_id__in=exp_sellers, is_official=False
+        ).count()
+        _delete_experience_shop_records(exp_sellers)
+
+        staff_qs = User.objects.filter(
+            employer_seller_id__in=exp_sellers,
+            is_permanent=False,
+        )
+        stats['staff'] = staff_qs.count()
+        staff_qs.delete()
+
+        # 旧号曾写成卖家：店没了必须改回客人，禁止继续当成店主
+        hat_qs = User.objects.filter(
+            is_experience=True,
+            is_permanent=False,
+            role='seller',
+        ).exclude(username__in=official_ids)
+        stats['hats'] = hat_qs.count()
+        hat_qs.update(role='buyer')
+
+        stats['users'] = User.objects.filter(
+            is_experience=True,
+            is_permanent=False,
+            role__in=ECO_ROLES,
+        ).count()
     return stats
 
 
@@ -299,7 +348,7 @@ def experience_hint_context() -> dict:
         'experience_hint': (
             '这是一次体验注册：可体验完整功能，但无法开通真实支付。'
             '若要测试真实支付，请到官方小店。'
-            '所有体验帐户将在每天 24 点自动清空重置。'
+            '体验账号会保留；若开了体验店，店和店主资格将在每天 24 点自动清掉，账号仍可当客人。'
         ) if experience_site_enabled() else '',
         'daily_shop_limit': daily_shop_limit(),
         'daily_account_limit': daily_account_limit(),
