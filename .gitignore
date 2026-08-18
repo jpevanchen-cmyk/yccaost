@@ -17,6 +17,7 @@ env/
 # V1 安装包中间产物（体积大；脚本与 iss 保留）
 installer/staging/
 installer/output/
+installer/cache/
 
 # Django
 db.sqlite3

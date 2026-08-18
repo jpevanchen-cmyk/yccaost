@@ -739,13 +739,23 @@ class YecaoTrayApp:
 
 
 def main() -> None:
-    if pystray is None:
-        _show_fatal_error('缺少 pystray，请先在项目虚拟环境执行：pip install pystray')
+    try:
+        if pystray is None:
+            _show_fatal_error('缺少托盘图标零件，请重新安装。')
+            sys.exit(1)
+        if sys.platform != 'win32':
+            _show_fatal_error('V1 托盘当前仅支持 Windows。')
+            sys.exit(1)
+        YecaoTrayApp().run()
+    except Exception:
+        import traceback
+
+        detail = traceback.format_exc()
+        _log_tray_fatal(detail)
+        _show_fatal_error(
+            '托盘启动失败。请打开安装目录 launcher 文件夹里的 tray_startup_error.log 查看原因，或重新安装。'
+        )
         sys.exit(1)
-    if sys.platform != 'win32':
-        _show_fatal_error('V1 托盘当前仅支持 Windows。')
-        sys.exit(1)
-    YecaoTrayApp().run()
 
 
 if __name__ == '__main__':

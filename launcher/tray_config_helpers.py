@@ -15,7 +15,11 @@ def project_root() -> Path:
 
 
 def python_executable(root: Path | None = None) -> Path:
+    """安装包用可带走的 Python（.venv\\python.exe）；开发机仍可用 .venv\\Scripts。"""
     root = root or project_root()
+    embed_py = root / '.venv' / 'python.exe'
+    if embed_py.is_file():
+        return embed_py
     venv_py = root / '.venv' / 'Scripts' / 'python.exe'
     if venv_py.is_file():
         return venv_py

@@ -21,6 +21,38 @@ class _SkipUsernameUniqueValidationMixin:
         return exclude
 
 
+class OpenShopForm(forms.Form):
+    """已登录生态账户：在「我的」里开通本机店铺（不是向平台申请）。"""
+
+    shop_name = forms.CharField(max_length=100, label='店铺名称')
+    shop_type = forms.ChoiceField(choices=ShopProfile.SHOP_TYPE_CHOICES, label='店铺类型')
+    address = forms.CharField(widget=forms.Textarea(attrs={'rows': 2}), label='店铺地址')
+    current_password = forms.CharField(
+        label='当前登录密码',
+        widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}),
+        help_text='用于确认是本人，并生成同密码的店主工牌（工作台用）。',
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_current_password(self):
+        password = self.cleaned_data.get('current_password') or ''
+        if not self.user or not self.user.check_password(password):
+            raise forms.ValidationError('当前密码不正确')
+        return password
+
+    def clean(self):
+        cleaned = super().clean()
+        from .experience_helpers import can_register_experience_shop
+
+        ok, msg = can_register_experience_shop()
+        if not ok:
+            raise forms.ValidationError(msg)
+        return cleaned
+
+
 class BuyerRegistrationForm(_SkipUsernameUniqueValidationMixin, UserCreationForm):
     """买家注册：仅允许注册买家身份"""
 
@@ -79,38 +111,22 @@ class ShopRegistrationForm(_SkipUsernameUniqueValidationMixin, UserCreationForm)
         return cleaned
 
     def save(self, commit=True):
-        from .experience_helpers import apply_experience_flags_for_new_user, experience_site_enabled
+        from .account_helpers import create_shop_records_for_seller
+        from .experience_helpers import apply_experience_flags_for_new_user
 
         user = super().save(commit=False)
-        user.role = 'seller'
+        user.role = 'buyer'
         if commit:
             user.save()
-            apply_experience_flags_for_new_user(user, is_shop=True)
-            profile = ShopProfile.objects.create(
-                seller_id=user.username,
+            apply_experience_flags_for_new_user(user)
+            create_shop_records_for_seller(
+                user,
                 shop_name=self.cleaned_data['shop_name'],
                 shop_type=self.cleaned_data['shop_type'],
                 address=self.cleaned_data['address'],
-                is_listed=True,
-                is_official=False,  # 公网开通默认体验店；官方店用管理命令标记
+                raw_password=self.cleaned_data['password1'],
             )
-            assign_shop_code_on_create(profile)
-            ShopDeliverySettings.objects.create(seller_id=user.username)
-            pay = ShopPaymentSettings.objects.create(seller_id=user.username)
-            if experience_site_enabled():
-                # 体验店默认只开模拟支付，禁止真微信
-                pay.enable_wechat = False
-                pay.enable_simulate = True
-                pay.save(update_fields=['enable_wechat', 'enable_simulate'])
-            ShopOperatingSettings.objects.create(seller_id=user.username)
-            from .home_page_helpers import ensure_home_page_for_seller, ensure_server_home_page
-            from .menu_helpers import ensure_active_menu_catalog
-            ensure_home_page_for_seller(user.username, profile)
-            ensure_active_menu_catalog(user.username)
-            ensure_server_home_page()
-            from .staff_account_helpers import create_owner_workbench_staff
-
-            create_owner_workbench_staff(user, self.cleaned_data['password1'])
+            user.refresh_from_db()
         return user
 
 

@@ -99,7 +99,9 @@ def request_user_subject_to_operation_lock(request) -> bool:
         return False
     path = request.path or ''
     if path.startswith('/seller-panel/'):
-        return getattr(user, 'role', '') == 'seller'
+        from .account_helpers import user_has_seller_capability
+
+        return user_has_seller_capability(user)
     return False
 
 

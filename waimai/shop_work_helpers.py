@@ -16,10 +16,12 @@ def current_seller_id_for_user(user) -> str:
     """统一取得账号所属店铺：店主用账号名，员工用所属店铺。"""
     if not getattr(user, 'is_authenticated', False):
         return ''
-    if getattr(user, 'role', '') == 'seller':
-        return (getattr(user, 'username', '') or '').strip()
     if getattr(user, 'role', '') in SHOP_STAFF_ROLES:
         return (getattr(user, 'employer_seller_id', '') or '').strip()
+    from .account_helpers import user_has_seller_capability
+
+    if user_has_seller_capability(user):
+        return (getattr(user, 'username', '') or '').strip()
     return ''
 
 

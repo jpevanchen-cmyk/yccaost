@@ -12,7 +12,7 @@
 <div class="card" style="margin-bottom:14px;">
     <h2 style="margin-top:0;">基本信息</h2>
     <p>账号：<strong>{{ user.username }}</strong></p>
-    <p class="card-meta">身份：{{ user.get_role_display }} · 注册于 {{ user.date_joined|local:"Y-m-d H:i" }}</p>
+    <p class="card-meta">身份：{{ eco_hat_text }} · 注册于 {{ user.date_joined|local:"Y-m-d H:i" }}</p>
     <a class="btn btn-outline btn-sm" href="{% url 'account_password_change' %}">修改密码</a>
 </div>
 
@@ -29,6 +29,34 @@
         <label>收件邮箱 <input type="email" name="buyer_notify_email" value="{{ buyer_notify_email }}" placeholder="you@gmail.com"></label>
         <button type="submit" class="btn btn-primary btn-sm">保存通知设置</button>
     </form>
+</div>
+
+<div class="card" id="open-shop" style="margin-bottom:14px;" data-yc-tour="open-shop-card">
+    <h2 style="margin-top:0;">我要开店</h2>
+    {% if already_shop and own_shop %}
+    <p>你已在本机开店：<strong>{{ own_shop.shop_name }}</strong>。不是向任何平台申请。</p>
+    <p><a class="btn btn-primary btn-sm" href="{% url 'seller_panel' %}">进入管理店铺</a></p>
+    {% else %}
+    <p class="card-meta">在这台服务器上开通自己的店。同一账户仍可当客人逛店下单。不是向平台申请。</p>
+    <form method="post" class="seller-form-stack" id="open-shop-form">
+        {% csrf_token %}
+        <input type="hidden" name="open_shop" value="1">
+        <input type="hidden" name="idempotency_key" id="open-shop-idempotency-key" value="">
+        {{ open_shop_form.non_field_errors }}
+        <label>店铺名称 {{ open_shop_form.shop_name }} {{ open_shop_form.shop_name.errors }}</label>
+        <label>店铺类型 {{ open_shop_form.shop_type }} {{ open_shop_form.shop_type.errors }}</label>
+        <label>店铺地址 {{ open_shop_form.address }} {{ open_shop_form.address.errors }}</label>
+        <label>当前登录密码 {{ open_shop_form.current_password }} {{ open_shop_form.current_password.errors }}</label>
+        <p class="card-meta">{{ open_shop_form.current_password.help_text }}</p>
+        <button type="submit" class="btn btn-green btn-sm" data-yc-tour="open-shop-submit">开通店铺</button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-bottom:14px;">
+    <h2 style="margin-top:0;">我要做服务商</h2>
+    <p class="card-meta">跑腿、联营配送等以后在这里开通。目前尚未开放接单，点进去也不会假装已经能接单。</p>
+    <p><button type="button" class="btn btn-outline btn-sm" disabled>尚未开放</button></p>
 </div>
 
 <h2>当前订单</h2>
@@ -80,4 +108,15 @@
 {% else %}
 <p class="card-meta">还没有历史订单。</p>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% load static %}
+<script src="{% static 'waimai/idempotency_client.js' %}"></script>
+<script>
+(function () {
+    var input = document.getElementById('open-shop-idempotency-key');
+    if (input && window.YcIdempotency) input.value = window.YcIdempotency.newKey();
+})();
+</script>
 {% endblock %}

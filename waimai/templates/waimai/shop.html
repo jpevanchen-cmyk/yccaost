@@ -50,7 +50,7 @@
 {% if using_menu %}
 <p class="page-desc">{{ product_shell.shop_catalog_intro }}</p>
 {% endif %}
-{% if user.is_authenticated and user.role == 'seller' and user.username == seller_id %}
+{% if user.is_authenticated and eco_has_seller and user.username == seller_id %}
 <p class="msg-warn">
     卖家预览：会员价/特价须用<strong>买家账号登录</strong>后才可购买；
     {% if product_shell.show_menu_catalog %}展示与否以使用中{{ product_shell.catalog_word }}为准。{% else %}当前页面按主体商品上下架状态展示。{% endif %}

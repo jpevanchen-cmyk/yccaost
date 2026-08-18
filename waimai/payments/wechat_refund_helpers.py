@@ -267,8 +267,10 @@ def order_needs_wechat_refund(order: BuyOrder) -> bool:
 
 
 def is_shop_owner_account(user) -> bool:
-    """是否店主主账号（非员工工牌）"""
-    return bool(user and getattr(user, 'role', '') == 'seller')
+    """是否店主主账号（非员工工牌）；买家开店后仍算店主。"""
+    from waimai.account_helpers import user_has_seller_capability
+
+    return user_has_seller_capability(user)
 
 
 def initiate_wechat_refund_for_order(

@@ -20,7 +20,9 @@ def _audit_operation_lock(request, summary: str, *, result: str = 'ok') -> None:
 
     seller_id = ''
     user = getattr(request, 'user', None)
-    if user and getattr(user, 'is_authenticated', False) and getattr(user, 'role', '') == 'seller':
+    from .account_helpers import user_has_seller_capability
+
+    if user and getattr(user, 'is_authenticated', False) and user_has_seller_capability(user):
         seller_id = user.username
     write_audit_log(
         action_code='operation_lock',

@@ -8,6 +8,7 @@ from .constants import AUTO_ADVANCE_SECONDS, AUTO_ADVANCE_SECONDS_TYPE_DEMO
 
 TOUR_PAGES: dict[str, str] = {
     'home': '/',
+    'register': '/register/',
     'shop_register': '/shop-register/',
     'preview_operating': '/experience/preview/seller/operating/',
     'preview_products': '/experience/preview/seller/products/',

@@ -34,6 +34,9 @@ def nav_shop_work(request):
     # 关页 / 空闲退出按「当前页面」分通道，避免店主与员工互相踢下线
     session_channel = _session_guard_channel_for_path(path, has_eco=has_eco, has_work=has_work)
 
+    from .account_helpers import user_has_buyer_capability, user_has_seller_capability
+
+    eco_user = getattr(request, 'user', None)
     return {
         'nav_shop_work_code': code,
         'on_shop_work_site': on_shop,
@@ -45,6 +48,8 @@ def nav_shop_work(request):
         'session_idle_seconds': IDLE_TIMEOUT_SECONDS,
         'session_heartbeat_url': reverse('session_heartbeat'),
         'session_beacon_url': reverse('session_beacon_logout'),
+        'eco_has_buyer': user_has_buyer_capability(eco_user),
+        'eco_has_seller': user_has_seller_capability(eco_user),
     }
 
 

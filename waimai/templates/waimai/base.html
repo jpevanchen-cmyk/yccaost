@@ -21,10 +21,8 @@
             {% endif %}
             {% if on_shop_work_site and shop_work_user %}
             <div class="site-user" title="{{ shop_work_user.username }}">工作台 · {{ shop_work_user|staff_title }}</div>
-            {% elif user.is_authenticated and user.role == 'buyer' %}
-            <div class="site-user" title="{{ user.username }}">{{ user.get_role_display }}</div>
-            {% elif user.is_authenticated and user.role == 'seller' %}
-            <div class="site-user" title="{{ user.username }}">{{ user.get_role_display }}</div>
+            {% elif eco_has_buyer or eco_has_seller %}
+            <div class="site-user" title="{{ user.username }}">{% if eco_has_seller and eco_has_buyer %}店主·买家{% elif eco_has_seller %}店主{% else %}买家{% endif %}</div>
             {% elif on_shop_work_site %}
             <div class="site-user">店铺工作台</div>
             {% endif %}
@@ -35,13 +33,13 @@
         <nav class="site-nav" id="site-nav">
             <div class="nav-section-title">导航</div>
             <a href="/">🌿 {{ site_nav_label|default:"店铺名录" }}</a>
-            {% if user.is_authenticated and user.role == 'buyer' %}
+            {% if eco_has_buyer %}
                 <a href="{% url 'buyer_center' %}" data-yc-tour="nav-buyer-center">👤 我的</a>
                 <a href="/order-history/" data-yc-tour="nav-order-history">📜 我的订单</a>
             {% endif %}
             {% if experience_preview and shop_order_preview_url %}
                 <a href="{{ shop_order_preview_url }}" data-yc-tour="nav-preview-shop" data-unsaved-skip>👀 预览店铺</a>
-            {% elif user.is_authenticated and user.role == 'seller' %}
+            {% elif eco_has_seller %}
                 <a href="/seller-panel/">📦 管理店铺</a>
                 <a href="/shop/?seller_id={{ user.username }}">👀 预览店铺</a>
                 <a href="{% url 'account_password_change' %}">🔐 修改密码</a>
@@ -60,13 +58,7 @@
                     {% csrf_token %}
                     <button type="submit" class="nav-logout-btn">退出工作台</button>
                 </form>
-            {% elif user.is_authenticated and user.role == 'buyer' %}
-                <span class="nav-user-line">👋 {{ user.username }}</span>
-                <form method="post" action="/accounts/logout/" class="nav-logout-form">
-                    {% csrf_token %}
-                    <button type="submit" class="nav-logout-btn">退出登录</button>
-                </form>
-            {% elif user.is_authenticated and user.role == 'seller' %}
+            {% elif eco_has_buyer or eco_has_seller %}
                 <span class="nav-user-line">👋 {{ user.username }}</span>
                 <form method="post" action="/accounts/logout/" class="nav-logout-form">
                     {% csrf_token %}
@@ -75,8 +67,7 @@
             {% elif not on_shop_work_site %}
                 <a href="/accounts/login/" data-yc-tour="nav-login">登录</a>
                 {% if v1_public_register_enabled %}
-                <a href="/register/" data-yc-tour="nav-buyer-register">买家注册</a>
-                <a href="/shop-register/" data-yc-tour="nav-shop-register">店铺开通</a>
+                <a href="/register/" data-yc-tour="nav-buyer-register">注册</a>
                 {% endif %}
             {% else %}
                 <span class="nav-user-line">请在本页登录本店账号</span>

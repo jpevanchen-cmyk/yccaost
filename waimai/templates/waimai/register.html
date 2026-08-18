@@ -6,14 +6,14 @@
 {% endblock %}
 
 {% block content %}
-<h1 class="page-title">🚀 买家注册</h1>
+<h1 class="page-title">🚀 注册</h1>
 {% if experience_site %}
 <div class="card" style="border-left: 4px solid #e6a23c; background: #fff8e6; margin-bottom: 16px; padding: 12px 16px;">
     <p style="margin: 0; font-size: 1.05rem; line-height: 1.6;"><strong>体验注册说明</strong></p>
     <p style="margin: 8px 0 0;">{{ experience_hint }}</p>
 </div>
 {% endif %}
-<p class="page-desc">注册后可浏览店铺、下单。骑手由店铺创建账号；开店请用 <a href="/shop-register/">店铺开通</a>。</p>
+<p class="page-desc">注册后可浏览店铺、下单。默认是买家。开店请登录后到「我的 → 我要开店」。店里员工由老板发工牌。</p>
 <form method="POST" class="auth-form" data-yc-tour="buyer-register-form">
     {% csrf_token %}
     {% include 'waimai/_auth_form_fields.html' %}

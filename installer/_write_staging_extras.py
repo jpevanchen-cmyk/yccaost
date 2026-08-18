@@ -97,7 +97,7 @@ def _assert_must_have(app: Path) -> None:
         "wuwei_system",
         "launcher",
         "templates",
-        ".venv",
+        ".venv/python.exe",
     ]
     missing = [m for m in must if not (app / m).exists()]
     if missing:
@@ -155,12 +155,17 @@ def main() -> int:
                 "chcp 65001 >nul",
                 'cd /d "%~dp0"',
                 "title 野草本地营业",
-                'if not exist ".venv\\Scripts\\pythonw.exe" (',
-                "  echo 找不到内嵌运行环境，请重新安装。",
-                "  pause",
-                "  exit /b 1",
+                'if exist ".venv\\pythonw.exe" (',
+                '  start "" ".venv\\pythonw.exe" -m launcher',
+                "  exit /b 0",
                 ")",
-                'start "" ".venv\\Scripts\\pythonw.exe" -m launcher',
+                'if exist ".venv\\Scripts\\pythonw.exe" (',
+                '  start "" ".venv\\Scripts\\pythonw.exe" -m launcher',
+                "  exit /b 0",
+                ")",
+                "echo 找不到内嵌运行环境，请重新安装。",
+                "pause",
+                "exit /b 1",
                 "",
             ]
         ),
@@ -173,19 +178,55 @@ def main() -> int:
                 "@echo off",
                 "chcp 65001 >nul",
                 'cd /d "%~dp0"',
-                'if not exist ".venv\\Scripts\\python.exe" exit /b 1',
-                '".venv\\Scripts\\python.exe" manage.py migrate --noinput',
-                "exit /b %ERRORLEVEL%",
+                'if exist ".venv\\python.exe" (',
+                '  ".venv\\python.exe" manage.py migrate --noinput',
+                "  exit /b %ERRORLEVEL%",
+                ")",
+                'if exist ".venv\\Scripts\\python.exe" (',
+                '  ".venv\\Scripts\\python.exe" manage.py migrate --noinput',
+                "  exit /b %ERRORLEVEL%",
+                ")",
+                "exit /b 1",
                 "",
             ]
         ),
         encoding="utf-8",
     )
 
-    reset_bat = app / "本机忘记密码重置.bat"
-    if not reset_bat.is_file():
-        print("发布目录缺少 本机忘记密码重置.bat", file=sys.stderr)
-        return 1
+    (app / "本机忘记密码重置.bat").write_text(
+        "\r\n".join(
+            [
+                "@echo off",
+                "chcp 65001 >nul",
+                'cd /d "%~dp0"',
+                "title 野草 · 本机忘记密码重置",
+                "echo 正在打开本机忘记密码重置窗口...",
+                'if exist ".venv\\pythonw.exe" (',
+                '  ".venv\\pythonw.exe" -m launcher.yecao_password_reset_ui',
+                "  goto :after_reset",
+                ")",
+                'if exist ".venv\\Scripts\\pythonw.exe" (',
+                '  ".venv\\Scripts\\pythonw.exe" -m launcher.yecao_password_reset_ui',
+                "  goto :after_reset",
+                ")",
+                'if exist ".venv\\python.exe" (',
+                '  ".venv\\python.exe" -m launcher.yecao_password_reset_ui',
+                "  goto :after_reset",
+                ")",
+                "echo 找不到内嵌运行环境，请重新安装。",
+                "pause",
+                "exit /b 1",
+                ":after_reset",
+                "if errorlevel 1 (",
+                "  echo.",
+                "  echo 启动失败。请重新安装，或在安装目录用内嵌运行环境执行重置命令。",
+                "  pause",
+                ")",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
     (app / "使用说明.txt").write_text(
         "\n".join(
@@ -195,6 +236,8 @@ def main() -> int:
                 "",
                 "产品主页：https://yichbo.com/",
                 "各版本增加了什么：请看安装目录 docs\\V1版本迭代说明.md",
+                "",
+                "本包已带运行环境，店里电脑不必再单独安装 Python。",
                 "",
                 "一、日常怎么开",
                 "1. 双击「启动野草」或开始菜单同名项",

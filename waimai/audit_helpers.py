@@ -67,7 +67,9 @@ def write_audit_log(
             actor_role = actor_role or getattr(actor, 'role', '') or ''
             if not seller_id:
                 role = getattr(actor, 'role', '')
-                if role == 'seller':
+                from .account_helpers import user_has_seller_capability
+
+                if user_has_seller_capability(actor):
                     seller_id = actor.username
                 elif role in ('staff', 'waiter', 'kitchen', 'rider', 'manager'):
                     seller_id = getattr(actor, 'employer_seller_id', '') or ''
@@ -241,7 +243,9 @@ def read_tech_log_filtered(
 
 def can_view_all_shop_audit(user) -> bool:
     """店主（兼本店服务器管理员）可看本店全部操作审计"""
-    return bool(user and getattr(user, 'is_authenticated', False) and user.role == 'seller')
+    from .account_helpers import user_has_seller_capability
+
+    return user_has_seller_capability(user)
 
 
 def can_view_tech_logs(user) -> bool:

@@ -17,9 +17,11 @@ def normalize_guest_nickname(raw: str) -> str:
 
 
 def resolve_order_buyer_id(request) -> str:
-    """已登录买家用账号名；游客返回空串。"""
+    """已登录且具备买家资格用账号名（含已开店的店主）；游客返回空串。"""
+    from waimai.account_helpers import user_has_buyer_capability
+
     user = getattr(request, 'user', None)
-    if user is not None and getattr(user, 'is_authenticated', False) and getattr(user, 'role', '') == 'buyer':
+    if user_has_buyer_capability(user):
         return user.username
     return ''
 
@@ -44,14 +46,11 @@ def guest_can_access_order(request, order: BuyOrder, table_sess: TableSession | 
 
 
 def buyer_or_guest_can_access_order(request, order: BuyOrder, table_sess: TableSession | None = None) -> bool:
-    """已登录买家认账号；游客认桌台会话。"""
+    """已登录客人认账号（含已开店的店主）；游客认桌台会话。"""
+    from waimai.account_helpers import eco_is_order_buyer
+
     user = getattr(request, 'user', None)
-    if (
-        user is not None
-        and getattr(user, 'is_authenticated', False)
-        and getattr(user, 'role', '') == 'buyer'
-        and order.buyer_id == user.username
-    ):
+    if eco_is_order_buyer(user, order):
         return True
     return guest_can_access_order(request, order, table_sess)
 

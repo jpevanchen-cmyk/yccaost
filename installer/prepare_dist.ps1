@@ -1,4 +1,4 @@
-﻿# 准备 Inno 安装用的发布目录：代码 + 内嵌 .venv（不含开发机营业库/备份）
+﻿# 准备 Inno 安装用的发布目录：代码 + 可带走的内嵌 Python（不含开发机营业库/备份）
 # 本文件须 UTF-8 带 BOM，否则本机 Windows PowerShell 会把中文文件名写乱
 $ErrorActionPreference = 'Stop'
 
@@ -8,15 +8,150 @@ $StagingRoot = Join-Path $InstallerDir 'staging'
 $AppDir = Join-Path $StagingRoot 'app'
 $VenvSrc = Join-Path $ProjectRoot '.venv'
 $ReqFile = Join-Path $ProjectRoot 'requirements.txt'
+$CacheDir = Join-Path $InstallerDir 'cache'
+$EmbedZipName = 'python-3.11.9-embed-amd64.zip'
+$EmbedUrl = "https://www.python.org/ftp/python/3.11.9/$EmbedZipName"
+$GetPipName = 'get-pip.py'
+$GetPipUrl = 'https://bootstrap.pypa.io/get-pip.py'
 
 Write-Host "项目根目录: $ProjectRoot"
 Write-Host "发布目录: $AppDir"
 
 if (-not (Test-Path $VenvSrc)) {
-    throw "找不到项目虚拟环境：$VenvSrc 。请先在本机创建 .venv 并 pip install -r requirements.txt"
+    throw "找不到项目虚拟环境：$VenvSrc 。请先在本机创建 .venv 并 pip install -r requirements.txt（打包脚本本身要用它写安装专用文件）"
 }
 if (-not (Test-Path $ReqFile)) {
     throw "找不到 requirements.txt"
+}
+
+function Get-CachedDownload([string]$Url, [string]$DestFile, [string]$What) {
+    if (Test-Path $DestFile) {
+        Write-Host "使用已缓存的 $What"
+        return
+    }
+    Write-Host "正在下载 $What …"
+    New-Item -ItemType Directory -Path (Split-Path -Parent $DestFile) -Force | Out-Null
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri $Url -OutFile $DestFile -UseBasicParsing
+    if (-not (Test-Path $DestFile)) {
+        throw "下载失败：$What"
+    }
+}
+
+function Add-TkinterFromFullPython([string]$DestDir) {
+    # 官方精简包没有窗口零件；托盘控制台必须用它，须从本机完整 Python 拷入
+    $devPy = Join-Path $VenvSrc 'Scripts\python.exe'
+    $base = (& $devPy -c "import sys; print(sys.base_prefix)").Trim()
+    if (-not $base) {
+        throw "读不到本机完整 Python 路径，无法拷入窗口零件。"
+    }
+    $tclSrc = Join-Path $base 'tcl'
+    $tkSrc = Join-Path $base 'Lib\tkinter'
+    $pydSrc = Join-Path $base 'DLLs\_tkinter.pyd'
+    if (-not (Test-Path $tclSrc) -or -not (Test-Path $tkSrc) -or -not (Test-Path $pydSrc)) {
+        throw "本机完整 Python 里找不到窗口零件（tcl / tkinter），无法打进安装包。路径：$base"
+    }
+    Write-Host "拷入窗口零件（托盘控制台用）…"
+    $tclDest = Join-Path $DestDir 'tcl'
+    if (Test-Path $tclDest) {
+        Remove-Item -LiteralPath $tclDest -Recurse -Force
+    }
+    Copy-Item -LiteralPath $tclSrc -Destination $tclDest -Recurse -Force
+    $libDest = Join-Path $DestDir 'Lib'
+    New-Item -ItemType Directory -Path $libDest -Force | Out-Null
+    $tkDest = Join-Path $libDest 'tkinter'
+    if (Test-Path $tkDest) {
+        Remove-Item -LiteralPath $tkDest -Recurse -Force
+    }
+    Copy-Item -LiteralPath $tkSrc -Destination $tkDest -Recurse -Force
+    Get-ChildItem -LiteralPath $tkDest -Recurse -Directory -Filter '__pycache__' -ErrorAction SilentlyContinue |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    Copy-Item -LiteralPath $pydSrc -Destination (Join-Path $DestDir '_tkinter.pyd') -Force
+    $dllDir = Join-Path $base 'DLLs'
+    Get-ChildItem -LiteralPath $dllDir -Filter 'tcl*.dll' -ErrorAction SilentlyContinue |
+        Copy-Item -Destination $DestDir -Force
+    Get-ChildItem -LiteralPath $dllDir -Filter 'tk*.dll' -ErrorAction SilentlyContinue |
+        Copy-Item -Destination $DestDir -Force
+    $zlib = Join-Path $dllDir 'zlib1.dll'
+    if (Test-Path $zlib) {
+        Copy-Item -LiteralPath $zlib -Destination (Join-Path $DestDir 'zlib1.dll') -Force
+    }
+}
+
+function Install-PortablePython([string]$DestDir) {
+    New-Item -ItemType Directory -Path $CacheDir -Force | Out-Null
+    $zip = Join-Path $CacheDir $EmbedZipName
+    $getPip = Join-Path $CacheDir $GetPipName
+    Get-CachedDownload -Url $EmbedUrl -DestFile $zip -What "可带走的 Python 3.11.9"
+    Get-CachedDownload -Url $GetPipUrl -DestFile $getPip -What "pip 安装脚本"
+
+    if (Test-Path $DestDir) {
+        Remove-Item -LiteralPath $DestDir -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
+    Write-Host "解压可带走的 Python 到发布目录…"
+    Expand-Archive -LiteralPath $zip -DestinationPath $DestDir -Force
+
+    $pth = Get-ChildItem -LiteralPath $DestDir -Filter "python*._pth" | Select-Object -First 1
+    if (-not $pth) {
+        throw "解压后找不到 python*._pth，内嵌包不完整。"
+    }
+    @(
+        'python311.zip'
+        '.'
+        '..'
+        'Lib'
+        'Lib\site-packages'
+        'import site'
+        ''
+    ) | Set-Content -LiteralPath $pth.FullName -Encoding ascii
+
+    Add-TkinterFromFullPython -DestDir $DestDir
+
+    $embedPy = Join-Path $DestDir 'python.exe'
+    if (-not (Test-Path $embedPy)) {
+        throw "解压后找不到 python.exe"
+    }
+    if (-not (Test-Path (Join-Path $DestDir 'pythonw.exe'))) {
+        throw "解压后找不到 pythonw.exe"
+    }
+
+    Write-Host "为可带走的 Python 安装 pip…"
+    & $embedPy $getPip --no-warn-script-location
+    if ($LASTEXITCODE -ne 0) {
+        throw "安装 pip 失败"
+    }
+
+    Write-Host "安装程序依赖（按 requirements.txt）…"
+    & $embedPy -m pip install --retries 20 --timeout 120 -r $ReqFile "whitenoise>=6.6,<7"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "网上安装失败，改从本机已缓存的包装入…"
+        $wheelDir = Join-Path $CacheDir 'wheels'
+        New-Item -ItemType Directory -Path $wheelDir -Force | Out-Null
+        $devPy = Join-Path $VenvSrc 'Scripts\python.exe'
+        & $devPy -m pip download -r $ReqFile "whitenoise>=6.6,<7" -d $wheelDir
+        if ($LASTEXITCODE -ne 0) {
+            throw "下载依赖包到本地缓存失败"
+        }
+        & $embedPy -m pip install --no-index --find-links $wheelDir -r $ReqFile "whitenoise>=6.6,<7"
+        if ($LASTEXITCODE -ne 0) {
+            throw "安装依赖失败"
+        }
+    }
+
+    Write-Host "核对可带走的 Python 能否独立运行…"
+    & $embedPy -c "import django; print('django', django.get_version())"
+    if ($LASTEXITCODE -ne 0) {
+        throw "可带走的 Python 自检失败"
+    }
+    & $embedPy -c "import tkinter; print('tkinter ok')"
+    if ($LASTEXITCODE -ne 0) {
+        throw "窗口零件自检失败（托盘控制台打不开）"
+    }
+    $cfg = Join-Path $DestDir 'pyvenv.cfg'
+    if (Test-Path $cfg) {
+        throw "发布目录里不应再有会写死开发机路径的 pyvenv.cfg"
+    }
 }
 
 # 清空旧 staging
@@ -102,14 +237,9 @@ Get-ChildItem -LiteralPath $ProjectRoot -Force | ForEach-Object {
     }
 }
 
-Write-Host "复制虚拟环境 .venv（较大，请稍候）…"
+Write-Host "安装可带走的 Python（不拷贝开发机 .venv）…"
 $VenvDest = Join-Path $AppDir '.venv'
-& robocopy $VenvSrc $VenvDest /E /NFL /NDL /NJH /NJS /nc /ns /np `
-    /XD '__pycache__' '.pytest_cache' `
-    /XF '*.pyc' '*.pyo'
-if ($LASTEXITCODE -ge 8) {
-    throw "robocopy 复制 .venv 失败，退出码 $LASTEXITCODE"
-}
+Install-PortablePython -DestDir $VenvDest
 
 Write-Host "写入安装专用文件并裁剪文档…"
 New-Item -ItemType Directory -Path (Join-Path $AppDir 'backup') -Force | Out-Null
@@ -124,14 +254,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "写入安装专用中文文件失败"
 }
 
-# 确保发布用虚拟环境有 WhiteNoise，并收集静态文件（安装包 YECAO_DEBUG=0 须正式送样式）
-Write-Host "安装/核对 WhiteNoise…"
-$pyStaging = Join-Path $AppDir '.venv\Scripts\python.exe'
-& $pyStaging -m pip install "whitenoise>=6.6,<7" -q
-if ($LASTEXITCODE -ne 0) {
-    throw "发布目录安装 whitenoise 失败"
-}
 Write-Host "收集静态文件 collectstatic…"
+$pyStaging = Join-Path $AppDir '.venv\python.exe'
 Push-Location $AppDir
 $env:YECAO_DEBUG = '0'
 & $pyStaging manage.py collectstatic --noinput
@@ -143,6 +267,16 @@ if ($collectExit -ne 0) {
 }
 if (-not (Test-Path (Join-Path $AppDir 'staticfiles'))) {
     throw "collectstatic 后仍无 staticfiles 目录"
+}
+
+$scanRoot = Join-Path $AppDir '.venv'
+$scanFiles = Get-ChildItem -LiteralPath $scanRoot -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.Extension -in @('.cfg', '.pth') -or $_.Name -like '*._pth'
+    }
+$hit = $scanFiles | Select-String -Pattern 'C:\Users\user\AppData\Local\Programs\Python' -SimpleMatch -ErrorAction SilentlyContinue
+if ($hit) {
+    throw "发布目录运行环境仍含开发机 Python 路径，请检查打包脚本。"
 }
 
 function Get-DirMB([string]$p) {

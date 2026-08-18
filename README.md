@@ -14,10 +14,10 @@
 
 ## V1 安装包下载
 
-- GitHub 发行版：<https://github.com/jpevanchen-cmyk/yccaost/releases/tag/v1.0.0-local-beta>   
+- GitHub 发行版：<https://github.com/jpevanchen-cmyk/yccaost/releases/tag/v1.01-local-beta>   
 - 官网主页 <https://yichbo.com/> 上也有下载入口
 - 装好后看：[`docs/V1本地营业用户说明书.md`](docs/V1本地营业用户说明书.md)
-- 各版本增加了什么：[`docs/V1版本迭代说明.md`](docs/V1版本迭代说明.md)（**1.01** 本机已打出；挂网前下载到的仍是 **1.0**）
+- 各版本增加了什么：[`docs/V1版本迭代说明.md`](docs/V1版本迭代说明.md)（网上当前是 **1.01**）
 
 ---
 
@@ -98,7 +98,7 @@
 |:---|:---|
 | **在线主页** | **[yichbo.com](https://yichbo.com/)** 正式试跑（HTTPS） |
 | **单店闭环** | 堂食、工作台、支付地基等主体可运行 |
-| **本地营业 V1** | 托盘、备份、向导、忘密码等本机能力已落地；安装包已可从 [发行版](https://github.com/jpevanchen-cmyk/yccaost/releases/tag/v1.0.0-local-beta) / [官网主页](https://yichbo.com/) 下载（内测） |
+| **本地营业 V1** | 托盘、备份、向导、忘密码等本机能力已落地；安装包已可从 [发行版](https://github.com/jpevanchen-cmyk/yccaost/releases/tag/v1.01-local-beta) / [官网主页](https://yichbo.com/) 下载（内测 **1.01**） |
 | **微信收款 / 最小退款** | 本机能力已具备；真机场景请按开通指南与店内验收 |
 | **上线前仍须谨慎** | 对外正式营业前仍有清查与安全项；以手册与部署说明为准 |
 

@@ -232,7 +232,9 @@ def staff_has_permission(user, permission_code: str) -> bool:
     """店主拥有全部店务权限；员工按权限清单判断。"""
     if not user or not getattr(user, 'is_active', False):
         return False
-    if getattr(user, 'role', '') == 'seller':
+    from .account_helpers import user_has_seller_capability
+
+    if getattr(user, 'role', '') == 'seller' or user_has_seller_capability(user):
         return True
     return is_shop_staff_account(user) and permission_code in staff_permission_codes(user)
 
@@ -241,7 +243,9 @@ def staff_has_any_order_desk_permission(user) -> bool:
     """是否可看到主体「订单处理」台（任一细权限即可）。"""
     if not user or not getattr(user, 'is_active', False):
         return False
-    if getattr(user, 'role', '') == 'seller':
+    from .account_helpers import user_has_seller_capability
+
+    if getattr(user, 'role', '') == 'seller' or user_has_seller_capability(user):
         return True
     codes = staff_permission_codes(user)
     return any(code in codes for code in CORE_ORDER_DESK_PERMISSIONS)
@@ -401,7 +405,8 @@ def create_owner_workbench_staff(seller_user, raw_password: str):
     主账号只进卖家后台，工作台须用工牌登录。
     """
     seller_id = (getattr(seller_user, 'username', '') or '').strip()
-    if not seller_id or getattr(seller_user, 'role', '') != 'seller':
+    # 生态主账号即可（买家开店后仍是买家，旧号可能是 seller）
+    if not seller_id or getattr(seller_user, 'role', '') not in MAIN_ECO_ACCOUNT_ROLES:
         return None
 
     internal = staff_internal_username(seller_id, seller_id)

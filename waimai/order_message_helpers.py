@@ -11,27 +11,38 @@ MAX_MESSAGE_LEN = 300
 
 def viewer_can_use_order_chat(user, order: BuyOrder) -> bool:
     """买家、店主、本店员工可留言；骑手只读看。"""
+    from .account_helpers import eco_is_order_buyer, user_has_seller_capability
+
     if not user or not getattr(user, 'pk', None):
         return False
-    if user.role == 'buyer':
-        return order.buyer_id == user.username
-    if user.role == 'seller':
-        return order.seller_id == user.username
+    if eco_is_order_buyer(user, order):
+        return True
+    if user_has_seller_capability(user) and order.seller_id == user.username:
+        return True
     if user.role in SHOP_STAFF_ROLES:
         return (user.employer_seller_id or '').strip() == order.seller_id
     return False
 
 
-def viewer_is_shop_side(user) -> bool:
-    return getattr(user, 'role', None) in ('seller',) + SHOP_STAFF_ROLES
+def viewer_is_shop_side(user, order=None) -> bool:
+    from .account_helpers import eco_is_order_buyer, user_has_seller_capability
+
+    if order is not None and eco_is_order_buyer(user, order):
+        return False
+    if user_has_seller_capability(user):
+        if order is None or order.seller_id == user.username:
+            return True
+    return getattr(user, 'role', None) in SHOP_STAFF_ROLES
 
 
 def unread_count_for_viewer(order: BuyOrder, user) -> int:
     """当前查看方还有几条对方留言未读。"""
-    if getattr(user, 'role', None) == 'buyer':
+    from .account_helpers import eco_is_order_buyer
+
+    if eco_is_order_buyer(user, order):
         since = order.buyer_msg_read_at
         qs = order.messages.filter(author_side='shop')
-    elif viewer_is_shop_side(user):
+    elif viewer_is_shop_side(user, order):
         since = order.seller_msg_read_at
         qs = order.messages.filter(author_side='buyer')
     else:
@@ -43,11 +54,13 @@ def unread_count_for_viewer(order: BuyOrder, user) -> int:
 
 def mark_order_messages_read(order: BuyOrder, user) -> None:
     """打开详情时记为已读。"""
+    from .account_helpers import eco_is_order_buyer
+
     now = now_local_wall()
-    if getattr(user, 'role', None) == 'buyer' and order.buyer_id == user.username:
+    if eco_is_order_buyer(user, order):
         BuyOrder.objects.filter(pk=order.pk).update(buyer_msg_read_at=now)
         order.buyer_msg_read_at = now
-    elif viewer_is_shop_side(user) and viewer_can_use_order_chat(user, order):
+    elif viewer_is_shop_side(user, order) and viewer_can_use_order_chat(user, order):
         BuyOrder.objects.filter(pk=order.pk).update(seller_msg_read_at=now)
         order.seller_msg_read_at = now
 
@@ -62,7 +75,9 @@ def post_order_message(order: BuyOrder, user, body: str) -> tuple[bool, str]:
     if len(text) > MAX_MESSAGE_LEN:
         return False, f'留言请控制在 {MAX_MESSAGE_LEN} 字以内'
 
-    side = 'buyer' if user.role == 'buyer' else 'shop'
+    from .account_helpers import eco_is_order_buyer
+
+    side = 'buyer' if eco_is_order_buyer(user, order) else 'shop'
     OrderMessage.objects.create(
         order=order,
         author_side=side,

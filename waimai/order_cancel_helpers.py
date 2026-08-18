@@ -67,7 +67,9 @@ def shop_can_cancel_order(user, order: BuyOrder) -> bool:
         return False
     # V1：已微信到账单仅店主可取消（会触发原路退款）
     if order.payment_status == 'paid' and order.payment_method == 'wechat':
-        return getattr(user, 'role', '') == 'seller'
+        from .account_helpers import user_has_seller_capability
+
+        return user_has_seller_capability(user)
     return True
 
 
@@ -117,7 +119,9 @@ def _apply_cancel_fields(order: BuyOrder, *, side: str, note: str) -> list[str]:
 @transaction.atomic
 def cancel_order_by_buyer(order: BuyOrder, user) -> tuple[bool, str]:
     """买家自主取消"""
-    if user.role != 'buyer' or order.buyer_id != user.username:
+    from .account_helpers import eco_is_order_buyer
+
+    if not eco_is_order_buyer(user, order):
         return False, '只能取消自己的订单'
     if not buyer_can_self_cancel(order):
         return False, BUYER_BLOCKED_HINT
@@ -146,13 +150,15 @@ def cancel_order_by_buyer(order: BuyOrder, user) -> tuple[bool, str]:
 @transaction.atomic
 def cancel_order_by_shop(order: BuyOrder, user, note: str = '') -> tuple[bool, str]:
     """店家/授权员工取消（兜底）"""
+    from .account_helpers import user_has_seller_capability
+
     if not shop_can_cancel_order(user, order):
         if (
             order.payment_status == 'paid'
             and order.payment_method == 'wechat'
             and user_has_cancel_order_perm(user)
             and resolve_employer_seller_id(user) == order.seller_id
-            and getattr(user, 'role', '') != 'seller'
+            and not user_has_seller_capability(user)
         ):
             return False, '已微信收款的订单只能由店主取消并原路退款，请联系店主'
         return False, '您没有取消此订单的权限，或订单已不可取消'

@@ -43,6 +43,8 @@ def operation_lock_unlock(request):
         return redirect(nxt or 'seller_panel')
 
     user = request.user
+    from .account_helpers import user_has_seller_capability
+
     if not getattr(user, 'is_authenticated', False):
         if _wants_json_response(request):
             return JsonResponse({'ok': False, 'message': '请先登录'}, status=401)
@@ -56,7 +58,7 @@ def operation_lock_unlock(request):
         from .audit_helpers import write_audit_log
 
         seller_id = ''
-        if getattr(user, 'role', '') == 'seller':
+        if user_has_seller_capability(user):
             seller_id = user.username
         write_audit_log(
             action_code='operation_lock',
@@ -83,7 +85,7 @@ def operation_lock_unlock(request):
         'waimai/operation_lock_unlock.html',
         {
             'next_path': next_path,
-            'is_seller': getattr(user, 'role', '') == 'seller',
+            'is_seller': user_has_seller_capability(user),
             'is_manager': user_is_server_manager(user),
         },
     )
@@ -96,7 +98,9 @@ def operation_lock_manual(request):
     if not site_operation_lock_enabled():
         return redirect('seller_panel')
     user = request.user
-    if getattr(user, 'role', '') != 'seller':
+    from .account_helpers import user_has_seller_capability
+
+    if not user_has_seller_capability(user):
         return redirect('seller_panel')
     manual_operation_lock(request)
     from .audit_helpers import write_audit_log

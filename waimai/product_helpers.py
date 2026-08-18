@@ -188,8 +188,10 @@ def validate_tier_purchase(
     elif tier in (PRICE_TIER_MEMBER, PRICE_TIER_SPECIAL):
         if not buyer or not buyer.is_authenticated:
             return False, f'「{dish.name}」{TIER_LABELS[tier]}须登录后购买'
-        if buyer.role != 'buyer':
-            return False, f'「{dish.name}」仅买家账号可购'
+        from .account_helpers import user_has_buyer_capability
+
+        if not user_has_buyer_capability(buyer):
+            return False, f'「{dish.name}」仅已登录的野草账户可购'
     else:
         return False, '无效的价格档位'
 

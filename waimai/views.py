@@ -18,10 +18,10 @@ from .delivery_helpers import build_delivery_fee_breakdown, calc_order_delivery_
 from .dispatch_helpers import dispatch_buy_order, get_shop_riders
 from .forms import (
     BuyerRegistrationForm,
+    OpenShopForm,
     ShopDeliverySettingsForm,
     ShopOperatingSettingsForm,
     ShopPaymentSettingsForm,
-    ShopRegistrationForm,
     ShopStatusSettingsForm,
 )
 from .models import BuyOrder, DeliveryOrder, Dish, MenuProfile, ShopProfile, TableSession, User
@@ -33,6 +33,13 @@ from .menu_helpers import (
     validate_dish_purchase,
 )
 from .operating_helpers import check_order_admission, get_operating_settings
+
+
+def _require_eco_seller(request) -> bool:
+    """生态登录且已开通本机卖家。"""
+    from .account_helpers import user_has_seller_capability
+
+    return user_has_seller_capability(request.user)
 from waimai.plugins.dining.table_helpers import (
     build_addon_scan_path,
     build_table_scan_path,
@@ -167,7 +174,9 @@ class CustomLoginView(LoginView):
         if redirect_to:
             return redirect_to
         user = self.request.user
-        if user.role == 'seller':
+        from .account_helpers import user_has_seller_capability
+
+        if user_has_seller_capability(user):
             return reverse_lazy('seller_panel')
         return reverse_lazy('directory')
 
@@ -1122,7 +1131,7 @@ def seller_order_cashier_qr_print(request, order_id):
     """卖家后台：打印订单码小票。"""
     from .order_qr_helpers import build_order_cashier_qr_bundle, resolve_shop_code_for_order
 
-    if request.user.role != 'seller':
+    if not _require_eco_seller(request):
         messages.error(request, '只有店主可以打印订单码')
         return redirect('seller_panel_section', section='orders')
 
@@ -1632,13 +1641,15 @@ def product_scan_add(request, display_code, tier):
             ),
         )
 
-    if request.user.role != 'buyer':
+    from .account_helpers import user_has_buyer_capability
+
+    if not user_has_buyer_capability(request.user):
         return render(
             request,
             'waimai/product_scan_message.html',
             _message_ctx(
                 ok=False,
-                message='请使用买家账号登录后再扫码加购。',
+                message='请使用已登录的野草账户后再扫码加购。',
                 login_url=login_url,
             ),
         )
@@ -1741,6 +1752,7 @@ def shop_page(request):
             )
 
         if action == 'checkout':
+            from .account_helpers import user_has_buyer_capability
             from .channel_helpers import CHANNEL_DINE_IN
             from .guest_order_helpers import normalize_guest_nickname
             from waimai.plugins.dining.waiter_table_order_helpers import (
@@ -1749,7 +1761,8 @@ def shop_page(request):
             )
 
             is_logged_buyer = (
-                request.user.is_authenticated and request.user.role == 'buyer'
+                request.user.is_authenticated
+                and user_has_buyer_capability(request.user)
             )
             waiter_dine = is_waiter_table_order_active(request, seller_id)
             # 堂食 + 有效桌台会话：游客或服务员代点可结算
@@ -1933,30 +1946,28 @@ def register(request):
 
 
 def shop_register(request):
-    """店铺注册服务器：创建卖家账号并进入名录"""
+    """旧「店铺开通」入口：引导先注册/登录，再到「我的」开店。"""
     from django.contrib import messages
     from django.shortcuts import redirect
+    from django.urls import reverse
 
-    from .experience_helpers import experience_hint_context, touch_online_user
+    from .account_helpers import user_has_buyer_capability, user_has_seller_capability
     from .v1_local_helpers import v1_local_block_message, v1_local_mode_enabled
 
     if v1_local_mode_enabled():
         messages.info(request, v1_local_block_message())
         return redirect('login')
 
-    if request.method == 'POST':
-        form = ShopRegistrationForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            login(request, user)
-            from .single_login_helpers import claim_single_login
-            claim_single_login(request, user)
-            touch_online_user(user)
+    if getattr(request.user, 'is_authenticated', False):
+        if user_has_seller_capability(request.user):
+            messages.info(request, '你已经开过店，可直接进入管理店铺。')
             return redirect('seller_panel')
-    else:
-        form = ShopRegistrationForm()
-    ctx = {'form': form, **experience_hint_context()}
-    return render(request, 'waimai/shop_register.html', ctx)
+        if user_has_buyer_capability(request.user):
+            return redirect(reverse('buyer_center') + '#open-shop')
+        messages.info(request, '请用工牌登录工作台；开店请用野草账户登录后到「我的」。')
+        return redirect('directory')
+
+    return render(request, 'waimai/shop_register.html')
 
 
 @login_required
@@ -1966,7 +1977,7 @@ def seller_pending_orders_json(request):
 
     仅供网页内新单强提醒：页面开着时定时来查，有新单就持续提醒。
     """
-    if request.user.role != 'seller':
+    if not _require_eco_seller(request):
         return JsonResponse({'ok': False, 'count': 0, 'latest_ts': 0}, status=403)
     seller_id = request.user.username
     from .order_alert_helpers import list_shop_new_order_links, query_shop_new_orders
@@ -1988,7 +1999,7 @@ def seller_pending_orders_json(request):
 @require_GET
 def seller_pending_remittances_json(request):
     """卖家支付页轮询：待核对入金申请数量与最新时间戳。"""
-    if request.user.role != 'seller':
+    if not _require_eco_seller(request):
         return JsonResponse({'ok': False, 'count': 0, 'latest_ts': 0}, status=403)
     seller_id = request.user.username
     from .plugin_runtime.registry import is_plugin_enabled
@@ -2009,7 +2020,7 @@ def seller_pending_remittances_json(request):
 @require_GET
 def seller_fund_ledger_entry_drawer(request, ledger_id):
     """资金流水页：Ajax 拉单笔流水浮层 HTML。"""
-    if request.user.role != 'seller':
+    if not _require_eco_seller(request):
         return JsonResponse({'ok': False, 'message': '请先登录卖家账号'}, status=403)
     seller_id = request.user.username
     from django.template.loader import render_to_string
@@ -2037,7 +2048,7 @@ def seller_fund_ledger_entry_drawer(request, ledger_id):
 @require_GET
 def seller_fund_ledger_order_drawer(request, order_id):
     """资金流水页：Ajax 拉订单摘要浮层 HTML。"""
-    if request.user.role != 'seller':
+    if not _require_eco_seller(request):
         return JsonResponse({'ok': False, 'message': '请先登录卖家账号'}, status=403)
     seller_id = request.user.username
     from django.template.loader import render_to_string
@@ -2059,7 +2070,7 @@ def seller_fund_ledger_order_drawer(request, order_id):
 @login_required
 def seller_panel(request):
     """卖家管理入口：默认进入订单页（仅店主生态登录）"""
-    if request.user.role != 'seller':
+    if not _require_eco_seller(request):
         return redirect('/accounts/login/')
     return redirect('seller_panel_section', section='orders')
 
@@ -2067,7 +2078,7 @@ def seller_panel(request):
 @login_required
 def seller_product_qr_print(request):
     """G1-7：使用中清单全部商品二维码 · 批量打印页"""
-    if request.user.role != 'seller':
+    if not _require_eco_seller(request):
         return redirect('/accounts/login/')
 
     seller_id = request.user.username
@@ -2091,7 +2102,7 @@ def seller_product_qr_print(request):
 @login_required
 def seller_panel_attendance_logs(request):
     """员工考勤流水全表（新窗口打开；支持筛选与分页）"""
-    if request.user.role != 'seller':
+    if not _require_eco_seller(request):
         return redirect('/accounts/login/')
 
     from .operating_helpers import get_operating_settings
@@ -2135,7 +2146,7 @@ def seller_panel_attendance_logs(request):
 @never_cache
 def seller_panel_section(request, section):
     """卖家管理分区（仅店主生态登录）"""
-    if request.user.role != 'seller':
+    if not _require_eco_seller(request):
         return redirect('/accounts/login/')
 
     if section in ('dishes', 'menus'):
@@ -2676,8 +2687,10 @@ def _execute_place_order(request):
     from .pending_payment_timeout_helpers import pending_pay_stamp_fields
 
     seller_id = (request.POST.get('seller_id') or 'seller_001').strip()
+    from .account_helpers import user_has_buyer_capability
+
     is_logged_buyer = (
-        request.user.is_authenticated and request.user.role == 'buyer'
+        request.user.is_authenticated and user_has_buyer_capability(request.user)
     )
     waiter_dine = is_waiter_table_order_active(request, seller_id)
     if waiter_dine and get_buyer_table_session(request, seller_id):
@@ -3073,7 +3086,9 @@ def wechat_pay_notify(request):
 @login_required
 def order_history(request):
     """买家历史订单"""
-    if request.user.role != 'buyer':
+    from .account_helpers import user_has_buyer_capability
+
+    if not user_has_buyer_capability(request.user):
         return redirect('directory')
 
     from .order_message_helpers import unread_map_for_orders
@@ -3102,16 +3117,26 @@ def order_history(request):
 
 @login_required
 def buyer_center(request):
-    """买家中心：基本信息、当前订单与历史订单、邮件通知设置。"""
-    if request.user.role != 'buyer':
-        return redirect('directory')
-
-    from django.core.validators import validate_email
+    """我的：基本信息、订单、开店、服务商入口占位。"""
     from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
 
+    from .account_helpers import (
+        create_shop_records_for_seller,
+        user_has_buyer_capability,
+        user_has_seller_capability,
+    )
+    from .idempotency_helpers import idempotency_scope, run_idempotent
     from .order_message_helpers import unread_map_for_orders
 
+    if not user_has_buyer_capability(request.user):
+        return redirect('directory')
+
     user = request.user
+    already_shop = user_has_seller_capability(user)
+    own_shop = ShopProfile.objects.filter(seller_id=user.username).first() if already_shop else None
+    open_shop_form = OpenShopForm(user=user)
+
     if request.method == 'POST' and 'save_buyer_notify' in request.POST:
         user.buyer_notify_enabled = request.POST.get('buyer_notify_enabled') == '1'
         email = (request.POST.get('buyer_notify_email') or '').strip()[:254]
@@ -3132,6 +3157,30 @@ def buyer_center(request):
         if save_ok:
             user.save(update_fields=['buyer_notify_enabled', 'buyer_notify_email'])
             messages.success(request, '邮件通知设置已保存')
+
+    if request.method == 'POST' and 'open_shop' in request.POST:
+        if already_shop:
+            messages.info(request, '你已经开过店。')
+            return redirect('buyer_center')
+
+        open_shop_form = OpenShopForm(request.POST, user=user)
+        if open_shop_form.is_valid():
+            def _execute_open_shop():
+                _profile, created = create_shop_records_for_seller(
+                    user,
+                    shop_name=open_shop_form.cleaned_data['shop_name'],
+                    shop_type=open_shop_form.cleaned_data['shop_type'],
+                    address=open_shop_form.cleaned_data['address'],
+                    raw_password=open_shop_form.cleaned_data['current_password'],
+                )
+                if created:
+                    messages.success(request, '店铺已开通。同一账户仍可当客人下单；管店请进「管理店铺」。工作台请用店主工牌登录。')
+                else:
+                    messages.info(request, '你已经开过店。')
+                return redirect('seller_panel')
+
+            scope = idempotency_scope('eco_open_shop', str(user.pk))
+            return run_idempotent(request, scope, _execute_open_shop)
 
     orders = list(
         BuyOrder.objects.filter(buyer_id=request.user.username)
@@ -3160,11 +3209,18 @@ def buyer_center(request):
         _row(order) for order in orders
         if order.order_status in ('completed', 'cancelled')
     ]
+    hats = ['买家']
+    if already_shop and own_shop:
+        hats.append(f'已开店（{own_shop.shop_name}）')
     return render(request, 'waimai/buyer_center.html', {
         'current_order_rows': current_rows,
         'history_order_rows': history_rows,
         'buyer_notify_enabled': user.buyer_notify_enabled,
         'buyer_notify_email': user.buyer_notify_email,
+        'already_shop': already_shop,
+        'own_shop': own_shop,
+        'open_shop_form': open_shop_form,
+        'eco_hat_text': ' · '.join(hats),
     })
 
 
@@ -3173,6 +3229,7 @@ def account_password_change(request):
     from django.contrib.auth import update_session_auth_hash
     from django.contrib.auth.forms import PasswordChangeForm
 
+    from .account_helpers import user_has_buyer_capability, user_has_seller_capability
     from .shop_work_auth import get_shop_work_user
 
     eco_user = request.user if getattr(request.user, 'is_authenticated', False) else None
@@ -3190,9 +3247,9 @@ def account_password_change(request):
         from .single_login_helpers import claim_single_login
         claim_single_login(request, changed_user)
         messages.success(request, '密码已修改，请使用新密码登录')
-        if changed_user.role == 'buyer':
+        if user_has_buyer_capability(changed_user):
             return redirect('buyer_center')
-        if changed_user.role == 'seller':
+        if user_has_seller_capability(changed_user):
             return redirect('seller_panel')
         from .shop_work_helpers import build_shop_work_path, get_shop_code_for_user
 
@@ -3315,29 +3372,45 @@ def order_detail(request, order_id):
     if not user and not is_guest_viewer:
         return redirect('login')
 
-    if user and user.role == 'buyer' and order.buyer_id != user.username and not is_guest_viewer:
-        return redirect('order_history')
-    if user and user.role == 'seller' and order.seller_id != user.username:
-        return redirect('seller_panel_section', section='orders')
-    if user and user.role == 'rider':
-        delivery = getattr(order, 'delivery_order', None)
-        if not delivery or delivery.rider_id != user.username:
-            return redirect('rider_home')
+    from .account_helpers import eco_is_order_buyer, user_has_buyer_capability, user_has_seller_capability
 
-    viewer_role = 'guest' if (is_guest_viewer and not user) else user.role
-    # 游客本机只看单，不开放沟通/取消（投诉以店内小票为准）
+    if user:
+        is_this_buyer = eco_is_order_buyer(user, order)
+        is_this_shop = user_has_seller_capability(user) and order.seller_id == user.username
+        is_this_rider = False
+        if user.role == 'rider':
+            delivery = getattr(order, 'delivery_order', None)
+            is_this_rider = bool(delivery and delivery.rider_id == user.username)
+            if not is_this_rider:
+                return redirect('rider_home')
+        if not is_this_buyer and not is_this_shop and not is_this_rider and not is_guest_viewer:
+            if user_has_seller_capability(user):
+                return redirect('seller_panel_section', section='orders')
+            return redirect('order_history')
+
+    if is_guest_viewer and not user:
+        viewer_role = 'guest'
+    elif user and eco_is_order_buyer(user, order):
+        viewer_role = 'buyer'
+    elif user and is_this_shop:
+        viewer_role = 'seller'
+    elif user:
+        viewer_role = user.role
+    else:
+        viewer_role = 'guest'
+
     can_chat = bool(user) and viewer_can_use_order_chat(user, order)
-    can_buyer_cancel = bool(user) and user.role == 'buyer' and buyer_can_self_cancel(order)
+    as_buyer = bool(user) and eco_is_order_buyer(user, order)
+    can_buyer_cancel = as_buyer and buyer_can_self_cancel(order)
     show_buyer_cancel_blocked = (
-        bool(user)
-        and user.role == 'buyer'
+        as_buyer
         and order.order_status not in ('cancelled',)
         and not buyer_can_self_cancel(order)
     )
-    can_shop_cancel = bool(user) and shop_can_cancel_order(user, order)
+    can_shop_cancel = bool(user) and shop_can_cancel_order(user, order) and not as_buyer
 
     if request.method == 'POST' and 'cash_shortfall_response' in request.POST:
-        if not user or user.role != 'buyer':
+        if not as_buyer:
             messages.error(request, '只有本订单买家可以确认实际支付金额')
         else:
             from .payments import buyer_respond_cash_shortfall
@@ -3402,7 +3475,7 @@ def order_detail(request, order_id):
     from .payments.wechat_refund_helpers import shop_cancel_refund_hint
 
     if order.order_status == 'cancelled' or (
-        user and getattr(user, 'role', '') == 'seller' and order.seller_id == user.username
+        user and user_has_seller_capability(user) and order.seller_id == user.username
     ):
         poll_wechat_refund(order)
         order.refresh_from_db()
