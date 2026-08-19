@@ -34,6 +34,7 @@ _RESERVED_SLUGS = frozenset({
     'admin', 'static', 'media', 'shop', 'seller', 'owner', 'server-settings',
     'guestbook', 'directory', 'showcase', 'home', 'p', 's', 'api', 'accounts',
     'experience', 'onboarding', 'v1', 'login', 'logout', 'rider-home', 'kitchen-home',
+    'bulletin', 'privacy',
 })
 
 

@@ -76,6 +76,22 @@ owner_branding = server_settings_branding
 
 
 @_manager_required
+def server_settings_bulletin(request):
+    """整机公告：现行正文 + 历史留痕（与大厅积木分开）"""
+    from .bulletin_helpers import get_bulletin, list_bulletin_history, save_bulletin_body
+
+    if request.method == 'POST':
+        msg = save_bulletin_body(request.POST.get('body') or '')
+        messages.success(request, msg)
+        return redirect('server_settings_bulletin')
+    return render(request, 'waimai/owner/bulletin.html', {
+        'section': 'bulletin',
+        'bulletin': get_bulletin(),
+        'bulletin_history': list_bulletin_history(),
+    })
+
+
+@_manager_required
 def server_settings_compliance(request):
     """备案信息"""
     from .models import SiteComplianceSettings

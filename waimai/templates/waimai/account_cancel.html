@@ -1,0 +1,47 @@
+{% extends 'waimai/base.html' %}
+{% load static %}
+{% block title %}注销账户 - 野草系统{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/account/" back_label="返回我的" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">注销账户</h1>
+<p class="page-desc">注销后将不能用这个登录名进入。除店里依法需要留下的订单记录以外，你的登录账户会从本机去掉。店铺注销尚未开通：有正式店的号暂时不能注销。</p>
+
+{% if cancel_block_reason %}
+<div class="form-alert" role="alert">
+    <strong>{{ cancel_block_reason }}</strong>
+</div>
+<p><a class="btn btn-primary" href="{% url 'buyer_center' %}">返回我的</a></p>
+{% else %}
+<form method="POST" class="auth-form" id="account-cancel-form">
+    {% csrf_token %}
+    <input type="hidden" name="idempotency_key" id="account-cancel-idempotency-key" value="">
+    {% if form.non_field_errors %}
+    <div class="form-alert" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <p>
+        <label for="{{ form.current_password.id_for_label }}">{{ form.current_password.label }}</label>
+        {{ form.current_password }}
+        {% if form.current_password.errors %}<ul class="errorlist">{% for error in form.current_password.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    </p>
+    <p>
+        <label class="form-check">{{ form.confirm_cancel }} {{ form.confirm_cancel.label }}</label>
+        {% if form.confirm_cancel.errors %}<ul class="errorlist">{% for error in form.confirm_cancel.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    </p>
+    <button type="submit" class="btn btn-green btn-block">确认注销</button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'waimai/idempotency_client.js' %}"></script>
+<script>
+(function () {
+    var input = document.getElementById('account-cancel-idempotency-key');
+    if (input && window.YcIdempotency) input.value = window.YcIdempotency.newKey();
+})();
+</script>
+{% endblock %}

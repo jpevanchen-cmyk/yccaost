@@ -314,6 +314,51 @@ class ServerSiteSettings(models.Model):
         return f'站点设置:{self.site_name}'
 
 
+class ServerBulletin(models.Model):
+    """整机现行公告（真源）；与大厅积木无关。"""
+
+    singleton_id = models.PositiveSmallIntegerField(
+        primary_key=True, default=1, editable=False, verbose_name='固定编号',
+    )
+    body = models.TextField(blank=True, default='', verbose_name='现行公告正文')
+    revision = models.PositiveIntegerField(default=0, verbose_name='现行版本号')
+    published_at = models.DateTimeField(blank=True, null=True, verbose_name='最近发布时刻')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'server_bulletin'
+        verbose_name = '整机现行公告'
+        verbose_name_plural = '整机现行公告'
+
+    def save(self, *args, **kwargs):
+        self.singleton_id = 1
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'整机公告:rev{self.revision}'
+
+
+class ServerBulletinHistory(models.Model):
+    """整机公告历史留痕：每次改现行正文时，把旧正文存下来。"""
+
+    history_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='记录ID')
+    bulletin = models.ForeignKey(
+        ServerBulletin, on_delete=models.CASCADE, related_name='history_rows', verbose_name='现行公告',
+    )
+    body = models.TextField(verbose_name='当时正文')
+    revision = models.PositiveIntegerField(default=0, verbose_name='当时版本号')
+    archived_at = models.DateTimeField(db_index=True, verbose_name='收入历史的时刻')
+
+    class Meta:
+        db_table = 'server_bulletin_history'
+        ordering = ['-archived_at']
+        verbose_name = '整机公告历史'
+        verbose_name_plural = '整机公告历史'
+
+    def __str__(self):
+        return f'公告历史:rev{self.revision}'
+
+
 class ServerEmailSettings(models.Model):
     """整台服务器发信邮箱；由服务器管理者在「服务器设置」维护（优先于 .env）。"""
 

@@ -17,6 +17,7 @@
     <nav class="owner-settings-nav" aria-label="服务器设置分区">
         <a class="btn btn-sm {% if section == 'index' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings' %}">总览</a>
         <a class="btn btn-sm {% if section == 'branding' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_branding' %}">站点品牌</a>
+        <a class="btn btn-sm {% if section == 'bulletin' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_bulletin' %}">整机公告</a>
         <a class="btn btn-sm {% if section == 'compliance' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_compliance' %}">备案信息</a>
         <a class="btn btn-sm {% if section == 'email' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_email' %}">发信邮箱</a>
         <a class="btn btn-sm {% if section == 'tech_logs' %}btn-primary{% else %}btn-outline{% endif %}" href="{% url 'server_settings_tech_logs' %}">系统排错日志</a>

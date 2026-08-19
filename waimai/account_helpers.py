@@ -91,6 +91,12 @@ def create_shop_records_for_seller(
         # 开店只加卖家资格，不把买家改成卖家
         apply_experience_flags_for_new_user(user, is_shop=True)
 
+        from .shop_name_helpers import SHOP_NAME_TAKEN_MESSAGE, normalize_shop_name, shop_name_is_taken
+
+        shop_name = normalize_shop_name(shop_name)
+        if shop_name_is_taken(shop_name, exclude_seller_id=seller_id):
+            raise ValueError(SHOP_NAME_TAKEN_MESSAGE)
+
         profile = ShopProfile.objects.create(
             seller_id=seller_id,
             shop_name=shop_name,

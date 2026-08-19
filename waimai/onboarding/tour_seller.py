@@ -932,7 +932,7 @@ def _seller_register() -> dict[str, Any]:
             _ms('home', selector='[data-yc-tour="nav-buyer-register"]', title='找到「注册」入口',
                 body='先注册一个野草账户，默认是买家；开店在登录后的「我的」里。手机请先点 ☰。', open_nav=True),
             _ms('register', selector='.page-title', title='注册做什么',
-                body='只注册一次。默认能逛店下单；不是向平台申请开店。'),
+                body='只注册一次。请先点开隐私条款并勾选同意；年龄两项只选一项。默认能逛店下单。'),
             _ms('shop_register', selector='[data-yc-tour="shop-register-title"]', title='开店从哪进',
                 body='登录后到「我的 → 我要开店」填写店名地址。体验不真提交。'),
         ],

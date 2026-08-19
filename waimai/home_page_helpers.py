@@ -27,8 +27,8 @@ ORDER_NAV_TO_SHOP = 'to_shop'
 ORDER_NAV_TO_CTA = 'to_cta_block'
 
 # 第一版：自定义积木数量上限（防乱折腾）
-MAX_SHOP_CUSTOM_BLOCKS = 10
-MAX_SERVER_CUSTOM_BLOCKS = 10
+MAX_SHOP_CUSTOM_BLOCKS = 20
+MAX_SERVER_CUSTOM_BLOCKS = 20
 MAX_SERVER_DOWNLOAD_BLOCKS = 5
 
 # 店铺主页：店主后台可编辑的预设块（仅三块）
@@ -79,7 +79,7 @@ SHOP_PRESET_SPECS: tuple[BlockTypeSpec, ...] = (
 
 CUSTOM_BLOCK_SPEC = BlockTypeSpec(
     BLOCK_CUSTOM, '自定义积木', '更多', True, True, 200, True,
-    '可自由填写标题、正文、图片与链接；第一版每店最多 10 块', 'both',
+    '可自由填写标题、正文、图片与链接；每页最多 20 块', 'both',
 )
 
 FILE_DOWNLOAD_BLOCK_SPEC = BlockTypeSpec(
@@ -89,16 +89,8 @@ FILE_DOWNLOAD_BLOCK_SPEC = BlockTypeSpec(
 
 SERVER_PRESET_SPECS: tuple[BlockTypeSpec, ...] = (
     BlockTypeSpec(
-        BLOCK_INTRO, '服务器介绍', '介绍', True, True, 10, True,
-        '本服务器公共介绍（不是某一家店的简介）', 'server',
-    ),
-    BlockTypeSpec(
         BLOCK_DIRECTORY, '店铺名录', '名录', True, True, 20, True,
         '列出本服务器允许公开的店铺，支持按店名搜索', 'server',
-    ),
-    BlockTypeSpec(
-        BLOCK_NOTICE, '服务器公告', '公告', False, True, 30, True,
-        '整机公告；默认关闭', 'server',
     ),
     BlockTypeSpec(
         BLOCK_YECAO_INTRO, '野草介绍', '野草', False, True, 40, True,
@@ -288,6 +280,15 @@ def ensure_home_page_for_seller(seller_id: str, shop_profile=None):
     return page
 
 
+def convert_server_intro_notice_to_custom() -> int:
+    """把旧的服务器介绍/公告专用块改成可增删的自定义积木。"""
+    from .models import ServerHomeBlock
+
+    return ServerHomeBlock.objects.filter(
+        block_type__in=(BLOCK_INTRO, BLOCK_NOTICE),
+    ).update(block_type=BLOCK_CUSTOM)
+
+
 def ensure_server_home_page():
     """确保一级大厅与预设块存在（大厅固定页编号 1）"""
     from .models import ServerHomeBlock, ServerHomePage
@@ -308,6 +309,8 @@ def ensure_server_home_page():
         if not (page.title or '').strip():
             page.title = '一级大厅'
         page.save(update_fields=['page_role', 'slug', 'title', 'updated_at'])
+
+    convert_server_intro_notice_to_custom()
 
     existing = {b.block_type: b for b in page.blocks.all()}
     to_create = []
@@ -584,6 +587,12 @@ def build_server_home_view_context(request=None, page=None) -> dict:
         ctx['guestbook_settings'] = None
         ctx['public_wall_posts'] = []
         ctx['public_wall_pager'] = None
+        from .bulletin_helpers import bulletin_public_state
+
+        st = bulletin_public_state()
+        ctx['show_hall_bulletin_popup'] = bool(st['popup_body'])
+        ctx['hall_bulletin_body'] = st['popup_body']
+        ctx['hall_bulletin_revision'] = st['popup_revision']
         ctx = enrich_server_home_context(ctx)
         from .onboarding.context import enrich_server_home_onboarding
         return enrich_server_home_onboarding(ctx)

@@ -118,14 +118,19 @@ def site_branding(request):
 
     user = getattr(request, 'user', None)
     show_server_settings = False
+    show_bulletin_btn = False
     try:
         show_server_settings = bool(
             user
             and getattr(user, 'is_authenticated', False)
             and user_is_server_manager(user)
         )
+        from .bulletin_helpers import bulletin_public_state
+
+        show_bulletin_btn = bool(bulletin_public_state()['show_header_button'])
     except (OperationalError, ProgrammingError):
         show_server_settings = False
+        show_bulletin_btn = False
 
     return {
         'site_brand_name': site_name,
@@ -134,6 +139,7 @@ def site_branding(request):
         'site_brand_image_url': brand_image_url,
         'show_owner_console_link': show_server_settings,  # 模板兼容旧变量名
         'show_server_settings_link': show_server_settings,
+        'show_server_bulletin_button': show_bulletin_btn,
     }
 
 

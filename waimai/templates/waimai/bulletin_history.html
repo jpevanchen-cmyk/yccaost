@@ -1,0 +1,35 @@
+{% extends 'waimai/base.html' %}
+{% load yc_time %}
+{% block title %}公告{% endblock %}
+
+{% block content %}
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h1 style="margin:0 0 8px;font-size:20px;">服务器公告</h1>
+    <p class="card-meta" style="margin:0;">最新一条是现行公告；下面是改过之后留下的历史。</p>
+</div>
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h2 style="margin:0 0 8px;font-size:16px;">现行</h2>
+    {% if current_body %}
+    <div class="showcase-body" style="white-space:pre-wrap;">{{ current_body }}</div>
+    {% if bulletin.published_at %}
+    <p class="card-meta" style="margin:10px 0 0;">发布于 {{ bulletin.published_at|local }}</p>
+    {% endif %}
+    {% else %}
+    <p class="card-meta" style="margin:0;">暂无现行公告。</p>
+    {% endif %}
+</div>
+<div class="card" style="padding:16px;">
+    <h2 style="margin:0 0 8px;font-size:16px;">历史</h2>
+    {% if bulletin_history %}
+        {% for row in bulletin_history %}
+        <div style="border-bottom:1px solid #eee;padding:10px 0;">
+            <p class="card-meta" style="margin:0 0 6px;">版本 {{ row.revision }} · {{ row.archived_at|local }}</p>
+            <div class="showcase-body" style="white-space:pre-wrap;">{{ row.body }}</div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="card-meta" style="margin:0;">还没有历史公告。</p>
+    {% endif %}
+</div>
+<p style="margin:16px 0 0;"><a class="btn btn-outline" href="/">回大厅</a></p>
+{% endblock %}

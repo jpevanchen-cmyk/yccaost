@@ -1,7 +1,7 @@
 import uuid
 
 from django.conf import settings
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -17,6 +17,7 @@ from django.views.decorators.http import require_GET, require_POST
 from .delivery_helpers import build_delivery_fee_breakdown, calc_order_delivery_fee, get_delivery_settings
 from .dispatch_helpers import dispatch_buy_order, get_shop_riders
 from .forms import (
+    AccountCancelForm,
     BuyerRegistrationForm,
     OpenShopForm,
     ShopDeliverySettingsForm,
@@ -257,6 +258,18 @@ def home(request):
         return render(request, 'waimai/home_empty.html')
     context = build_server_home_view_context(request)
     return render(request, 'waimai/showcase_home.html', context)
+
+
+def server_bulletin_history(request):
+    """顶栏「公告」：现行 + 历史（只读）"""
+    from .bulletin_helpers import get_bulletin, list_bulletin_history
+
+    bulletin = get_bulletin()
+    return render(request, 'waimai/bulletin_history.html', {
+        'bulletin': bulletin,
+        'bulletin_history': list_bulletin_history(),
+        'current_body': (bulletin.body or '').strip(),
+    })
 
 
 def server_topic_page(request, slug):
@@ -1931,7 +1944,7 @@ def register(request):
         return redirect('login')
 
     if request.method == 'POST':
-        form = BuyerRegistrationForm(request.POST)
+        form = BuyerRegistrationForm(request.POST, request=request)
         if form.is_valid():
             user = form.save()
             login(request, user)
@@ -1940,9 +1953,23 @@ def register(request):
             touch_online_user(user)
             return redirect('directory')
     else:
-        form = BuyerRegistrationForm()
-    ctx = {'form': form, **experience_hint_context()}
+        form = BuyerRegistrationForm(request=request)
+    from .privacy_policy_helpers import privacy_policy_was_viewed
+
+    ctx = {
+        'form': form,
+        'privacy_viewed': privacy_policy_was_viewed(request),
+        **experience_hint_context(),
+    }
     return render(request, 'waimai/register.html', ctx)
+
+
+def privacy_policy(request):
+    """本服务器隐私条款（注册须先打开本页）"""
+    from .privacy_policy_helpers import mark_privacy_policy_viewed
+
+    mark_privacy_policy_viewed(request)
+    return render(request, 'waimai/privacy_policy.html', {'privacy_plain_page': True})
 
 
 def shop_register(request):
@@ -3221,6 +3248,39 @@ def buyer_center(request):
         'own_shop': own_shop,
         'open_shop_form': open_shop_form,
         'eco_hat_text': ' · '.join(hats),
+    })
+
+
+@login_required
+def account_cancel(request):
+    """我的 → 注销账户（生态个人号；工牌不走这里）。"""
+    from .account_helpers import user_has_buyer_capability
+    from .account_cancel_helpers import account_cancel_block_reason, cancel_eco_account
+    from .idempotency_helpers import idempotency_scope, run_idempotent
+
+    if not user_has_buyer_capability(request.user):
+        messages.error(request, '请用个人账户登录后再注销。')
+        return redirect('directory')
+
+    user = request.user
+    block = account_cancel_block_reason(user)
+    form = AccountCancelForm(user=user)
+
+    if request.method == 'POST':
+        form = AccountCancelForm(request.POST, user=user)
+        if not block and form.is_valid():
+            def _execute_cancel():
+                cancel_eco_account(user)
+                logout(request)
+                messages.success(request, '账号已注销。')
+                return redirect('directory')
+
+            scope = idempotency_scope('eco_account_cancel', str(user.pk))
+            return run_idempotent(request, scope, _execute_cancel)
+
+    return render(request, 'waimai/account_cancel.html', {
+        'form': form,
+        'cancel_block_reason': block,
     })
 
 

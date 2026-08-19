@@ -228,6 +228,10 @@ def finalize_v1_setup(draft: dict[str, Any]) -> tuple[User, dict[str, Any]]:
         raise ValueError('向导数据不完整，请从第 2 步重新填写。')
     if User.objects.filter(username=username).exists():
         raise ValueError(f'登录名「{username}」已被占用，请返回第 2 步更换。')
+    from .shop_name_helpers import SHOP_NAME_TAKEN_MESSAGE, shop_name_is_taken
+
+    if shop_name_is_taken(shop_name):
+        raise ValueError(SHOP_NAME_TAKEN_MESSAGE)
 
     user = User.objects.create_user(
         username=username,

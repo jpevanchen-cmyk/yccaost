@@ -7,15 +7,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}野草系统{% endblock %}</title>
     {% if yc_page_view_id %}<meta name="yc-page-view-id" content="{{ yc_page_view_id }}">{% endif %}
-    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=65">
+    <link rel="stylesheet" href="{% static 'waimai/mobile.css' %}?v=66">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% if on_shop_work_site %}shop-work-site {% endif %}{% block body_class %}{% endblock %}">
-    {% if not on_shop_work_site %}
+    {% if not on_shop_work_site and not privacy_plain_page %}
     <div class="site-top">
         <header class="site-header">
             <button type="button" class="nav-toggle" id="nav-toggle" aria-label="打开菜单">☰</button>
             <a class="site-brand" href="/">{% if site_brand_image_url %}<img src="{{ site_brand_image_url }}" alt="" style="height:22px;vertical-align:middle;margin-right:4px;">{% endif %}{{ site_brand_name|default:"🌿 野草系统" }}</a>
+            {% if show_server_bulletin_button %}
+            <a href="{% url 'server_bulletin_history' %}" class="btn btn-sm btn-orange site-header-experience-btn">公告</a>
+            {% endif %}
             {% if experience_enabled and not v1_local_mode %}
             <button type="button" class="btn btn-sm btn-orange site-header-experience-btn" data-experience-start="seller" data-yc-tour="experience-start-btn">体验开店</button>
             {% endif %}
@@ -81,8 +84,8 @@
         {% block content %}{% endblock %}
     </main>
 
-    {% if site_compliance and site_compliance.icp_record_number or site_compliance and site_compliance.police_record_number or site_show_powered_by %}
-    <footer class="site-compliance-footer" aria-label="网站备案信息">
+    {% if not privacy_plain_page %}
+    <footer class="site-compliance-footer" aria-label="页脚">
         {% if site_compliance and site_compliance.icp_record_number %}
         <a href="{{ site_compliance.icp_query_url }}" target="_blank" rel="noopener noreferrer">
             {{ site_compliance.icp_record_number }}
@@ -97,6 +100,7 @@
         {% if site_show_powered_by %}
         <span class="site-compliance-powered">由野草系统提供支持</span>
         {% endif %}
+        <a href="{% url 'privacy_policy' %}">隐私条款</a>
     </footer>
     {% endif %}
 
@@ -120,7 +124,7 @@
     <script src="{% static 'waimai/session_guard.js' %}?v=6"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
-    {% if experience_boot_json %}
+    {% if experience_boot_json and not privacy_plain_page %}
     <link rel="stylesheet" href="{% static 'waimai/onboarding/experience.css' %}?v=5">
     {% include 'waimai/onboarding/experience/_modals.html' %}
     <script type="application/json" id="yc-experience-boot">{{ experience_boot_json|safe }}</script>

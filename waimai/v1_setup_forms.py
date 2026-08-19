@@ -33,6 +33,11 @@ class V1SetupShopForm(forms.Form):
             raise forms.ValidationError('该登录名已被占用，请换一个。')
         return username
 
+    def clean_shop_name(self):
+        from .shop_name_helpers import validate_new_shop_name
+
+        return validate_new_shop_name(self.cleaned_data.get('shop_name'))
+
     def clean(self):
         cleaned = super().clean()
         p1 = cleaned.get('password1') or ''

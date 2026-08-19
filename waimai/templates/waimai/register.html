@@ -1,4 +1,5 @@
 {% extends 'waimai/base.html' %}
+{% load static %}
 {% block title %}注册 - 野草系统{% endblock %}
 
 {% block page_back %}
@@ -14,10 +15,27 @@
 </div>
 {% endif %}
 <p class="page-desc">注册后可浏览店铺、下单。默认是买家。开店请登录后到「我的 → 我要开店」。店里员工由老板发工牌。</p>
-<form method="POST" class="auth-form" data-yc-tour="buyer-register-form">
+<form method="POST" class="auth-form" data-yc-tour="buyer-register-form" data-privacy-viewed="{% if privacy_viewed %}1{% else %}0{% endif %}">
     {% csrf_token %}
     {% include 'waimai/_auth_form_fields.html' %}
-    <button type="submit" class="btn btn-green btn-block">注册</button>
+    <div class="register-legal-box" style="margin:14px 0;">
+        <label class="form-check" style="display:block;margin:8px 0;">
+            {{ form.age_adult }} {{ form.age_adult.label }}
+        </label>
+        <label class="form-check" style="display:block;margin:8px 0;">
+            {{ form.age_minor }} {{ form.age_minor.label }}
+        </label>
+        <label class="form-check" style="display:block;margin:8px 0;">
+            {{ form.agree_privacy }} {{ form.agree_privacy.label }}
+            <a href="{% url 'privacy_policy' %}" target="_blank" rel="noopener" id="privacy-policy-open">查看隐私条款</a>
+        </label>
+        <p class="card-meta" style="margin:8px 0 0;">请先点开「查看隐私条款」阅读全文，并勾选同意；年龄两项只选其中一项。</p>
+    </div>
+    <button type="submit" class="btn btn-green btn-block" id="register-submit">注册</button>
 </form>
 <p class="card-meta">已有账户？<a href="/accounts/login/">登录</a></p>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'waimai/register_legal.js' %}?v=2"></script>
 {% endblock %}

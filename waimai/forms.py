@@ -43,6 +43,11 @@ class OpenShopForm(forms.Form):
             raise forms.ValidationError('当前密码不正确')
         return password
 
+    def clean_shop_name(self):
+        from .shop_name_helpers import validate_new_shop_name
+
+        return validate_new_shop_name(self.cleaned_data.get('shop_name'))
+
     def clean(self):
         cleaned = super().clean()
         from .experience_helpers import can_register_experience_shop
@@ -53,25 +58,75 @@ class OpenShopForm(forms.Form):
         return cleaned
 
 
+class AccountCancelForm(forms.Form):
+    """注销个人账户：再输密码并勾选确认。"""
+
+    current_password = forms.CharField(
+        label='当前登录密码',
+        widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}),
+    )
+    confirm_cancel = forms.BooleanField(required=False, label='我确认注销这个账户')
+
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_current_password(self):
+        password = self.cleaned_data.get('current_password') or ''
+        if not self.user or not self.user.check_password(password):
+            raise forms.ValidationError('当前密码不正确')
+        return password
+
+    def clean_confirm_cancel(self):
+        if not self.cleaned_data.get('confirm_cancel'):
+            raise forms.ValidationError('请勾选确认注销。')
+        return True
+
+
 class BuyerRegistrationForm(_SkipUsernameUniqueValidationMixin, UserCreationForm):
     """买家注册：仅允许注册买家身份"""
+
+    age_adult = forms.BooleanField(required=False, label='我已年满18周岁。')
+    age_minor = forms.BooleanField(
+        required=False,
+        label='我未满18周岁，我承诺在监护人的监督同意下使用。',
+    )
+    agree_privacy = forms.BooleanField(required=False, label='我已阅读并同意隐私条款')
 
     class Meta(UserCreationForm.Meta):
         model = User
         fields = UserCreationForm.Meta.fields
+
+    def __init__(self, *args, request=None, **kwargs):
+        self.request = request
+        super().__init__(*args, **kwargs)
 
     def clean_username(self):
         from .staff_account_helpers import validate_main_eco_username
 
         return validate_main_eco_username(self.cleaned_data.get('username'))
 
+    def clean_agree_privacy(self):
+        if not self.cleaned_data.get('agree_privacy'):
+            raise forms.ValidationError('请勾选同意隐私条款。')
+        return True
+
     def clean(self):
         cleaned = super().clean()
         from .experience_helpers import can_register_experience_account
+        from .privacy_policy_helpers import privacy_policy_was_viewed
 
         ok, msg = can_register_experience_account()
         if not ok:
             raise forms.ValidationError(msg)
+        adult = bool(cleaned.get('age_adult'))
+        minor = bool(cleaned.get('age_minor'))
+        if adult and minor:
+            raise forms.ValidationError('年龄请只选一项。')
+        if not adult and not minor:
+            raise forms.ValidationError('请选择是否已满18周岁。')
+        if not privacy_policy_was_viewed(self.request):
+            raise forms.ValidationError('请先打开并阅读隐私条款。')
         return cleaned
 
     def save(self, commit=True):
@@ -100,6 +155,11 @@ class ShopRegistrationForm(_SkipUsernameUniqueValidationMixin, UserCreationForm)
         from .staff_account_helpers import validate_main_eco_username
 
         return validate_main_eco_username(self.cleaned_data.get('username'))
+
+    def clean_shop_name(self):
+        from .shop_name_helpers import validate_new_shop_name
+
+        return validate_new_shop_name(self.cleaned_data.get('shop_name'))
 
     def clean(self):
         cleaned = super().clean()

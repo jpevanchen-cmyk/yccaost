@@ -92,6 +92,11 @@ a {
     z-index: 220;
 }
 
+.site-header-experience-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 .site-user {
     font-size: 13px;
     color: var(--yc-muted);

@@ -1,0 +1,32 @@
+{% extends 'waimai/owner/base.html' %}
+{% load yc_time %}
+{% block title %}整机公告{% endblock %}
+{% block owner_content %}
+<div class="card" style="padding:16px;margin-bottom:14px;">
+    <h2 style="margin:0 0 8px;font-size:18px;">整机公告</h2>
+    <p class="card-meta" style="margin:0 0 12px;">
+        这里写给全站客人看的<strong>现行公告</strong>。大厅积木是另一回事，删掉介绍/公告积木不会影响这里。
+        正文有改动才记一条历史；客人进大厅只弹一次最新内容。
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <label class="form-label">现行公告正文</label>
+        <textarea class="form-input" name="body" rows="8" placeholder="留空表示暂不弹窗、也不显示最新正文">{{ bulletin.body }}</textarea>
+        <p class="card-meta" style="margin:8px 0 12px;">当前版本号：{{ bulletin.revision }}{% if bulletin.published_at %} · 最近发布 {{ bulletin.published_at|local }}{% endif %}</p>
+        <button type="submit" class="btn btn-primary">保存现行公告</button>
+    </form>
+</div>
+<div class="card" style="padding:16px;">
+    <h2 style="margin:0 0 8px;font-size:16px;">历史</h2>
+    {% if bulletin_history %}
+        {% for row in bulletin_history %}
+        <div class="line-item" style="border-bottom:1px solid #eee;padding:10px 0;display:block;">
+            <p class="card-meta" style="margin:0 0 6px;">版本 {{ row.revision }} · {{ row.archived_at|local }}</p>
+            <div class="showcase-body" style="white-space:pre-wrap;">{{ row.body }}</div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="card-meta" style="margin:0;">还没有历史。改过现行正文之后会出现。</p>
+    {% endif %}
+</div>
+{% endblock %}

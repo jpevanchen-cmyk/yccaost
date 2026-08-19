@@ -14,6 +14,7 @@
     <p>账号：<strong>{{ user.username }}</strong></p>
     <p class="card-meta">身份：{{ eco_hat_text }} · 注册于 {{ user.date_joined|local:"Y-m-d H:i" }}</p>
     <a class="btn btn-outline btn-sm" href="{% url 'account_password_change' %}">修改密码</a>
+    <a class="btn btn-outline btn-sm" href="{% url 'account_cancel' %}">注销账户</a>
 </div>
 
 <div class="card" style="margin-bottom:14px;">

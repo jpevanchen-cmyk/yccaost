@@ -290,6 +290,31 @@ def _delete_experience_shop_records(seller_ids: list[str]) -> None:
     ShopProfile.objects.filter(seller_id__in=seller_ids, is_official=False).delete()
 
 
+def teardown_experience_shops(seller_ids: list[str]) -> dict:
+    """拆掉指定体验店：该店订单、店资料、体验工牌。可安全重跑。"""
+    from .models import BuyOrder, DeliveryOrder, ShopProfile, User
+
+    seller_ids = [str(s).strip() for s in seller_ids if str(s).strip()]
+    stats = {'shops': 0, 'staff': 0, 'orders': 0}
+    if not seller_ids:
+        return stats
+    order_qs = BuyOrder.objects.filter(seller_id__in=seller_ids)
+    stats['orders'] = order_qs.count()
+    DeliveryOrder.objects.filter(buy_order__seller_id__in=seller_ids).delete()
+    order_qs.delete()
+    stats['shops'] = ShopProfile.objects.filter(
+        seller_id__in=seller_ids, is_official=False
+    ).count()
+    _delete_experience_shop_records(seller_ids)
+    staff_qs = User.objects.filter(
+        employer_seller_id__in=seller_ids,
+        is_permanent=False,
+    )
+    stats['staff'] = staff_qs.count()
+    staff_qs.delete()
+    return stats
+
+
 def purge_experience_data() -> dict:
     """
     体验日清：拆掉体验店并摘掉店主帽子，保留体验账号与客人资格。
@@ -299,7 +324,7 @@ def purge_experience_data() -> dict:
     from django.db import transaction
 
     from .account_helpers import ECO_ROLES
-    from .models import BuyOrder, DeliveryOrder, ShopProfile, User
+    from .models import ShopProfile, User
 
     official_ids = set(
         ShopProfile.objects.filter(is_official=True).values_list('seller_id', flat=True)
@@ -308,22 +333,10 @@ def purge_experience_data() -> dict:
     stats = {'shops': 0, 'staff': 0, 'hats': 0, 'orders': 0, 'users': 0}
 
     with transaction.atomic():
-        order_qs = BuyOrder.objects.filter(seller_id__in=exp_sellers)
-        stats['orders'] = order_qs.count()
-        DeliveryOrder.objects.filter(buy_order__seller_id__in=exp_sellers).delete()
-        order_qs.delete()
-
-        stats['shops'] = ShopProfile.objects.filter(
-            seller_id__in=exp_sellers, is_official=False
-        ).count()
-        _delete_experience_shop_records(exp_sellers)
-
-        staff_qs = User.objects.filter(
-            employer_seller_id__in=exp_sellers,
-            is_permanent=False,
-        )
-        stats['staff'] = staff_qs.count()
-        staff_qs.delete()
+        torn = teardown_experience_shops(exp_sellers)
+        stats['orders'] = torn['orders']
+        stats['shops'] = torn['shops']
+        stats['staff'] = torn['staff']
 
         # 旧号曾写成卖家：店没了必须改回客人，禁止继续当成店主
         hat_qs = User.objects.filter(
