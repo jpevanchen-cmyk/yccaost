@@ -8,14 +8,102 @@
     <h2 style="margin:0 0 8px;">📒 资金流水</h2>
     <p class="card-meta" style="margin-bottom:12px;">
         全店资金总账；下方标签只是筛选同一张表。点流水号或订单号可在浮层查看详情，不关本页。
+        疑似双收/双退会标红，方便核对。
     </p>
 
-    <div class="seller-tabs-mobile" style="margin-bottom:12px;">
-        {% for code, label in fund_ledger_tabs %}
-        <a href="{% url 'seller_panel_section' 'fund_ledger' %}?tab={{ code }}"
-           class="seller-tab {% if fund_ledger_tab == code %}active{% endif %}">{{ label }}</a>
+    {% if fund_ledger_alert_order_count %}
+    <p class="fund-ledger-alert-banner">
+        当前有 <strong>{{ fund_ledger_alert_order_count }}</strong> 笔订单疑似双收或双退。
+        <a href="{% url 'seller_panel_section' 'fund_ledger' %}?view=alerts{% if fund_ledger_tab != 'all' %}&amp;tab={{ fund_ledger_tab }}{% endif %}">只看异常</a>
+    </p>
+    {% endif %}
+
+    <div class="fund-ledger-subtabs" style="margin-bottom:10px;" aria-label="流水视图">
+        {% for code, label in fund_ledger_views %}
+        <a href="{% url 'seller_panel_section' 'fund_ledger' %}?view={{ code }}&amp;tab={{ fund_ledger_tab }}{% if fund_ledger_q %}&amp;q={{ fund_ledger_q|urlencode }}{% endif %}{% if fund_ledger_date_from %}&amp;date_from={{ fund_ledger_date_from }}{% endif %}{% if fund_ledger_date_to %}&amp;date_to={{ fund_ledger_date_to }}{% endif %}{% if fund_ledger_fl_month %}&amp;fl_month={{ fund_ledger_fl_month }}{% endif %}"
+           class="fund-ledger-subtab {% if fund_ledger_view == code %}active{% endif %}">{{ label }}</a>
         {% endfor %}
     </div>
+
+    <div class="fund-ledger-subtabs" style="margin-bottom:12px;" aria-label="支付方式筛选">
+        {% for code, label in fund_ledger_tabs %}
+        <a href="{% url 'seller_panel_section' 'fund_ledger' %}?view={{ fund_ledger_view }}&amp;tab={{ code }}{% if fund_ledger_q %}&amp;q={{ fund_ledger_q|urlencode }}{% endif %}{% if fund_ledger_date_from %}&amp;date_from={{ fund_ledger_date_from }}{% endif %}{% if fund_ledger_date_to %}&amp;date_to={{ fund_ledger_date_to }}{% endif %}{% if fund_ledger_fl_month %}&amp;fl_month={{ fund_ledger_fl_month }}{% endif %}"
+           class="fund-ledger-subtab {% if fund_ledger_tab == code %}active{% endif %}">{{ label }}</a>
+        {% endfor %}
+    </div>
+
+    {% if fund_ledger_view == 'daily' %}
+    <form method="get" action="{% url 'seller_panel_section' 'fund_ledger' %}" class="fund-ledger-filter-bar">
+        <input type="hidden" name="view" value="daily">
+        <input type="hidden" name="tab" value="{{ fund_ledger_tab }}">
+        <label class="card-meta" for="fl-month-select" style="margin:0;">汇总月份</label>
+        <select id="fl-month-select" name="fl_month" class="input" style="min-width:140px;" onchange="this.form.submit()">
+            {% for opt in fund_ledger_month_choices %}
+            <option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+        </select>
+        <noscript><button type="submit" class="btn btn-sm btn-outline">切换</button></noscript>
+    </form>
+
+    {% if fund_ledger_empty %}
+    <p class="card-meta">该月暂无成功流水可汇总。</p>
+    {% else %}
+    <div class="fund-ledger-table-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <table class="seller-table fund-ledger-table">
+            <thead>
+                <tr>
+                    <th>日期</th>
+                    <th>笔数</th>
+                    <th>收入笔数</th>
+                    <th>收入金额</th>
+                    <th>支出笔数</th>
+                    <th>支出金额</th>
+                    <th>净额</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in fund_ledger_daily.rows %}
+                <tr>
+                    <td>{{ row.date }}</td>
+                    <td>{{ row.entry_count }}</td>
+                    <td>{{ row.income_count }}</td>
+                    <td>¥{{ row.income_amount }}</td>
+                    <td>{{ row.expense_count }}</td>
+                    <td>¥{{ row.expense_amount }}</td>
+                    <td>¥{{ row.net_amount }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th>合计</th>
+                    <th>{{ fund_ledger_daily.totals.entry_count }}</th>
+                    <th>{{ fund_ledger_daily.totals.income_count }}</th>
+                    <th>¥{{ fund_ledger_daily.totals.income_amount }}</th>
+                    <th>{{ fund_ledger_daily.totals.expense_count }}</th>
+                    <th>¥{{ fund_ledger_daily.totals.expense_amount }}</th>
+                    <th>¥{{ fund_ledger_daily.totals.net_amount }}</th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <p class="card-meta" style="margin-top:8px;">按日汇总只统计「成功」流水；现金入金细节仍可在「外卖现金管理」核对。</p>
+    {% endif %}
+
+    {% else %}
+    <form method="get" action="{% url 'seller_panel_section' 'fund_ledger' %}" class="fund-ledger-filter-bar">
+        <input type="hidden" name="view" value="{{ fund_ledger_view }}">
+        <input type="hidden" name="tab" value="{{ fund_ledger_tab }}">
+        <label class="card-meta" for="fl-q" style="margin:0;">搜索</label>
+        <input id="fl-q" type="search" name="q" class="input" value="{{ fund_ledger_q }}"
+               placeholder="流水号 / 订单号 / 备注 / 依据编号" style="min-width:180px;flex:1;">
+        <label class="card-meta" for="fl-date-from" style="margin:0;">从</label>
+        <input id="fl-date-from" type="date" name="date_from" class="input" value="{{ fund_ledger_date_from }}">
+        <label class="card-meta" for="fl-date-to" style="margin:0;">到</label>
+        <input id="fl-date-to" type="date" name="date_to" class="input" value="{{ fund_ledger_date_to }}">
+        <button type="submit" class="btn btn-sm btn-green">查询</button>
+        <a class="btn btn-sm btn-outline" href="{% url 'seller_panel_section' 'fund_ledger' %}?view={{ fund_ledger_view }}&amp;tab={{ fund_ledger_tab }}">清空</a>
+    </form>
 
     {% if fund_ledger_empty %}
     <p class="card-meta">当前筛选下还没有流水记录。新订单支付、收款、入金确认后会自动写入。</p>
@@ -33,11 +121,12 @@
                     <th>流水状态</th>
                     <th>资金状态</th>
                     <th>时间</th>
+                    <th>提示</th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in fund_ledger_entries %}
-                <tr>
+                <tr class="{% if row.is_alert %}fund-ledger-row-alert{% endif %}">
                     <td class="fund-ledger-code-cell">
                         <button type="button" class="btn btn-link btn-sm yc-fl-drawer-link"
                                 title="{{ row.display_no_full }}"
@@ -61,11 +150,16 @@
                     <td>{{ row.entry_status }}</td>
                     <td>{{ row.fund_status }}</td>
                     <td>{{ row.occurred_at }}</td>
+                    <td>{% if row.alert_label %}<span class="fund-ledger-alert-tag">{{ row.alert_label }}</span>{% else %}—{% endif %}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    {% if fund_ledger_view == 'shortfall' %}
+    <p class="card-meta" style="margin-top:8px;">少收明细来自总流水里的「少收兜底结单」记录；进行中的少收争议请到「外卖现金管理」处理。</p>
+    {% endif %}
+    {% endif %}
     {% endif %}
 </div>
 
@@ -91,5 +185,5 @@ window.YC_FUND_LEDGER_DRAWER = {
     orderUrlTemplate: "{% url 'seller_fund_ledger_order_drawer' order_id='00000000-0000-0000-0000-000000000000' %}"
 };
 </script>
-<script src="{% static 'waimai/fund_ledger_drawer.js' %}?v=1"></script>
+<script src="{% static 'waimai/fund_ledger_drawer.js' %}?v=2"></script>
 {% endblock %}

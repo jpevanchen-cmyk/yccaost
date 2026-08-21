@@ -46,6 +46,29 @@ FUND_LEDGER_TABS: list[tuple[str, str]] = [
     ('external', '外部门店'),
 ]
 
+# 84b · 查询视图（仍读同一张总流水，不另建账）
+FUND_LEDGER_VIEWS: list[tuple[str, str]] = [
+    ('detail', '明细'),
+    ('daily', '按日汇总'),
+    ('remit', '入金历史'),
+    ('shortfall', '少收明细'),
+    ('alerts', '异常告警'),
+]
+
+# 同一订单不应重复出现的「真正到账」类业务（入金确认不算第二笔到账）
+DUPLICATE_INCOME_BUSINESS_TYPES = frozenset({
+    'payment_received',
+    'wechat_payment_success',
+    'demo_payment_success',
+    'rider_cash_collected',
+    'cash_exception_settled',
+})
+
+# 同一订单不应重复完成的退款类业务
+DUPLICATE_REFUND_BUSINESS_TYPES = frozenset({
+    'wechat_refund_success',
+})
+
 TRACKABLE_FIELDS = ('entry_status', 'fund_status', 'refund_status')
 
 
@@ -110,9 +133,14 @@ def compact_order_display_no(order: BuyOrder | None) -> str:
     return order.get_order_short_code() or '—'
 
 
-def entry_display_row(entry: FundLedgerEntry) -> dict[str, str]:
+def entry_display_row(
+    entry: FundLedgerEntry,
+    *,
+    alert_flags: list[str] | None = None,
+) -> dict[str, str]:
     """模板用：一行流水的中文展示字段。"""
     order = entry.buy_order if entry.buy_order_id else None
+    flags = list(alert_flags or [])
     return {
         'ledger_id': str(entry.ledger_id),
         'order_id': str(order.order_id) if order else '',
@@ -132,6 +160,8 @@ def entry_display_row(entry: FundLedgerEntry) -> dict[str, str]:
         'reference_key': entry.reference_key or '—',
         'note': entry.note or '',
         'occurred_at': format_local(entry.occurred_at, '%Y-%m-%d %H:%M'),
+        'is_alert': bool(flags),
+        'alert_label': '、'.join(flags),
     }
 
 
@@ -339,12 +369,198 @@ def build_order_drawer_context(order: BuyOrder) -> dict:
     }
 
 
+def _parse_ledger_day(raw_value: str, *, end_of_day: bool = False):
+    """解析 YYYY-MM-DD 为系统本地日界时刻；非法则返回 None。"""
+    from datetime import datetime, time
+
+    text = (raw_value or '').strip()
+    if not text:
+        return None
+    try:
+        day = datetime.strptime(text, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+    if end_of_day:
+        return datetime.combine(day, time(23, 59, 59))
+    return datetime.combine(day, time.min)
+
+
+def detect_fund_ledger_order_alerts(seller_id: str) -> dict[str, list[str]]:
+    """
+    扫本店总流水，标出疑似双收/双退的订单。
+    只读汇总，不另存第二份账。
+    """
+    from collections import defaultdict
+
+    income_counts: dict[str, int] = defaultdict(int)
+    refund_counts: dict[str, int] = defaultdict(int)
+    qs = (
+        FundLedgerEntry.objects.filter(
+            seller_id=seller_id,
+            entry_status=FundLedgerEntry.ENTRY_STATUS_SUCCESS,
+        )
+        .exclude(buy_order_id=None)
+        .values_list('buy_order_id', 'business_type')
+    )
+    for order_id, business_type in qs.iterator():
+        key = str(order_id)
+        if business_type in DUPLICATE_INCOME_BUSINESS_TYPES:
+            income_counts[key] += 1
+        if business_type in DUPLICATE_REFUND_BUSINESS_TYPES:
+            refund_counts[key] += 1
+
+    alerts: dict[str, list[str]] = {}
+    for order_id, count in income_counts.items():
+        if count >= 2:
+            alerts.setdefault(order_id, []).append('疑似双收')
+    for order_id, count in refund_counts.items():
+        if count >= 2:
+            alerts.setdefault(order_id, []).append('疑似双退')
+    return alerts
+
+
+def build_fund_ledger_daily_summary(
+    seller_id: str,
+    *,
+    year_month: str,
+    payment_method: str = 'all',
+    max_rows: int = 62,
+) -> dict:
+    """按发生日汇总总流水（成功态）；同一数据源现算。"""
+    from collections import defaultdict
+
+    from .time_helpers import to_local
+
+    bucket: dict[str, dict] = defaultdict(lambda: {
+        'entry_count': 0,
+        'income_amount': Decimal('0'),
+        'expense_amount': Decimal('0'),
+        'income_count': 0,
+        'expense_count': 0,
+        'alert_hint_count': 0,
+    })
+
+    qs = FundLedgerEntry.objects.filter(
+        seller_id=seller_id,
+        entry_status=FundLedgerEntry.ENTRY_STATUS_SUCCESS,
+    )
+    if payment_method and payment_method != 'all':
+        qs = qs.filter(payment_method=payment_method)
+
+    for entry in qs.only('occurred_at', 'direction', 'amount').iterator():
+        day = to_local(entry.occurred_at).date().isoformat()
+        if year_month and not day.startswith(year_month):
+            continue
+        row = bucket[day]
+        row['entry_count'] += 1
+        amount = _money2(entry.amount)
+        if entry.direction == FundLedgerEntry.DIRECTION_EXPENSE:
+            row['expense_amount'] += amount
+            row['expense_count'] += 1
+        else:
+            row['income_amount'] += amount
+            row['income_count'] += 1
+
+    sorted_days = sorted(bucket.keys(), reverse=True)[:max_rows]
+    rows = []
+    for day in sorted_days:
+        data = bucket[day]
+        income = _money2(data['income_amount'])
+        expense = _money2(data['expense_amount'])
+        rows.append({
+            'date': day,
+            'entry_count': data['entry_count'],
+            'income_count': data['income_count'],
+            'expense_count': data['expense_count'],
+            'income_amount': income,
+            'expense_amount': expense,
+            'net_amount': _money2(income - expense),
+        })
+
+    totals = {
+        'entry_count': sum(row['entry_count'] for row in rows),
+        'income_count': sum(row['income_count'] for row in rows),
+        'expense_count': sum(row['expense_count'] for row in rows),
+        'income_amount': _money2(sum((row['income_amount'] for row in rows), Decimal('0'))),
+        'expense_amount': _money2(sum((row['expense_amount'] for row in rows), Decimal('0'))),
+        'net_amount': _money2(sum((row['net_amount'] for row in rows), Decimal('0'))),
+    }
+    return {
+        'rows': rows,
+        'totals': totals,
+        'year_month': year_month,
+    }
+
+
+def _apply_fund_ledger_search(qs, q: str):
+    """流水号 / 订单号 / 备注 / 依据编号 模糊搜。"""
+    from django.db.models import Q
+
+    text = (q or '').strip()
+    if not text:
+        return qs
+    filters = (
+        Q(display_no__icontains=text)
+        | Q(note__icontains=text)
+        | Q(reference_key__icontains=text)
+        | Q(operator__icontains=text)
+        | Q(buy_order__order_id__icontains=text)
+    )
+    # 短号：去掉横线后按订单 UUID 前缀试匹配
+    compact = text.replace('-', '').strip()
+    if len(compact) >= 4:
+        filters = filters | Q(buy_order__order_id__istartswith=compact[:8])
+    return qs.filter(filters)
+
+
 def build_seller_fund_ledger_context(seller_id: str, request) -> dict:
-    """卖家资金流水页：总表 + 支付方式 tab（同一数据源）。"""
-    tab = (request.GET.get('tab') or 'all').strip()
+    """卖家资金流水页：明细 / 按日 / 入金 / 少收 / 告警（同一总流水）。"""
+    from .cash_manage_helpers import build_cash_month_choices, resolve_cash_month
+
+    get = getattr(request, 'GET', {}) or {}
+    tab = (get.get('tab') or 'all').strip()
     valid_tabs = {code for code, _ in FUND_LEDGER_TABS}
     if tab not in valid_tabs:
         tab = 'all'
+
+    view = (get.get('view') or 'detail').strip()
+    valid_views = {code for code, _ in FUND_LEDGER_VIEWS}
+    if view not in valid_views:
+        view = 'detail'
+
+    q = (get.get('q') or '').strip()
+    date_from = (get.get('date_from') or '').strip()
+    date_to = (get.get('date_to') or '').strip()
+    fl_month = resolve_cash_month(get.get('fl_month'))
+
+    order_alerts = detect_fund_ledger_order_alerts(seller_id)
+    alert_order_count = len(order_alerts)
+
+    ctx: dict[str, Any] = {
+        'fund_ledger_tab': tab,
+        'fund_ledger_tabs': FUND_LEDGER_TABS,
+        'fund_ledger_view': view,
+        'fund_ledger_views': FUND_LEDGER_VIEWS,
+        'fund_ledger_q': q,
+        'fund_ledger_date_from': date_from,
+        'fund_ledger_date_to': date_to,
+        'fund_ledger_fl_month': fl_month,
+        'fund_ledger_month_choices': build_cash_month_choices(
+            selected=fl_month, extra_months=[fl_month] if fl_month else [],
+        ),
+        'fund_ledger_alert_order_count': alert_order_count,
+        'fund_ledger_daily': None,
+        'fund_ledger_entries': [],
+        'fund_ledger_empty': True,
+    }
+
+    if view == 'daily':
+        daily = build_fund_ledger_daily_summary(
+            seller_id, year_month=fl_month, payment_method=tab,
+        )
+        ctx['fund_ledger_daily'] = daily
+        ctx['fund_ledger_empty'] = not daily['rows']
+        return ctx
 
     qs = (
         FundLedgerEntry.objects.filter(seller_id=seller_id)
@@ -354,10 +570,31 @@ def build_seller_fund_ledger_context(seller_id: str, request) -> dict:
     if tab != 'all':
         qs = qs.filter(payment_method=tab)
 
-    entries = [entry_display_row(row) for row in qs[:200]]
-    return {
-        'fund_ledger_tab': tab,
-        'fund_ledger_tabs': FUND_LEDGER_TABS,
-        'fund_ledger_entries': entries,
-        'fund_ledger_empty': not entries,
-    }
+    if view == 'remit':
+        qs = qs.filter(business_type='cash_remittance_confirmed')
+    elif view == 'shortfall':
+        qs = qs.filter(business_type='cash_exception_settled')
+    elif view == 'alerts':
+        if order_alerts:
+            qs = qs.filter(buy_order_id__in=list(order_alerts.keys()))
+        else:
+            qs = qs.none()
+
+    start_at = _parse_ledger_day(date_from, end_of_day=False)
+    end_at = _parse_ledger_day(date_to, end_of_day=True)
+    if start_at:
+        qs = qs.filter(occurred_at__gte=start_at)
+    if end_at:
+        qs = qs.filter(occurred_at__lte=end_at)
+
+    qs = _apply_fund_ledger_search(qs, q)
+
+    entries = []
+    for row in qs[:300]:
+        order_key = str(row.buy_order_id) if row.buy_order_id else ''
+        flags = list(order_alerts.get(order_key, []))
+        entries.append(entry_display_row(row, alert_flags=flags))
+
+    ctx['fund_ledger_entries'] = entries
+    ctx['fund_ledger_empty'] = not entries
+    return ctx
