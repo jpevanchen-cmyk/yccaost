@@ -1,0 +1,17 @@
+{# 营业中 / 停止营业开关（进度 80-3 Panel 片段） #}
+{# 动作写在隐藏标记里：静默刷新打包时必带；按钮只负责给人点 #}
+<p class="card-meta" style="margin:16px 0 8px;" data-yc-tour="operating-status-text">
+    当前状态：
+    {% if is_shop_open %}
+    <strong style="color:#2a7;">营业中</strong>
+    {% else %}
+    <strong style="color:#a60;">停止营业</strong>
+    {% endif %}
+</p>
+<form method="POST" data-yc-panel="operating-status-panel">
+    {% csrf_token %}
+    <input type="hidden" name="toggle_open" value="1">
+    <button type="submit" class="btn {% if is_shop_open %}btn-outline{% else %}btn-green{% endif %}" data-yc-tour="operating-toggle">
+        {% if is_shop_open %}停止营业{% else %}营业中{% endif %}
+    </button>
+</form>

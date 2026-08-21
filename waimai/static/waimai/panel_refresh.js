@@ -95,11 +95,21 @@
             || panelId === 'work-cash-manage-panel-body';
     }
 
+    function isProductImageManagePanel(panelId) {
+        return (panelId || '').indexOf('product-image-manage-') === 0;
+    }
+
+    function isOperatingStatusPanel(panelId) {
+        return panelId === 'operating-status-panel';
+    }
+
     function panelNeedsIdempotency(panelId) {
         return isShopCartPanel(panelId)
             || isMenuCatalogPanel(panelId)
             || isWorkbenchPanel(panelId)
-            || isCashManagePanel(panelId);
+            || isCashManagePanel(panelId)
+            || isProductImageManagePanel(panelId)
+            || isOperatingStatusPanel(panelId);
     }
 
     function ensureLoadingOverlay() {

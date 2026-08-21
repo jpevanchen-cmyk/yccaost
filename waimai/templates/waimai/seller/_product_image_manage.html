@@ -1,6 +1,7 @@
-{# 商品多图：已上传列表、删图、调序、同步文件夹（G1-3） #}
+{# 商品多图：已上传列表、删图、调序、同步文件夹（G1-3 · 进度 80-3 Panel） #}
 {% if dish %}
-<div class="product-image-manage-block" data-yc-tour="product-image-manage">
+{% with panel_id=product_image_panel_id|default:'' %}
+<div class="product-image-manage-block" data-yc-tour="product-image-manage"{% if panel_id %} id="{{ panel_id }}" data-yc-panel-id="{{ panel_id }}"{% endif %}>
     <h4 class="product-image-manage-title">已上传图片（{{ dish_image_used|default:0 }} / {{ dish_image_max|default:10 }}）</h4>
     {% if dish.product_images.all %}
     <div class="product-image-thumb-row">
@@ -9,7 +10,7 @@
             <img src="{{ img.image.url }}" alt="图 {{ img.sort_index }}">
             <figcaption>{{ dish.display_code|upper }}-{{ img.sort_index }}</figcaption>
             <div class="product-image-thumb-actions">
-                <form method="POST" class="product-image-inline-form">
+                <form method="POST" class="product-image-inline-form"{% if panel_id %} data-yc-panel="{{ panel_id }}"{% endif %}>
                     {% csrf_token %}
                     <input type="hidden" name="move_dish_image" value="1">
                     <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
@@ -17,7 +18,7 @@
                     <input type="hidden" name="direction" value="up">
                     <button type="submit" class="btn btn-sm" title="往前">↑</button>
                 </form>
-                <form method="POST" class="product-image-inline-form">
+                <form method="POST" class="product-image-inline-form"{% if panel_id %} data-yc-panel="{{ panel_id }}"{% endif %}>
                     {% csrf_token %}
                     <input type="hidden" name="move_dish_image" value="1">
                     <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
@@ -25,7 +26,7 @@
                     <input type="hidden" name="direction" value="down">
                     <button type="submit" class="btn btn-sm" title="往后">↓</button>
                 </form>
-                <form method="POST" class="product-image-inline-form" onsubmit="return confirm('确定删除这张图片？');">
+                <form method="POST" class="product-image-inline-form" onsubmit="return confirm('确定删除这张图片？');"{% if panel_id %} data-yc-panel="{{ panel_id }}"{% endif %}>
                     {% csrf_token %}
                     <input type="hidden" name="delete_dish_image" value="1">
                     <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
@@ -39,7 +40,7 @@
     {% else %}
     <p class="card-meta">尚无图片。可在下方上传，或将文件放入编号文件夹后点「同步图片」。</p>
     {% endif %}
-    <form method="POST" class="product-image-sync-form">
+    <form method="POST" class="product-image-sync-form"{% if panel_id %} data-yc-panel="{{ panel_id }}"{% endif %}>
         {% csrf_token %}
         <input type="hidden" name="sync_dish_images" value="1">
         <input type="hidden" name="dish_id" value="{{ dish.dish_id }}">
@@ -49,4 +50,5 @@
         高级用法：把文件命名为「{{ dish.display_code|upper }}-1.jpg」等形式放进该商品编号文件夹，再点上方按钮挂载（不自动监视文件夹）。
     </p>
 </div>
+{% endwith %}
 {% endif %}

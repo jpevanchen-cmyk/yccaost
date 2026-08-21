@@ -28,20 +28,9 @@
             <button type="submit" class="btn btn-block" style="background:#607d8b;color:#fff;" data-yc-tour="operating-save-hours">保存营业时间</button>
         </form>
 
-        <p class="card-meta" style="margin:16px 0 8px;" data-yc-tour="operating-status-text">
-            当前状态：
-            {% if is_shop_open %}
-            <strong style="color:#2a7;">营业中</strong>
-            {% else %}
-            <strong style="color:#a60;">停止营业</strong>
-            {% endif %}
-        </p>
-        <form method="POST">
-            {% csrf_token %}
-            <button type="submit" name="toggle_open" value="1" class="btn {% if is_shop_open %}btn-outline{% else %}btn-green{% endif %}" data-yc-tour="operating-toggle">
-                {% if is_shop_open %}停止营业{% else %}营业中{% endif %}
-            </button>
-        </form>
+        <div id="operating-status-panel" data-yc-panel-id="operating-status-panel">
+            {% include 'waimai/seller/_operating_status_panel.html' %}
+        </div>
     </div>
 </details>
 {% endblock %}

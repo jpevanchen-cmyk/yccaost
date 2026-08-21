@@ -2271,7 +2271,28 @@ def seller_panel_section(request, section):
                 return response
         response = None
         if section == 'operating':
-            response = handle_operating_post(request, seller_id)
+            from .operating_seller_handlers import (
+                detect_operating_panel_action,
+                handle_operating_post,
+                run_operating_panel_idempotent,
+            )
+            from .panel_refresh_helpers import is_panel_refresh, panel_refresh_fail
+
+            op_action = detect_operating_panel_action(request)
+            if op_action:
+                response = run_operating_panel_idempotent(
+                    request,
+                    seller_id,
+                    op_action,
+                    lambda: handle_operating_post(request, seller_id),
+                )
+            else:
+                response = handle_operating_post(request, seller_id)
+                # 静默刷新却认不出动作：勿整页塞 HTML（前端会误报「操作未成功」）
+                if response is None and is_panel_refresh(request):
+                    return panel_refresh_fail(
+                        '没认出要切换营业，请刷新页面后再试',
+                    )
         elif section == 'dine':
             response = handle_dine_post(request, seller_id)
         elif section == 'products':
@@ -2283,9 +2304,21 @@ def seller_panel_section(request, section):
                 detect_menu_catalog_panel_action,
                 run_menu_catalog_idempotent,
             )
+            from .product_image_panel_helpers import (
+                detect_product_image_panel_action,
+                run_product_image_panel_idempotent,
+            )
 
+            image_action = detect_product_image_panel_action(request)
             menu_action = detect_menu_catalog_panel_action(request)
-            if menu_action:
+            if image_action:
+                response = run_product_image_panel_idempotent(
+                    request,
+                    seller_id,
+                    image_action,
+                    lambda: handle_products_post(request, seller_id),
+                )
+            elif menu_action:
                 response = run_menu_catalog_idempotent(
                     request,
                     seller_id,

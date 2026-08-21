@@ -112,6 +112,32 @@ def _respond_menu_toggle(request, seller_id, profile_id, *, ok: bool, message: s
     return _respond_menu_panel(request, seller_id, profile_id, ok=ok, message=message)
 
 
+def _respond_product_image_panel(request, dish, *, ok: bool, message: str):
+    """商品图管理区 Panel：成功换局部 HTML；普通 POST 仍 messages + 滚回编辑区。"""
+    from .panel_refresh_helpers import is_panel_refresh, panel_refresh_fail, panel_refresh_ok
+    from .product_image_panel_helpers import (
+        product_image_manage_panel_id,
+        render_product_image_manage_html,
+    )
+
+    if is_panel_refresh(request):
+        if not ok:
+            return panel_refresh_fail(message)
+        # 删/调序后须重新读库，避免旧关联缓存
+        dish.refresh_from_db()
+        html = render_product_image_manage_html(request, dish)
+        return panel_refresh_ok(
+            html=html,
+            message=message,
+            panel_id=product_image_manage_panel_id(dish),
+        )
+    if ok:
+        messages.success(request, message)
+    else:
+        messages.error(request, message)
+    return _products_redirect(_edit_anchor(dish), _edit_query(dish))
+
+
 def _fill_dish_descriptions(dish, post):
     """读取普通/会员/特价三档描述"""
     dish.description = (post.get('description') or '').strip()
@@ -248,30 +274,30 @@ def handle_products_post(request, seller_id):
         dish = get_object_or_404(Dish, dish_id=request.POST.get('dish_id'), seller_id=seller_id)
         err = delete_dish_image(dish, request.POST.get('image_id'))
         if err:
-            messages.error(request, err)
-        else:
-            messages.success(request, f'已删除「{dish.name}」的一张图片')
-        return _products_redirect(_edit_anchor(dish), _edit_query(dish))
+            return _respond_product_image_panel(request, dish, ok=False, message=err)
+        return _respond_product_image_panel(
+            request, dish, ok=True, message=f'已删除「{dish.name}」的一张图片',
+        )
 
     if 'move_dish_image' in request.POST:
         dish = get_object_or_404(Dish, dish_id=request.POST.get('dish_id'), seller_id=seller_id)
         err = move_dish_image(dish, request.POST.get('image_id'), request.POST.get('direction', ''))
         if err:
-            messages.error(request, err)
-        else:
-            messages.success(request, f'已调整「{dish.name}」图片顺序')
-        return _products_redirect(_edit_anchor(dish), _edit_query(dish))
+            return _respond_product_image_panel(request, dish, ok=False, message=err)
+        return _respond_product_image_panel(
+            request, dish, ok=True, message=f'已调整「{dish.name}」图片顺序',
+        )
 
     if 'sync_dish_images' in request.POST:
         dish = get_object_or_404(Dish, dish_id=request.POST.get('dish_id'), seller_id=seller_id)
         err, mounted = sync_dish_images_from_folder(dish)
         if err:
-            messages.error(request, err)
-        elif mounted:
-            messages.success(request, f'已同步文件夹图片，新挂载 {mounted} 张')
+            return _respond_product_image_panel(request, dish, ok=False, message=err)
+        if mounted:
+            msg = f'已同步文件夹图片，新挂载 {mounted} 张'
         else:
-            messages.success(request, f'已刷新「{dish.name}」图片列表，与文件夹一致')
-        return _products_redirect(_edit_anchor(dish), _edit_query(dish))
+            msg = f'已刷新「{dish.name}」图片列表，与文件夹一致'
+        return _respond_product_image_panel(request, dish, ok=True, message=msg)
 
     if 'delete_dish' in request.POST:
         dish = get_object_or_404(Dish, dish_id=request.POST.get('dish_id'), seller_id=seller_id)

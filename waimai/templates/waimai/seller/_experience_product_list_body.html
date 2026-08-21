@@ -42,7 +42,7 @@
             </form>
             {% if not experience_writable %}
             {% include 'waimai/seller/_product_image_upload_fields.html' with dish=dish dish_image_max=dish.image_quota.dish_image_max dish_image_max_mb=dish_image_max_mb dish_image_used=dish.image_quota.dish_image_used dish_image_remaining=dish.image_quota.dish_image_remaining only %}
-            {% include 'waimai/seller/_product_image_manage.html' with dish=dish dish_image_max=dish.image_quota.dish_image_max dish_image_used=dish.image_quota.dish_image_used %}
+            {% include 'waimai/seller/_product_image_manage.html' with dish=dish dish_image_max=dish.image_quota.dish_image_max dish_image_used=dish.image_quota.dish_image_used product_image_panel_id='product-image-manage-'|add:dish_pick %}
             {% if edit_scan_qr_rows or edit_scan_qr_missing_lan %}
             {% include 'waimai/seller/_product_scan_qr.html' with dish=dish scan_qr_rows=edit_scan_qr_rows scan_qr_missing_lan=edit_scan_qr_missing_lan %}
             {% endif %}
