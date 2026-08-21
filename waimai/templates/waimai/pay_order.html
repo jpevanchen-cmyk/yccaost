@@ -2,7 +2,11 @@
 {% block title %}支付订单 - 野草系统{% endblock %}
 
 {% block page_back %}
+{% if pay_back_url %}
+<a href="{{ pay_back_url }}" class="page-back-btn">{{ pay_back_label|default:"← 返回订单凭证" }}</a>
+{% else %}
 <a href="{% url 'order_detail' order.order_id %}" class="page-back-btn">← 返回订单详情</a>
+{% endif %}
 {% endblock %}
 
 {% block content %}

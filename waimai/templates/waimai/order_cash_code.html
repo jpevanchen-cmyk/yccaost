@@ -39,7 +39,7 @@
 
     <div style="display:flex;flex-direction:column;gap:10px;">
         <a class="btn btn-green btn-block" href="{{ shop_url }}">继续点菜</a>
-        <a class="btn btn-outline btn-block" href="{{ order_detail_url }}">查看完整订单</a>
+        <a class="btn btn-outline btn-block" href="{{ order_detail_url }}">{{ order_detail_label|default:"查看完整订单" }}</a>
         {% if qr_bundle %}
         <a class="btn btn-outline btn-block" href="{{ cash_code_print_url }}" target="_blank" rel="noopener">打印订单码</a>
         {% endif %}

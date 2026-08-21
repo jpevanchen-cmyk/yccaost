@@ -138,6 +138,7 @@ urlpatterns = [
     path('order-history/', views.order_history, name='order_history'),
     path('order/<uuid:order_id>/cash-code/', views.order_cash_code, name='order_cash_code'),
     path('order/<uuid:order_id>/cash-code/print/', views.order_cash_code_print, name='order_cash_code_print'),
+    path('order/<uuid:order_id>/voucher/', views.guest_order_voucher, name='guest_order_voucher'),
     path('order/<uuid:order_id>/', views.order_detail, name='order_detail'),
     path(
         'seller-panel/orders/cashier-qr/<uuid:order_id>/',

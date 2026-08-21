@@ -1,0 +1,139 @@
+{% extends 'waimai/base.html' %}
+{% load yc_time %}
+{% block title %}订单凭证 - 野草系统{% endblock %}
+
+{% block page_back %}
+<a href="{{ shop_url }}" class="page-back-btn">← 返回店铺</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+/* 订单凭证：紧凑平铺，方便一屏截图；打印仍可读 */
+.guest-voucher {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 10px 12px 14px !important;
+    font-size: 13px;
+    line-height: 1.35;
+}
+.guest-voucher .page-title {
+    font-size: 17px !important;
+    margin: 0 0 6px !important;
+}
+.guest-voucher .msg-warn {
+    margin: 0 0 8px !important;
+    padding: 8px 10px !important;
+    font-size: 12px;
+    line-height: 1.4;
+}
+.guest-voucher-block {
+    margin: 0 0 8px;
+    padding: 0 0 8px;
+    border-bottom: 1px solid #eee;
+}
+.guest-voucher-block:last-of-type { border-bottom: none; padding-bottom: 0; }
+.guest-voucher-h {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 700;
+}
+.guest-voucher .status-hero {
+    font-size: 15px !important;
+    margin: 0 !important;
+}
+.guest-voucher .card-meta { margin: 3px 0 0 !important; font-size: 12px; }
+.guest-voucher .detail-row {
+    padding: 3px 0 !important;
+    font-size: 13px;
+    min-height: 0;
+}
+.guest-voucher .line-item {
+    padding: 2px 0 !important;
+    font-size: 13px;
+}
+.guest-voucher-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+.guest-voucher-actions .btn { padding: 8px 12px; font-size: 14px; }
+.guest-voucher-actions .card-meta { font-size: 11px; }
+@media print {
+    .page-back-btn, .site-top, .guest-voucher-actions, .nav-toggle { display: none !important; }
+    .guest-voucher { max-width: none; padding: 0 !important; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card guest-voucher" data-yc-tour="guest-order-voucher">
+    <h2 class="page-title">🧾 订单凭证</h2>
+    <p class="msg-warn" style="text-align:left;">
+        <strong>请立刻截图或打印保存</strong>。换设备/清记录后未必还能打开。
+        {% if voucher_email_ready %}
+        您已填邮箱，订单凭证邮件已尝试发到该邮箱（本机须已配置发信）。
+        {% elif voucher_email_stage_ready and voucher_email_attempted %}
+        您已填邮箱，但本机尚未配置发信，邮件发不出；请以本页截图为准。
+        {% elif voucher_email_attempted %}
+        您已填邮箱：付完款或选定现金/货到付款后，会尝试发订单凭证邮件。
+        {% else %}
+        未填邮箱则不会发邮件，请务必截图或打印。
+        {% endif %}
+    </p>
+
+    <div class="guest-voucher-block">
+        <p class="status-hero">{{ order.get_order_status_display }}</p>
+        <p class="card-meta">订单号：<strong>{{ order.get_display_order_no }}</strong></p>
+        <p class="card-meta">
+            {{ order_shell.fulfillment_label }}
+            · 合计 <strong style="color:var(--yc-orange);">¥{{ order.total_amount }}</strong>
+            · {{ order.get_payment_status_display }}{% if order.payment_method %} · {{ order.get_payment_method_display }}{% endif %}
+        </p>
+        <p class="card-meta">下单：{{ order.created_at|local:"Y-m-d H:i" }}</p>
+    </div>
+
+    <div class="guest-voucher-block">
+        <p class="guest-voucher-h">店铺</p>
+        <div class="detail-row"><span>店名</span><span>{% if shop_profile %}{{ shop_profile.shop_name }}{% else %}—{% endif %}</span></div>
+        <div class="detail-row"><span>地址</span><span style="text-align:right;max-width:65%;">{% if shop_profile %}{{ shop_profile.address }}{% else %}—{% endif %}</span></div>
+    </div>
+
+    <div class="guest-voucher-block">
+        <p class="guest-voucher-h">顾客信息</p>
+        <div class="detail-row"><span>顾客姓名</span><span>{{ order.guest_contact_name|default:"—" }}</span></div>
+        <div class="detail-row"><span>顾客电话</span><span>{{ order.guest_contact_phone|default:"—" }}</span></div>
+        <div class="detail-row"><span>顾客邮箱</span><span>{% if order.guest_contact_email %}{{ order.guest_contact_email }}{% else %}未填{% endif %}</span></div>
+        {% if order.fulfillment_type == 'delivery' %}
+        <div class="detail-row"><span>送达</span><span style="text-align:right;max-width:65%;">{{ order.delivery_address }}</span></div>
+        {% endif %}
+    </div>
+
+    <div class="guest-voucher-block">
+        <p class="guest-voucher-h">订单内容</p>
+        {% for item in dish_lines %}
+        <div class="line-item">
+            <span>{{ item.name }} × {{ item.quantity }}</span>
+            <span>¥{{ item.line_total }}</span>
+        </div>
+        {% empty %}
+        <p class="card-meta">暂无明细</p>
+        {% endfor %}
+        {% if order.delivery_fee %}
+        <div class="line-item"><span>配送费</span><span>¥{{ order.delivery_fee }}</span></div>
+        {% endif %}
+        <div class="line-item"><span>合计</span><span><strong>¥{{ order.total_amount }}</strong></span></div>
+    </div>
+
+    <div class="guest-voucher-actions">
+        {% if pending_pay and not show_cash_code %}
+        <a class="btn btn-orange btn-block" href="{{ pay_url }}">去支付</a>
+        {% endif %}
+        {% if show_cash_code and cash_code_url %}
+        <a class="btn btn-green btn-block" href="{{ cash_code_url }}">出示收银码 / 到店付</a>
+        {% endif %}
+        <a class="btn btn-outline btn-block" href="{{ shop_url }}">返回店铺</a>
+        <p class="card-meta" style="margin:0;text-align:center;">到店出示本页截图，或报订单号与姓名电话。</p>
+    </div>
+</div>
+{% endblock %}

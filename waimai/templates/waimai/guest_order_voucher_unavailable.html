@@ -1,0 +1,21 @@
+{% extends 'waimai/base.html' %}
+{% block title %}无法打开订单凭证 - 野草系统{% endblock %}
+
+{% block page_back %}
+<a href="{{ shop_url }}" class="page-back-btn">← 返回店铺</a>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:420px;margin:0 auto;">
+    <h2 class="page-title" style="font-size:18px;">无法打开订单凭证</h2>
+    <p class="msg-warn" style="text-align:left;">
+        本页仅在<strong>下单当时的同一浏览器</strong>里可看。
+        若已换手机、清过记录，或未在下单后截图保存，这里就打不开了。
+    </p>
+    <p class="card-meta" style="text-align:left;">
+        可凭订单号 <strong>{{ order_no_hint }}</strong>，加上当时填写的姓名、电话，到店与店家核对。
+        若当时填了邮箱，付完或选定现金/货到付款后会尝试发订单凭证邮件。
+    </p>
+    <a class="btn btn-outline btn-block" href="{{ shop_url }}" style="margin-top:14px;">返回店铺</a>
+</div>
+{% endblock %}

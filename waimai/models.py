@@ -1119,6 +1119,16 @@ class BuyOrder(models.Model):
     table_label = models.CharField(max_length=64, blank=True, default='', verbose_name='桌号/拼桌标识')
     # 可选称呼：方便店员叫人；不填则展示时用桌号
     guest_nickname = models.CharField(max_length=20, blank=True, default='', verbose_name='称呼（可选）')
+    # 游客打包/外卖：本单必要联系信息（不挂买家账号；不在浏览器记忆）
+    guest_contact_name = models.CharField(
+        max_length=40, blank=True, default='', verbose_name='游客本单姓名',
+    )
+    guest_contact_phone = models.CharField(
+        max_length=20, blank=True, default='', verbose_name='游客本单电话',
+    )
+    guest_contact_email = models.CharField(
+        max_length=254, blank=True, default='', verbose_name='游客本单邮箱',
+    )
     order_kind = models.CharField(
         max_length=16, choices=ORDER_KIND_CHOICES, default='normal', verbose_name='订单类型',
     )
@@ -1243,11 +1253,14 @@ class BuyOrder(models.Model):
         return '-'.join(parts)
 
     def is_guest_order(self) -> bool:
-        """没有买家账号的订单（堂食游客）。"""
+        """没有买家账号的订单（堂食游客或打包/外卖游客）。"""
         return not (self.buyer_id or '').strip()
 
     def get_buyer_display_name(self) -> str:
-        """给人看的称呼：优先可选称呼 → 桌号 → 买家账号 →「游客」。"""
+        """给人看的称呼：本单姓名 → 可选称呼 → 桌号 → 买家账号 →「游客」。"""
+        contact_name = (self.guest_contact_name or '').strip()
+        if contact_name:
+            return contact_name
         nick = (self.guest_nickname or '').strip()
         if nick:
             return nick

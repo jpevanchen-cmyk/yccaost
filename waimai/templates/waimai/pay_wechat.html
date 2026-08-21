@@ -44,7 +44,7 @@
         });
     }
     var statusUrl = "{% url 'pay_order_status' order.order_id %}";
-    var successUrl = "/shop/?seller_id={{ order.seller_id }}&success=1&fulfillment={{ order.fulfillment_type }}";
+    var successUrl = "{% if pay_success_url %}{{ pay_success_url|escapejs }}{% else %}/shop/?seller_id={{ order.seller_id }}&success=1&fulfillment={{ order.fulfillment_type }}{% endif %}";
     function poll() {
         fetch(statusUrl, { credentials: "same-origin", headers: { "Accept": "application/json" } })
             .then(function (r) { return r.json(); })
@@ -55,7 +55,7 @@
                 } else if (data.cancelled) {
                     document.getElementById("pay-wait-hint").textContent = data.message || "订单已取消，请重新下单。";
                     window.setTimeout(function () {
-                        window.location.href = "{% url 'order_detail' order.order_id %}";
+                        window.location.href = successUrl;
                     }, 800);
                 }
             })

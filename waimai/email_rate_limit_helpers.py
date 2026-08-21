@@ -20,6 +20,7 @@ KIND_GUESTBOOK_REPLY = 'guestbook_reply'
 KIND_LOGIN_LOCKED = 'login_locked'
 KIND_BUYER_TIMEOUT_REFUND = 'buyer_timeout_refund'
 KIND_SHOP_TIMEOUT_REFUND = 'shop_timeout_refund'
+KIND_GUEST_ORDER_VOUCHER = 'guest_order_voucher'
 KIND_TEST = 'test_email'
 
 

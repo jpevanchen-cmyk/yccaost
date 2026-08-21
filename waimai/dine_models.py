@@ -41,6 +41,16 @@ class ShopOperatingSettings(models.Model):
     dine_channel_enabled = models.BooleanField(default=True, verbose_name='当前堂食接单开')
     takeaway_channel_enabled = models.BooleanField(default=True, verbose_name='当前打包接单开')
     delivery_channel_enabled = models.BooleanField(default=True, verbose_name='当前外卖接单开')
+    # A.2.5 游客（未登录）打包/外卖：系统默认全关，店家可自行打开
+    guest_takeaway_enabled = models.BooleanField(
+        default=False, verbose_name='允许未登录顾客打包自取',
+    )
+    guest_delivery_online_enabled = models.BooleanField(
+        default=False, verbose_name='允许未登录顾客外卖在线支付',
+    )
+    guest_delivery_cod_enabled = models.BooleanField(
+        default=False, verbose_name='允许未登录顾客外卖货到付款',
+    )
     delivery_handoff_mode = models.CharField(
         max_length=16,
         choices=DELIVERY_HANDOFF_CHOICES,

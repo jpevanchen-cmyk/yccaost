@@ -64,3 +64,7 @@ def maybe_notify_merchant_new_order(order: BuyOrder) -> None:
     from .order_notify_helpers import notify_new_order
 
     notify_new_order(order)
+    # 游客打包/外卖：同一时机发订单凭证（在线已付或已选现金/货到付款）
+    from .guest_order_voucher_notify_helpers import schedule_guest_order_voucher_notify
+
+    schedule_guest_order_voucher_notify(order)

@@ -699,6 +699,7 @@ class ShopOperatingSettingsForm(forms.ModelForm):
         model = ShopOperatingSettings
         fields = [
             'dine_channel_enabled', 'takeaway_channel_enabled', 'delivery_channel_enabled',
+            'guest_takeaway_enabled', 'guest_delivery_online_enabled', 'guest_delivery_cod_enabled',
             'dine_open', 'dine_close',
             'delivery_open', 'delivery_close',
             'dine_default_wait_minutes', 'takeaway_default_wait_minutes',
@@ -719,6 +720,9 @@ class ShopOperatingSettingsForm(forms.ModelForm):
             'dine_channel_enabled': '当前允许堂食接单（扫桌码等现场入口）',
             'takeaway_channel_enabled': '当前允许打包接单',
             'delivery_channel_enabled': '当前允许外卖接单',
+            'guest_takeaway_enabled': '允许未登录顾客 · 打包自取',
+            'guest_delivery_online_enabled': '允许未登录顾客 · 外卖在线支付',
+            'guest_delivery_cod_enabled': '允许未登录顾客 · 外卖货到付款',
             'dine_open': '堂食接单开始（可留空；打包暂共用此时段）',
             'dine_close': '堂食接单结束（可留空）',
             'delivery_open': '外卖接单开始（可留空）',
@@ -732,6 +736,9 @@ class ShopOperatingSettingsForm(forms.ModelForm):
             'table_lan_base_url': '桌码局域网固定地址',
         }
         help_texts = {
+            'guest_takeaway_enabled': '系统默认关。打开后，未登录客人可填本单姓名+电话（邮箱可选）下打包单。会员价/特价仍须登录。',
+            'guest_delivery_online_enabled': '系统默认关。打开后，未登录客人可填本单信息并用在线方式付外卖。',
+            'guest_delivery_cod_enabled': '系统默认关。还须「支付设置」里外卖货到付款总开关打开才真正生效。',
             'dine_default_wait_minutes': '没有匹配分时段规则时使用。',
             'takeaway_default_wait_minutes': '没有匹配分时段规则时使用。',
             'delivery_default_wait_minutes': '没有匹配分时段规则时使用。',

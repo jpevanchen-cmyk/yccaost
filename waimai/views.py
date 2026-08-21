@@ -1767,7 +1767,10 @@ def shop_page(request):
         if action == 'checkout':
             from .account_helpers import user_has_buyer_capability
             from .channel_helpers import CHANNEL_DINE_IN
-            from .guest_order_helpers import normalize_guest_nickname
+            from .guest_order_helpers import (
+                guest_remote_checkout_allowed,
+                normalize_guest_nickname,
+            )
             from waimai.plugins.dining.waiter_table_order_helpers import (
                 get_waiter_table_order_page_url,
                 is_waiter_table_order_active,
@@ -1780,11 +1783,6 @@ def shop_page(request):
             waiter_dine = is_waiter_table_order_active(request, seller_id)
             # 堂食 + 有效桌台会话：游客或服务员代点可结算
             is_guest_dine = bool(table_sess and (not is_logged_buyer or waiter_dine))
-            if not is_logged_buyer and not is_guest_dine:
-                return _shop_render(
-                    request, seller_id, cart, shop_profile,
-                    error='请先登录买家账号再下单（堂食扫桌码可免登录）',
-                )
 
             cart, cart_items, subtotal, removed_notes = prepare_checkout_cart(cart, seller_id)
             if removed_notes:
@@ -1798,10 +1796,24 @@ def shop_page(request):
             fulfillment_type, ch_err = require_shop_channel(request, seller_id, table_sess)
             if ch_err:
                 return _shop_render(request, seller_id, cart, shop_profile, error=ch_err)
+
+            is_guest_remote = False
+            if not is_logged_buyer and not is_guest_dine:
+                ok_remote, remote_msg = guest_remote_checkout_allowed(
+                    seller_id, fulfillment_type,
+                )
+                if ok_remote:
+                    is_guest_remote = True
+                else:
+                    return _shop_render(
+                        request, seller_id, cart, shop_profile,
+                        error=remote_msg or '请先登录买家账号再下单（堂食扫桌码可免登录）',
+                    )
+
             if is_guest_dine and fulfillment_type != CHANNEL_DINE_IN:
                 return _shop_render(
                     request, seller_id, cart, shop_profile,
-                    error='未登录只能堂食下单，外卖/打包请先登录',
+                    error='扫桌码模式下只能堂食下单；外卖/打包请退出桌码或登录后另选通道',
                 )
             ok_admit, admit_msg = check_order_admission(seller_id, fulfillment_type)
             if not ok_admit:
@@ -1854,6 +1866,7 @@ def shop_page(request):
                 'shop_profile': shop_profile,
                 'table_label': table_sess.display_label() if table_sess else '',
                 'is_guest_checkout': is_guest_dine,
+                'is_guest_remote_checkout': is_guest_remote,
                 'guest_nickname': normalize_guest_nickname(
                     request.POST.get('guest_nickname', ''),
                 ),
@@ -2737,7 +2750,10 @@ def _execute_place_order(request):
     )
     from .guest_order_helpers import (
         apply_guest_onsite_cash,
+        claim_guest_order,
+        guest_remote_checkout_allowed,
         normalize_guest_nickname,
+        parse_guest_contact,
         resolve_order_buyer_id,
     )
     from waimai.plugins.dining.waiter_table_order_helpers import (
@@ -2774,10 +2790,27 @@ def _execute_place_order(request):
         return redirect(f'/shop/?seller_id={seller_id}&error={ch_err}')
 
     is_guest = not is_logged_buyer
+    is_guest_remote = False
+    guest_contact = {'name': '', 'phone': '', 'email': ''}
     if is_guest:
-        if fulfillment_type != CHANNEL_DINE_IN or not table_sess:
-            messages.error(request, '未登录只能通过扫桌码堂食下单，外卖/打包请先登录')
-            return redirect(f'/shop/?seller_id={seller_id}')
+        if fulfillment_type == CHANNEL_DINE_IN and table_sess:
+            pass  # 堂食游客：桌码会话
+        else:
+            ok_remote, remote_msg = guest_remote_checkout_allowed(
+                seller_id, fulfillment_type,
+            )
+            if not ok_remote:
+                messages.error(
+                    request,
+                    remote_msg or '未登录只能通过扫桌码堂食下单，或本店已开放的打包/外卖',
+                )
+                return redirect(f'/shop/?seller_id={seller_id}')
+            is_guest_remote = True
+            parsed, contact_err = parse_guest_contact(request.POST)
+            if contact_err:
+                messages.error(request, contact_err)
+                return redirect(f'/shop/?seller_id={seller_id}&error={contact_err}')
+            guest_contact = parsed
 
     if fulfillment_type == CHANNEL_DINE_IN and not table_sess:
         messages.error(request, '堂食请扫桌上的二维码进入')
@@ -2847,6 +2880,11 @@ def _execute_place_order(request):
     table_label = ''
     order_kind = 'normal'
     order = None
+    guest_contact_fields = {
+        'guest_contact_name': guest_contact.get('name', ''),
+        'guest_contact_phone': guest_contact.get('phone', ''),
+        'guest_contact_email': guest_contact.get('email', ''),
+    }
     if table_sess:
         table_label = table_sess.display_label()
         if table_sess.session_type == 'main':
@@ -2873,6 +2911,7 @@ def _execute_place_order(request):
                     table_label=table_label,
                     order_kind=order_kind,
                     guest_nickname=guest_nickname,
+                    **guest_contact_fields,
                     **pending_pay_stamp_fields(seller_id),
                 )
 
@@ -2917,6 +2956,7 @@ def _execute_place_order(request):
             table_label=table_label,
             order_kind=order_kind,
             guest_nickname=guest_nickname,
+            **guest_contact_fields,
             **pending_pay_stamp_fields(seller_id),
         )
 
@@ -2946,7 +2986,7 @@ def _execute_place_order(request):
     )
 
     # 游客堂食：直接现场付现金，跳过在线支付页
-    if is_guest:
+    if is_guest and not is_guest_remote:
         from .order_qr_helpers import order_cash_code_url
 
         ok_cash, cash_errors = apply_guest_onsite_cash(order)
@@ -2963,11 +3003,21 @@ def _execute_place_order(request):
             return redirect(f'/shop/?seller_id={seller_id}')
         return redirect(order_cash_code_url(order.order_id))
 
+    # 游客打包/外卖：认领会话后进订单凭证页（自行截图/打印；支付从凭证页进入）
+    # 订单凭证邮件：付完或选定现金/货到付款后再发（见 maybe_notify_merchant_new_order）
+    if is_guest_remote:
+        claim_guest_order(request, order)
+        from .guest_order_helpers import guest_order_voucher_url
+
+        return redirect(guest_order_voucher_url(order.order_id))
+
     return redirect('pay_order', order_id=order.order_id)
 
 
 def _execute_pay_order_post(request, order):
     """支付页 POST：选支付方式或放弃当前微信（幂等第 7 步 · 由 run_idempotent 包裹）。"""
+    from .guest_order_helpers import is_guest_remote_order, redirect_guest_remote_home
+
     if request.POST.get('abandon_wechat'):
         from .pending_payment_timeout_helpers import abandon_wechat_for_switch
 
@@ -2976,6 +3026,8 @@ def _execute_pay_order_post(request, order):
             if msg:
                 messages.error(request, msg)
             if order.payment_status == 'paid':
+                if is_guest_remote_order(order):
+                    return redirect_guest_remote_home(order)
                 if order.is_guest_order():
                     return redirect('order_detail', order_id=order.order_id)
                 return redirect('order_history')
@@ -2989,6 +3041,9 @@ def _execute_pay_order_post(request, order):
             if err:
                 messages.error(request, err)
         return redirect('pay_order', order_id=order.order_id)
+    # 游客远程：演示付等成功后回凭证；现金仍去收银码页
+    if is_guest_remote_order(order) and order.payment_status == 'paid':
+        return redirect_guest_remote_home(order)
     if result.redirect_url:
         return redirect(result.redirect_url)
     if result.template_name:
@@ -3029,6 +3084,10 @@ def pay_order(request, order_id):
             return redirect('order_detail', order_id=order.order_id)
         if order.payment_status == 'paid':
             if order.is_guest_order():
+                from .guest_order_helpers import is_guest_remote_order, redirect_guest_remote_home
+
+                if is_guest_remote_order(order):
+                    return redirect_guest_remote_home(order)
                 return redirect('order_detail', order_id=order.order_id)
             return redirect('order_history')
 
@@ -3040,6 +3099,10 @@ def pay_order(request, order_id):
 
     if order.payment_status != 'pending_payment':
         if order.is_guest_order():
+            from .guest_order_helpers import is_guest_remote_order, redirect_guest_remote_home
+
+            if is_guest_remote_order(order):
+                return redirect_guest_remote_home(order)
             return redirect('order_detail', order_id=order.order_id)
         return redirect('order_history')
 
@@ -3058,6 +3121,12 @@ def pay_order(request, order_id):
         return redirect(order_cash_code_url(order.order_id))
 
     ctx = build_pay_page_context(order)
+    from .guest_order_helpers import guest_order_voucher_url, is_guest_remote_order
+
+    if is_guest_remote_order(order):
+        ctx['pay_back_url'] = guest_order_voucher_url(order.order_id)
+        ctx['pay_back_label'] = '← 返回订单凭证'
+        ctx['pay_success_url'] = guest_order_voucher_url(order.order_id)
 
     if request.method == 'POST':
         return run_initiate_payment_idempotent(
@@ -3378,11 +3447,47 @@ def order_cash_code(request, order_id):
             return redirect('order_history')
         return redirect('login')
     if order.payment_method != 'cash' or order.payment_status != 'pending_payment':
+        from .guest_order_helpers import is_guest_remote_order, redirect_guest_remote_home
+
+        if is_guest_remote_order(order):
+            return redirect_guest_remote_home(order)
         return redirect('order_detail', order_id=order.order_id)
     context = build_order_cash_code_page_context(request, order)
     context['page_back_url'] = context['shop_url']
     context['page_back_label'] = '返回店铺继续点菜'
     return render(request, 'waimai/order_cash_code.html', context)
+
+
+def guest_order_voucher(request, order_id):
+    """
+    游客打包/外卖 · 订单凭证页（只读）。
+    仅同一浏览器下单后认领可看；不设口令、不改完整订单详情登录墙。
+    """
+    from .guest_order_helpers import (
+        build_guest_order_voucher_context,
+        claim_guest_order,
+        guest_session_can_access_order,
+        is_guest_remote_order,
+    )
+
+    order = get_object_or_404(BuyOrder, order_id=order_id)
+    if not is_guest_remote_order(order):
+        return redirect('order_detail', order_id=order.order_id)
+
+    if not guest_session_can_access_order(request, order):
+        # 未认领：不展示本单隐私，只给人话说明（不踢登录页）
+        return render(request, 'waimai/guest_order_voucher_unavailable.html', {
+            'order_no_hint': order.get_display_order_no(),
+            'shop_url': f'/shop/?seller_id={order.seller_id}',
+        })
+
+    # 再打开时续认领，避免会话列表被挤掉后立刻丢
+    claim_guest_order(request, order)
+    return render(
+        request,
+        'waimai/guest_order_voucher.html',
+        build_guest_order_voucher_context(request, order),
+    )
 
 
 def order_cash_code_print(request, order_id):

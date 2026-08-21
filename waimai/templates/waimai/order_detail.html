@@ -39,6 +39,12 @@
         · {{ order_shell.fulfillment_label }}
         · 合计 <strong style="color:var(--yc-orange);font-size:18px;">¥{{ order.total_amount }}</strong>
     </p>
+    {% if viewer_role == 'guest' and order.is_guest_order and not order.is_dine_in %}
+    <p class="card-meta" style="margin:10px 0 0;">
+        推荐：可用本单信息在本店注册（可选，不强制）。
+        <a href="{% url 'register' %}">去注册</a>
+    </p>
+    {% endif %}
     {% if order.payment_status == 'pending_payment' %}
         {% include 'waimai/_pending_pay_timeout.html' with timeout_lock_selector=".btn-wechat" %}
         {% if viewer_role == 'buyer' or viewer_role == 'guest' %}
@@ -52,6 +58,8 @@
     <a class="btn btn-wechat btn-block" style="margin-top:14px;" href="{% url 'pay_order' order.order_id %}">去支付</a>
         {% elif viewer_role == 'buyer' and timeout_ctx.pay_locked %}
     <a class="btn btn-wechat btn-block" style="margin-top:14px;opacity:0.5;pointer-events:none;" aria-disabled="true">去支付</a>
+        {% elif viewer_role == 'guest' and not order.is_dine_in and not timeout_ctx.pay_locked %}
+    <a class="btn btn-wechat btn-block" style="margin-top:14px;" href="{% url 'pay_order' order.order_id %}">去支付</a>
         {% endif %}
         {% endif %}
     {% elif timeout_ctx.timeout_message %}
@@ -108,6 +116,12 @@
     <div class="seller-panel-fold-body">
         <p class="card-meta" style="margin:0 0 10px;">有问题请先电话/微信联系客人协商，不要直接拒单。谈妥后可在「订单沟通」写一句确认留痕。</p>
         <div class="detail-row"><span>称呼 / 买家</span><span id="guest-contact-id">{{ order.get_buyer_display_name }}{% if order.is_guest_order %}（游客）{% elif order.buyer_id %} · {{ order.buyer_id }}{% endif %}</span></div>
+        {% if order.guest_contact_phone %}
+        <div class="detail-row"><span>电话</span><span>{{ order.guest_contact_phone }}</span></div>
+        {% endif %}
+        {% if order.guest_contact_email %}
+        <div class="detail-row"><span>邮箱</span><span>{{ order.guest_contact_email }}</span></div>
+        {% endif %}
         {% if order.buyer_id %}
         <button type="button" class="btn btn-outline btn-sm" id="copy-guest-id-btn" style="margin-top:8px;">复制买家账号</button>
         <p class="card-meta" id="copy-guest-id-hint" style="margin:8px 0 0;display:none;">已复制</p>

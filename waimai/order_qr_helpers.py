@@ -151,13 +151,27 @@ def build_order_cash_code_page_context(request, order: BuyOrder) -> dict:
     waiter_page = get_waiter_table_order_page_url(request, order.seller_id)
     if waiter_page:
         continue_url = waiter_page
+
+    from waimai.plugins.dining.guest_order_helpers import (
+        guest_order_voucher_url,
+        is_guest_remote_order,
+    )
+
+    if is_guest_remote_order(order):
+        detail_url = guest_order_voucher_url(order.order_id)
+        detail_label = '返回订单凭证'
+    else:
+        detail_url = reverse('order_detail', kwargs={'order_id': order.order_id})
+        detail_label = '查看完整订单'
+
     return {
         'order': order,
         'order_shell': shell,
         'shop_profile': shop_profile,
         'qr_bundle': qr_bundle,
         'shop_url': continue_url,
-        'order_detail_url': reverse('order_detail', kwargs={'order_id': order.order_id}),
+        'order_detail_url': detail_url,
+        'order_detail_label': detail_label,
         'cash_code_print_url': reverse('order_cash_code_print', kwargs={'order_id': order.order_id}),
         'cash_code_page_url': cash_code_url,
     }

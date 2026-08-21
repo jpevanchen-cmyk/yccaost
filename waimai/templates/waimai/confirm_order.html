@@ -39,6 +39,8 @@
         {% endif %}
         {% if is_guest_checkout %}
         <p class="fulfillment-hint">您当前为<strong>免登录堂食</strong>，下单后请在店内现场付款。会员价/特价需登录后才可用。</p>
+        {% elif is_guest_remote_checkout %}
+        <p class="fulfillment-hint">您当前为<strong>未登录下单</strong>。请填写顾客联系信息（不会在浏览器里记住）。会员价/特价需登录后才可用。</p>
         {% endif %}
     </div>
 
@@ -47,8 +49,27 @@
         <label for="guest_nickname" style="font-size:14px;display:block;margin-bottom:6px;">称呼（可选，方便店员叫您）</label>
         <input type="text" name="guest_nickname" id="guest_nickname" form="place-order-form"
                value="{{ guest_nickname|default:'' }}" maxlength="20"
-               placeholder="不填则按桌号称呼" style="width:100%;max-width:280px;padding:8px 10px;">
+               placeholder="不填则按桌号称呼" style="width:100%;max-width:280px;padding:8px 10px;" autocomplete="off">
         <p class="card-meta" style="margin:6px 0 0;">不强制填写，有意愿再填即可。</p>
+    </div>
+    {% endif %}
+
+    {% if is_guest_remote_checkout %}
+    <div class="fulfillment-block" style="margin-top:12px;">
+        <p style="margin:0 0 10px;font-size:14px;"><strong>顾客联系信息</strong></p>
+        <label for="guest_contact_name" style="font-size:14px;display:block;margin-bottom:4px;">顾客姓名（必填）</label>
+        <input type="text" name="guest_contact_name" id="guest_contact_name" form="place-order-form"
+               value="" maxlength="40" required
+               placeholder="怎么称呼您" style="width:100%;max-width:320px;padding:8px 10px;margin-bottom:10px;" autocomplete="off">
+        <label for="guest_contact_phone" style="font-size:14px;display:block;margin-bottom:4px;">顾客电话（必填）</label>
+        <input type="tel" name="guest_contact_phone" id="guest_contact_phone" form="place-order-form"
+               value="" maxlength="20" required
+               placeholder="方便店家联系" style="width:100%;max-width:320px;padding:8px 10px;margin-bottom:10px;" autocomplete="off">
+        <label for="guest_contact_email" style="font-size:14px;display:block;margin-bottom:4px;">顾客邮箱（建议填，可不填）</label>
+        <input type="email" name="guest_contact_email" id="guest_contact_email" form="place-order-form"
+               value="" maxlength="254"
+               placeholder="付完或选定现金/货到付款后发订单凭证；不填请自行截图" style="width:100%;max-width:320px;padding:8px 10px;" autocomplete="off">
+        <p class="card-meta" style="margin:8px 0 0;">本页不会自动记住您的信息。下单后可用本单信息注册（可选，默认不必勾）。</p>
     </div>
     {% endif %}
 
@@ -129,7 +150,7 @@
         {% elif shop_channel == 'dine_in' %}
         <input type="hidden" name="dine_in_at_shop" value="1">
         {% endif %}
-        <button type="submit" class="btn btn-orange">{% if is_guest_checkout %}确认下单（现场付）{% else %}确认下单{% endif %}</button>
+        <button type="submit" class="btn btn-orange">{% if is_guest_checkout %}确认下单（现场付）{% elif is_guest_remote_checkout %}确认下单并去支付{% else %}确认下单{% endif %}</button>
     </form>
 </div>
 {% endblock %}

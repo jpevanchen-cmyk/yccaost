@@ -125,4 +125,8 @@ def build_dining_buyer_pay_options(settings, order=None) -> list:
         soon = [o for o in options if o.coming_soon]
         main = [o for o in options if not o.coming_soon]
         options = main + [cash] + soon
-    return options
+
+    # 游客外卖：按店铺「未登录·在线付 / 货到付款」开关再过滤
+    from waimai.plugins.dining.guest_order_helpers import filter_guest_remote_pay_options
+
+    return filter_guest_remote_pay_options(options, order)
