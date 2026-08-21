@@ -109,6 +109,7 @@ urlpatterns = [
     path('accounts/logout/', views.EcosystemLogoutView.as_view(), name='logout'),
     path('account/', views.buyer_center, name='buyer_center'),
     path('account/cancel/', views.account_cancel, name='account_cancel'),
+    path('seller-panel/shop-cancel/', views.shop_cancel, name='shop_cancel'),
     path('account/password/', views.account_password_change, name='account_password_change'),
     path('accounts/session/heartbeat/', views.session_heartbeat, name='session_heartbeat'),
     path('accounts/session/beacon-logout/', views.session_beacon_logout, name='session_beacon_logout'),

@@ -1,0 +1,69 @@
+{% extends 'waimai/base.html' %}
+{% load static %}
+{% block title %}店铺注销 - 野草系统{% endblock %}
+
+{% block page_back %}
+{% include 'waimai/_page_back.html' with back_url="/seller-panel/operating/" back_label="返回营业状态" %}
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">店铺注销</h1>
+<p class="page-desc">
+    这是<strong>关店</strong>，不是改名，也不是注销个人登录号。
+    正式店注销后：客人不能再点餐，名录不再展示；店档案按规则保留约六个月；<strong>订单历史仍保留</strong>。
+    个人登录号还在，且<strong>在店铺资料彻底清理前不能销个人号</strong>（防止同名再注册领走旧店）。  
+</p>
+
+{% if shop_profile %}
+<p class="card-meta">当前店铺：<strong>{{ shop_profile.shop_name }}</strong>
+    {% if shop_profile.shop_code %}（店码 {{ shop_profile.shop_code }}）{% endif %}
+</p>
+{% endif %}
+
+{% if shop_already_cancelled %}
+<div class="form-alert" role="alert">
+    <strong>本店已经注销过了。</strong>
+</div>
+<p><a class="btn btn-primary" href="{% url 'buyer_center' %}">返回我的</a></p>
+{% elif cancel_block_reason %}
+<div class="form-alert" role="alert">
+    <strong>{{ cancel_block_reason }}</strong>
+</div>
+<p><a class="btn btn-primary" href="{% url 'seller_panel_section' section='orders' %}">去处理订单</a></p>
+{% else %}
+<div class="msg-warn" style="text-align:left;margin-bottom:12px;">
+    <strong>办理前请自行导出重要资料</strong>（菜单、对账、沟通记录等）。系统不代替店主保管全部副本。
+</div>
+<form method="POST" class="auth-form" id="shop-cancel-form">
+    {% csrf_token %}
+    <input type="hidden" name="idempotency_key" id="shop-cancel-idempotency-key" value="">
+    {% if form.non_field_errors %}
+    <div class="form-alert" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <p>
+        <label for="{{ form.current_password.id_for_label }}">{{ form.current_password.label }}</label>
+        {{ form.current_password }}
+        {% if form.current_password.errors %}<ul class="errorlist">{% for error in form.current_password.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    </p>
+    <p>
+        <label class="form-check">{{ form.export_ack }} {{ form.export_ack.label }}</label>
+        {% if form.export_ack.errors %}<ul class="errorlist">{% for error in form.export_ack.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    </p>
+    <p>
+        <label class="form-check">{{ form.confirm_cancel }} {{ form.confirm_cancel.label }}</label>
+        {% if form.confirm_cancel.errors %}<ul class="errorlist">{% for error in form.confirm_cancel.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    </p>
+    <button type="submit" class="btn btn-green btn-block">确认注销店铺</button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'waimai/idempotency_client.js' %}"></script>
+<script>
+(function () {
+    var input = document.getElementById('shop-cancel-idempotency-key');
+    if (input && window.YcIdempotency) input.value = window.YcIdempotency.newKey();
+})();
+</script>
+{% endblock %}

@@ -58,6 +58,40 @@ class OpenShopForm(forms.Form):
         return cleaned
 
 
+class ShopCancelForm(forms.Form):
+    """店铺注销：再输密码并勾选确认。"""
+
+    current_password = forms.CharField(
+        label='当前登录密码',
+        widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}),
+    )
+    confirm_cancel = forms.BooleanField(required=False, label='我确认注销这家店铺')
+    export_ack = forms.BooleanField(
+        required=False,
+        label='我已知自行导出菜单、对账等重要资料（系统不代替保管全部副本）',
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_current_password(self):
+        password = self.cleaned_data.get('current_password') or ''
+        if not self.user or not self.user.check_password(password):
+            raise forms.ValidationError('当前密码不正确')
+        return password
+
+    def clean_confirm_cancel(self):
+        if not self.cleaned_data.get('confirm_cancel'):
+            raise forms.ValidationError('请勾选确认注销店铺。')
+        return True
+
+    def clean_export_ack(self):
+        if not self.cleaned_data.get('export_ack'):
+            raise forms.ValidationError('请勾选：已知自行导出重要资料。')
+        return True
+
+
 class AccountCancelForm(forms.Form):
     """注销个人账户：再输密码并勾选确认。"""
 

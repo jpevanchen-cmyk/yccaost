@@ -705,6 +705,10 @@ class ShopProfile(models.Model):
     registered_at = models.DateTimeField(auto_now_add=True, verbose_name='注册时间')
     # 体验机：官方小店不占体验额度、不日清、可真支付
     is_official = models.BooleanField(default=False, db_index=True, verbose_name='官方小店')
+    # 店铺注销第一刀：有值表示已主动注销（保留期内档案仍在；名录/点餐关闭）
+    cancelled_at = models.DateTimeField(
+        blank=True, null=True, db_index=True, verbose_name='店铺注销时间',
+    )
 
     class Meta:
         db_table = 'shop_profile'
@@ -713,6 +717,10 @@ class ShopProfile(models.Model):
 
     def __str__(self):
         return self.shop_name
+
+    def is_cancelled(self) -> bool:
+        """是否已办理店铺注销（第一刀起）。"""
+        return self.cancelled_at is not None
 
 
 class ShopHomePage(models.Model):

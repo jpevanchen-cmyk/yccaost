@@ -531,7 +531,7 @@ def build_server_home_view_context(request=None, page=None) -> dict:
 
     directory_shops = []
     if page.is_hall and any(b.block_type == BLOCK_DIRECTORY for b in blocks):
-        qs = ShopProfile.objects.filter(is_listed=True).order_by('shop_name')
+        qs = ShopProfile.objects.filter(is_listed=True, cancelled_at__isnull=True).order_by('shop_name')
         if q:
             qs = qs.filter(Q(shop_name__icontains=q) | Q(address__icontains=q))
         directory_shops = list(qs)

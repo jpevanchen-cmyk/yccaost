@@ -377,8 +377,13 @@ def validate_staff_display_username(seller_id: str, raw_name: str, *, field_labe
 
 
 def validate_main_eco_username(raw_name: str) -> str:
-    """主账号注册名校验：只与买家/店主比，不与工牌比。"""
+    """主账号注册名校验：只与买家/店主比，不与工牌比；有店侧残留的名字也不能用。"""
     from django.core.exceptions import ValidationError
+
+    from .shop_residue_helpers import (
+        shop_residue_blocks_register_message,
+        username_has_shop_residue,
+    )
 
     name = (raw_name or '').strip()
     if not name:
@@ -387,6 +392,8 @@ def validate_main_eco_username(raw_name: str) -> str:
         raise ValidationError('用户名不能包含 ::')
     if main_eco_account_username_taken(name):
         raise ValidationError('该用户名已被使用')
+    if username_has_shop_residue(name):
+        raise ValidationError(shop_residue_blocks_register_message())
     return name
 
 

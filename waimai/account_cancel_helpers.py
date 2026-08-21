@@ -1,5 +1,6 @@
 # 生态个人账号主动注销（手册 A.2.3 第一刀）
 # 不另存「已注销名单」；历史订单仍留在店里（买家栏只剩当时的登录名文字）。
+# 店资料未清干净（含软注销保留期）时禁止销个人号，防止同名再注册领走旧店。
 
 from __future__ import annotations
 
@@ -42,7 +43,10 @@ def experience_shop_may_teardown_on_cancel(user) -> bool:
 def account_cancel_block_reason(user) -> str:
     """不能注销时返回人话；可以注销返回空串。"""
     from .account_helpers import user_has_buyer_capability, user_is_staff_badge
-    from .account_helpers import user_has_seller_capability
+    from .shop_residue_helpers import (
+        shop_residue_blocks_account_cancel_message,
+        username_has_shop_residue,
+    )
 
     if user_is_staff_badge(user):
         return '工牌不能在这里注销，请用个人账户。'
@@ -52,8 +56,14 @@ def account_cancel_block_reason(user) -> str:
         return '这是本台服务器的管理者账号，不能在这里注销。'
     if buyer_has_open_orders(getattr(user, 'username', '')):
         return '请先把进行中的订单处理完，再注销账户。'
-    if user_has_seller_capability(user) and not experience_shop_may_teardown_on_cancel(user):
-        return '你已开通店铺。店铺注销尚未开通，有店的号暂时不能注销。'
+
+    seller_id = (getattr(user, 'username', '') or '').strip()
+    # 体验店：销号时会先整店拆干净，允许走下去
+    if experience_shop_may_teardown_on_cancel(user):
+        return ''
+    # 正式店软注销保留期、或任何店侧残留：禁止销人号（防同名领店）
+    if username_has_shop_residue(seller_id):
+        return shop_residue_blocks_account_cancel_message()
     return ''
 
 
@@ -68,4 +78,11 @@ def cancel_eco_account(user) -> None:
     with transaction.atomic():
         if experience_shop_may_teardown_on_cancel(user):
             teardown_experience_shops([seller_id])
+        # 拆完后仍有残留则拒绝（防止半截状态）
+        from .shop_residue_helpers import username_has_shop_residue
+
+        if username_has_shop_residue(seller_id):
+            raise ValueError(
+                '店铺资料未能清理干净，个人账户暂不能注销。请联系本机管理者协助处理。'
+            )
         user.delete()

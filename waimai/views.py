@@ -20,6 +20,7 @@ from .forms import (
     AccountCancelForm,
     BuyerRegistrationForm,
     OpenShopForm,
+    ShopCancelForm,
     ShopDeliverySettingsForm,
     ShopOperatingSettingsForm,
     ShopPaymentSettingsForm,
@@ -309,6 +310,11 @@ def shop_showcase(request, shop_code=None):
         seller_id = (request.GET.get('seller_id') or '').strip()
         profile = ShopProfile.objects.filter(seller_id=seller_id).first() if seller_id else None
     if not profile:
+        return redirect('home')
+    from .shop_cancel_helpers import shop_is_cancelled
+
+    if shop_is_cancelled(profile):
+        messages.info(request, '这家店已注销，主页不再对外营业展示。')
         return redirect('home')
     page = ensure_home_page_for_seller(profile.seller_id, profile)
     context = build_shop_home_view_context(page, request)
@@ -1703,6 +1709,12 @@ def shop_page(request):
     seller_id = request.GET.get('seller_id', 'seller_001')
     cart = get_shop_cart(request.session, seller_id)
     shop_profile = ShopProfile.objects.filter(seller_id=seller_id).first()
+    from .shop_cancel_helpers import shop_order_block_message
+
+    closed_msg = shop_order_block_message(shop_profile)
+    if closed_msg:
+        messages.error(request, closed_msg)
+        return redirect('home')
     delivery_settings = get_delivery_settings(seller_id)
 
     if request.method == 'POST':
@@ -2194,6 +2206,9 @@ def seller_panel_section(request, section):
 
     if section in ('riders', 'waiters', 'kitchen'):
         return redirect('seller_panel_section', section='workbench')
+
+    if section == 'shop_cancel':
+        return redirect('shop_cancel')
 
     valid = (
         'orders', 'products', 'operating', 'dine', 'workbench', 'delivery',
@@ -2764,6 +2779,13 @@ def _execute_place_order(request):
 
     seller_id = (request.POST.get('seller_id') or 'seller_001').strip()
     from .account_helpers import user_has_buyer_capability
+    from .shop_cancel_helpers import shop_order_block_message
+
+    shop_profile = ShopProfile.objects.filter(seller_id=seller_id).first()
+    closed_msg = shop_order_block_message(shop_profile)
+    if closed_msg:
+        messages.error(request, closed_msg)
+        return redirect('home')
 
     is_logged_buyer = (
         request.user.is_authenticated and user_has_buyer_capability(request.user)
@@ -3383,6 +3405,47 @@ def account_cancel(request):
     return render(request, 'waimai/account_cancel.html', {
         'form': form,
         'cancel_block_reason': block,
+    })
+
+
+@login_required
+def shop_cancel(request):
+    """卖家后台 → 店铺注销（第一刀；与销个人号分开）。"""
+    from .account_helpers import user_has_seller_capability
+    from .idempotency_helpers import idempotency_scope, run_idempotent
+    from .shop_cancel_helpers import (
+        cancel_shop_for_owner,
+        get_seller_shop,
+        shop_cancel_block_reason,
+        shop_is_cancelled,
+    )
+
+    if not user_has_seller_capability(request.user):
+        messages.error(request, '请用已开店的个人账户登录后再办理。')
+        return redirect('directory')
+
+    user = request.user
+    shop = get_seller_shop(user)
+    already = shop_is_cancelled(shop)
+    block = '' if already else shop_cancel_block_reason(user, shop)
+    form = ShopCancelForm(user=user)
+
+    if request.method == 'POST' and not already:
+        form = ShopCancelForm(request.POST, user=user)
+        if not block and form.is_valid():
+            def _execute_shop_cancel():
+                msg = cancel_shop_for_owner(user)
+                messages.success(request, msg)
+                return redirect('buyer_center')
+
+            scope = idempotency_scope('shop_cancel', str(user.pk))
+            return run_idempotent(request, scope, _execute_shop_cancel)
+
+    return render(request, 'waimai/shop_cancel.html', {
+        'form': form,
+        'shop_profile': shop,
+        'cancel_block_reason': block,
+        'shop_already_cancelled': already,
     })
 
 

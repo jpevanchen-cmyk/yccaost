@@ -20,6 +20,7 @@ _CORE_SELLER_NAV: list[SellerNavItem] = [
     # 配送费规则已迁履约插件贡献
     SellerNavItem('payment', '支付设置', '💳', '支付', order=70),
     SellerNavItem('audit', '操作留痕', '📝', '留痕', order=80),
+    SellerNavItem('shop_cancel', '店铺注销', '🚪', '注销店', order=88),
     # 插件试验面板：看得到、关得掉
     SellerNavItem('plugins', '插件试验', '🧩', '插件', order=200),
 ]

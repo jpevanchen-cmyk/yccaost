@@ -106,13 +106,13 @@ def create_shop_records_for_seller(
             is_official=False,
         )
         assign_shop_code_on_create(profile)
-        ShopDeliverySettings.objects.create(seller_id=seller_id)
-        pay = ShopPaymentSettings.objects.create(seller_id=seller_id)
+        ShopDeliverySettings.objects.get_or_create(seller_id=seller_id)
+        pay, _ = ShopPaymentSettings.objects.get_or_create(seller_id=seller_id)
         if experience_site_enabled():
             pay.enable_wechat = False
             pay.enable_simulate = True
             pay.save(update_fields=['enable_wechat', 'enable_simulate'])
-        ShopOperatingSettings.objects.create(seller_id=seller_id)
+        ShopOperatingSettings.objects.get_or_create(seller_id=seller_id)
         ensure_home_page_for_seller(seller_id, profile)
         ensure_active_menu_catalog(seller_id)
         ensure_server_home_page()
