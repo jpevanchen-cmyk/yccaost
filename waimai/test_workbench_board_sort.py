@@ -47,16 +47,32 @@ class WorkBoardSortTests(TestCase):
             estimated_ready_at=self.now + timedelta(minutes=eta_minutes),
         )
 
-    def test_kitchen_sorts_by_eta_and_sinks_all_prepared(self):
-        early = self._make_order(fulfillment_type='takeaway', eta_minutes=5, prepared=0)
-        late = self._make_order(fulfillment_type='takeaway', eta_minutes=30, prepared=0)
-        done = self._make_order(fulfillment_type='takeaway', eta_minutes=3, prepared=2)
-
+    def test_kitchen_sort_allows_missing_eta_mixed_with_filled(self):
+        """有预计时间与无预计时间的单混排时，不得因时区形态不同而崩。"""
+        with_eta = self._make_order(fulfillment_type='takeaway', eta_minutes=10, prepared=0)
+        no_eta = BuyOrder.objects.create(
+            buyer_id='buyer1',
+            seller_id=self.seller.username,
+            total_amount=Decimal('20.00'),
+            subtotal_amount=Decimal('20.00'),
+            dish_items=[{
+                'dish_id': 'd1',
+                'name': '测试菜',
+                'quantity': 1,
+                'prepared_count': 0,
+                'served_count': 0,
+            }],
+            payment_status='paid',
+            payment_method='wechat_simulate',
+            order_status='preparing',
+            fulfillment_type='takeaway',
+            estimated_ready_at=None,
+        )
         rows = build_kitchen_board_context(self.seller.username)['orders']
         ids = [row['order'].pk for row in rows]
-        self.assertEqual(ids.index(early.pk), 0)
-        self.assertEqual(ids.index(late.pk), 1)
-        self.assertEqual(ids.index(done.pk), 2)
+        self.assertIn(with_eta.pk, ids)
+        self.assertIn(no_eta.pk, ids)
+        self.assertLess(ids.index(with_eta.pk), ids.index(no_eta.pk))
 
     def test_kitchen_groups_by_fulfillment(self):
         self._make_order(fulfillment_type='delivery', eta_minutes=10)

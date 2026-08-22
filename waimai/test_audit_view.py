@@ -67,13 +67,44 @@ class SellerAuditPageTests(TestCase):
         resp = self.client.get(url, {'q': '登录成功'})
         self.assertContains(resp, '测试登录成功留痕')
 
-    def test_query_audit_logs_keyword(self):
-        qs = query_audit_logs(
-            seller_id=self.seller_id,
-            keyword='登录成功',
+    def test_audit_page_paginates(self):
+        for i in range(12):
+            write_audit_log(
+                action_code='other',
+                summary=f'分页测试留痕-{i}',
+                seller_id=self.seller_id,
+                actor=self.bundle.seller,
+            )
+        url = reverse('seller_panel_section', kwargs={'section': 'audit'})
+        resp = self.client.get(url, {'audit_per_page': '10'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, '共')
+        self.assertContains(resp, '每页')
+        self.assertContains(resp, '下一页')
+        page2 = self.client.get(url, {'audit_per_page': '10', 'audit_page': '2'})
+        self.assertEqual(page2.status_code, 200)
+        self.assertContains(page2, '上一页')
+
+    def test_audit_panel_silent_page_returns_json(self):
+        for i in range(12):
+            write_audit_log(
+                action_code='other',
+                summary=f'静默翻页-{i}',
+                seller_id=self.seller_id,
+                actor=self.bundle.seller,
+            )
+        url = reverse('seller_panel_section', kwargs={'section': 'audit'})
+        resp = self.client.get(
+            url,
+            {'audit_per_page': '10', 'audit_page': '2', 'yc_panel': 'seller-audit-list-panel'},
+            HTTP_X_REQUESTED_WITH='YecaoPanel',
         )
-        summaries = [log.summary for log in qs]
-        self.assertTrue(any('登录成功' in s for s in summaries))
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get('ok'))
+        self.assertEqual(data.get('panel_id'), 'seller-audit-list-panel')
+        self.assertIn('静默翻页', data.get('html', ''))
+        self.assertIn('data-yc-panel-page="seller-audit-list-panel"', data.get('html', ''))
 
 
 class ServerTechLogsPageTests(TestCase):

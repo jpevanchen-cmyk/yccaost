@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime
 
 SORT_NEWEST = 'newest'
 SORT_OLDEST = 'oldest'
 SESSION_KEY = 'yc_workbench_order_sort'
 
-# 无预计出餐时间时，排序上放到同档最后
-_BOARD_ETA_FALLBACK = datetime(9999, 12, 31, tzinfo=dt_timezone.utc)
+# 无预计出餐时间时，排序上放到同档最后（形态须与库内时间一致，见 as_storage_datetime）
+_BOARD_ETA_FALLBACK_RAW = datetime(9999, 12, 31)
 
 # 后厨/服务员看板：按履约方式分组的标题与折叠 id
 WORK_BOARD_FULFILLMENT_GROUPS = (
@@ -42,9 +42,11 @@ def order_queryset_by_created(queryset, sort_mode: str):
 
 def _board_eta_sort_key(estimated_ready_at):
     """预计出餐时间：越早越靠前；未填写则排在本档末尾。"""
+    from .time_helpers import as_storage_datetime
+
     if estimated_ready_at is None:
-        return _BOARD_ETA_FALLBACK
-    return estimated_ready_at
+        return as_storage_datetime(_BOARD_ETA_FALLBACK_RAW)
+    return as_storage_datetime(estimated_ready_at)
 
 
 def sort_kitchen_board_rows(rows: list) -> list:

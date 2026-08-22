@@ -71,7 +71,7 @@
     {% if 'rider' in enabled_work_views %}
     <a class="btn {% if current_view == 'rider' %}btn-orange{% else %}btn-outline{% endif %}" href="{{ tab_rider_url }}">{{ workbench_shell.tab_rider }}</a>
     {% endif %}
-    {% if my_audit_logs is not None %}
+    {% if my_audit_tab_available %}
     <a class="btn {% if show_my_audit %}btn-orange{% else %}btn-outline{% endif %}"
        href="{{ form_action }}{% if '?' in form_action %}&{% else %}?{% endif %}my_audit=1">我的操作记录</a>
     {% endif %}
@@ -147,23 +147,12 @@
 </div>
 
 {% if show_my_audit %}
-<div class="card" style="padding:14px;margin-top:12px;" id="my-audit">
-    <h2 style="margin:0 0 10px;font-size:18px;">📝 我的操作记录</h2>
-    <p class="card-meta" style="margin:0 0 10px;">只显示您本人在本店的操作留痕（约保留半年）。</p>
-    {% if my_audit_logs %}
-        {% for log in my_audit_logs %}
-        <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
-            <div style="flex:1;min-width:220px;">
-                <strong>{{ log.action_label|default:log.get_action_code_display }}</strong>
-                {% if log.result == 'fail' %}<span class="badge badge-default">失败</span>{% endif %}
-                <div class="card-meta" style="margin-top:4px;">{{ log.created_at|local:"Y-m-d H:i:s" }}</div>
-                {% if log.summary %}<div style="margin-top:4px;">{{ log.summary }}</div>{% endif %}
-            </div>
-        </div>
-        {% endfor %}
-    {% else %}
-        <p class="card-meta">暂无本人操作记录。</p>
-    {% endif %}
+<div class="card" style="padding:14px;margin-top:12px;" id="my-audit" data-yc-fold-multi="1">
+{% include 'waimai/_yc_panel_fold.html' with fold_id='work-my-audit' fold_title='📝 我的操作记录' fold_open=True %}
+    <div id="work-my-audit-panel" data-yc-panel-id="work-my-audit-panel">
+    {% include 'waimai/_shop_work_my_audit_panel.html' %}
+    </div>
+{% include 'waimai/seller/_panel_fold_end.html' %}
 </div>
 {% endif %}
 <p class="card-meta" style="margin-top:12px;" data-yc-tour="work-audit-hint">查历史订单请到「管理店铺 → 订单管理」；本人操作记录在 Tab 栏可打开。</p>
@@ -200,9 +189,9 @@ window.YC_REMITTANCE_ALERT = {
 {% if can_use_order_alert or can_use_remittance_alert %}
 <script src="{% static 'waimai/order_alert.js' %}?v=10"></script>
 {% endif %}
+<script src="{% static 'waimai/panel_refresh.js' %}?v=23"></script>
 {% if current_view == 'kitchen' or current_view == 'waiter' or current_view == 'orders' or current_view == 'cash_manage' or current_view == 'cashier' or current_view == 'rider' %}
 <script src="{% static 'waimai/idempotency_client.js' %}"></script>
-<script src="{% static 'waimai/panel_refresh.js' %}?v=21"></script>
 {% endif %}
 {% if current_view == 'waiter' and show_table_board %}
 <script>

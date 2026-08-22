@@ -532,6 +532,52 @@ def shop_work(request, shop_code):
 
         form_action = _work_url(current_view)
 
+        # 进度 80：列表分页静默刷新（操作记录 / 今日历史）
+        if request.method == 'GET':
+            from .panel_refresh_helpers import is_panel_refresh, panel_refresh_ok
+
+            if is_panel_refresh(request):
+                panel_id = (request.GET.get('yc_panel') or '').strip()
+                from .audit_helpers import (
+                    WORK_MY_AUDIT_PANEL_ID,
+                    render_work_my_audit_panel_html,
+                )
+                from .shop_work_helpers import (
+                    WORK_HIST_ACTIONS_PANEL_ID,
+                    WORK_HIST_ORDERS_PANEL_ID,
+                    render_work_hist_actions_panel_html,
+                    render_work_hist_orders_panel_html,
+                )
+                from .workbench_pagination_helpers import append_query_params
+
+                if panel_id == WORK_MY_AUDIT_PANEL_ID and is_shop_staff_account(work_user):
+                    audit_list_url = append_query_params(form_action, {'my_audit': '1'})
+                    html = render_work_my_audit_panel_html(
+                        request,
+                        seller_id,
+                        username=work_user.username,
+                        base_url=audit_list_url,
+                    )
+                    return panel_refresh_ok(html=html, panel_id=panel_id, message='')
+                if panel_id == WORK_HIST_ORDERS_PANEL_ID:
+                    html = render_work_hist_orders_panel_html(
+                        request,
+                        seller_id,
+                        work_user,
+                        list_base_url=form_action,
+                        shop_work_code=code,
+                    )
+                    return panel_refresh_ok(html=html, panel_id=panel_id, message='')
+                if panel_id == WORK_HIST_ACTIONS_PANEL_ID:
+                    html = render_work_hist_actions_panel_html(
+                        request,
+                        seller_id,
+                        work_user,
+                        list_base_url=form_action,
+                        shop_work_code=code,
+                    )
+                    return panel_refresh_ok(html=html, panel_id=panel_id, message='')
+
         # 进度 80：现金管理 · 汇总月份下拉 Panel 静默刷新（不整页 reload）
         if (
             request.method == 'GET'
@@ -607,23 +653,39 @@ def shop_work(request, shop_code):
             context['duty_remittance_notify_smtp_warn'] = smtp_not_ready_message(
                 operating.duty_remittance_notify_enabled,
             )
-        from .audit_helpers import query_audit_logs, write_audit_log
+        from .audit_helpers import build_paginated_audit_context, write_audit_log
         # 服务方仅看本人操作记录（A.12）
         if is_shop_staff_account(work_user):
-            if (request.GET.get('my_audit') or '').strip() == '1':
-                write_audit_log(
-                    action_code='view_audit',
-                    summary='员工查看本人操作记录',
+            show_audit = (request.GET.get('my_audit') or '').strip() == '1'
+            if show_audit:
+                # 静默翻页不重复记「查看本人操作记录」
+                from .panel_refresh_helpers import is_panel_refresh
+
+                if not is_panel_refresh(request):
+                    write_audit_log(
+                        action_code='view_audit',
+                        summary='员工查看本人操作记录',
+                        seller_id=seller_id,
+                        actor=work_user,
+                        request=request,
+                    )
+                from .workbench_pagination_helpers import append_query_params
+
+                audit_list_url = append_query_params(form_action, {'my_audit': '1'})
+                context.update(build_paginated_audit_context(
                     seller_id=seller_id,
-                    actor=work_user,
                     request=request,
-                )
-            context['my_audit_logs'] = list(query_audit_logs(
-                seller_id=seller_id,
-                only_username=work_user.username,
-                limit=30,
-            ))
-            context['show_my_audit'] = (request.GET.get('my_audit') or '').strip() == '1'
+                    base_url=audit_list_url,
+                    only_username=work_user.username,
+                ))
+                context['my_audit_logs'] = context['audit_logs']
+                context['show_my_audit'] = True
+            else:
+                context['my_audit_logs'] = []
+                context['show_my_audit'] = False
+            context['my_audit_tab_available'] = True
+        else:
+            context['my_audit_tab_available'] = False
         if current_view == 'orders':
             from .order_desk_helpers import build_order_desk_context
 
@@ -2665,11 +2727,21 @@ def seller_panel_section(request, section):
         return render(request, 'waimai/seller/fund_ledger.html', context)
     elif section == 'audit':
         from .audit_helpers import (
+            SELLER_AUDIT_LIST_PANEL_ID,
+            build_paginated_audit_context,
             build_seller_audit_querystring,
             parse_audit_view_params,
-            query_audit_logs,
+            render_seller_audit_list_panel_html,
             write_audit_log,
         )
+        from .panel_refresh_helpers import is_panel_refresh, panel_refresh_ok
+
+        # 静默翻页：只返回列表碎片，不重复记「查看留痕」
+        if request.method == 'GET' and is_panel_refresh(request):
+            panel_id = (request.GET.get('yc_panel') or '').strip()
+            if panel_id == SELLER_AUDIT_LIST_PANEL_ID:
+                html = render_seller_audit_list_panel_html(request, seller_id)
+                return panel_refresh_ok(html=html, panel_id=panel_id, message='')
 
         params = parse_audit_view_params(request.GET)
         only_me = params['scope'] == 'mine'
@@ -2689,11 +2761,13 @@ def seller_panel_section(request, section):
         context['audit_query_scope_mine'] = build_seller_audit_querystring(
             scope='mine', q=keyword,
         )
-        context['audit_logs'] = list(query_audit_logs(
+        audit_base_url = reverse('seller_panel_section', kwargs={'section': 'audit'})
+        context.update(build_paginated_audit_context(
             seller_id=seller_id,
+            request=request,
+            base_url=audit_base_url,
             only_username=request.user.username if only_me else None,
             keyword=keyword,
-            limit=100,
         ))
     elif section == 'homepage':
         from .home_page_helpers import (

@@ -1,17 +1,20 @@
-{# 工作台 · 列表分页 #}
+{# 工作台 · 列表分页；panel_page_id 有值时点链接走静默刷新（不整页跳顶） #}
 {% if list_page.paginator.count %}
 <div class="work-list-pagination" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;">
     <span class="card-meta">共 {{ list_page.paginator.count }} 条 · 第 {{ list_page.number }}/{{ list_page.paginator.num_pages }} 页</span>
     <span class="card-meta">每页</span>
     {% for item in list_per_page_links %}
     <a href="{{ item.url }}"
-       class="btn btn-sm {% if list_per_page == item.size %}btn-green{% else %}btn-outline{% endif %}">{{ item.size }}</a>
+       class="btn btn-sm {% if list_per_page == item.size %}btn-green{% else %}btn-outline{% endif %}"
+       {% if panel_page_id %}data-yc-panel-page="{{ panel_page_id }}"{% if panel_fold_id %} data-yc-panel-fold="{{ panel_fold_id }}"{% endif %}{% endif %}>{{ item.size }}</a>
     {% endfor %}
     {% if list_prev_url %}
-    <a href="{{ list_prev_url }}" class="btn btn-sm btn-outline">上一页</a>
+    <a href="{{ list_prev_url }}" class="btn btn-sm btn-outline"
+       {% if panel_page_id %}data-yc-panel-page="{{ panel_page_id }}"{% if panel_fold_id %} data-yc-panel-fold="{{ panel_fold_id }}"{% endif %}{% endif %}>上一页</a>
     {% endif %}
     {% if list_next_url %}
-    <a href="{{ list_next_url }}" class="btn btn-sm btn-outline">下一页</a>
+    <a href="{{ list_next_url }}" class="btn btn-sm btn-outline"
+       {% if panel_page_id %}data-yc-panel-page="{{ panel_page_id }}"{% if panel_fold_id %} data-yc-panel-fold="{{ panel_fold_id }}"{% endif %}{% endif %}>下一页</a>
     {% endif %}
 </div>
 {% endif %}

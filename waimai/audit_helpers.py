@@ -130,9 +130,12 @@ def query_audit_logs(
     seller_id: str,
     only_username: str | None = None,
     keyword: str = '',
-    limit: int = 100,
+    limit: int | None = 100,
 ) -> QuerySet:
-    """按店查询操作审计；支持关键词搜索摘要、账号、动作等。"""
+    """
+    按店查询操作审计；支持关键词搜索摘要、账号、动作等。
+    limit=None 时不截断（供分页）；有 limit 时仍限制上限 500（兼容旧调用）。
+    """
     purge_expired_audit_logs()
     qs = OperationAuditLog.objects.filter(seller_id=seller_id)
     if only_username:
@@ -146,7 +149,103 @@ def query_audit_logs(
             | Q(action_code__icontains=q)
             | Q(ip_address__icontains=q)
         )
-    return qs.order_by('-created_at')[: max(1, min(int(limit), 500))]
+    qs = qs.order_by('-created_at')
+    if limit is None:
+        return qs
+    return qs[: max(1, min(int(limit), 500))]
+
+
+def build_paginated_audit_context(
+    *,
+    seller_id: str,
+    request,
+    base_url: str,
+    only_username: str | None = None,
+    keyword: str = '',
+    page_param: str = 'audit_page',
+    per_page_param: str = 'audit_per_page',
+) -> dict:
+    """
+    操作留痕 / 我的操作记录共用分页（默认每页 10，可选 10/15/20）。
+    返回 audit_page、audit_logs、audit_pagination、audit_per_page。
+    """
+    from django.core.paginator import EmptyPage, Paginator
+
+    from .workbench_pagination_helpers import (
+        resolve_work_list_page_size,
+        work_list_pagination_context,
+    )
+
+    qs = query_audit_logs(
+        seller_id=seller_id,
+        only_username=only_username,
+        keyword=keyword,
+        limit=None,
+    )
+    per_page = resolve_work_list_page_size(request.GET.get(per_page_param))
+    paginator = Paginator(qs, per_page)
+    try:
+        page_num = int(request.GET.get(page_param) or 1)
+    except (TypeError, ValueError):
+        page_num = 1
+    if page_num < 1:
+        page_num = 1
+    try:
+        page_obj = paginator.page(page_num)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages if paginator.num_pages else 1)
+
+    return {
+        'audit_page': page_obj,
+        'audit_logs': list(page_obj.object_list),
+        'audit_per_page': per_page,
+        'audit_pagination': work_list_pagination_context(
+            base_url,
+            request,
+            page_param=page_param,
+            per_page_param=per_page_param,
+            per_page=per_page,
+            page_obj=page_obj,
+        ),
+    }
+
+
+SELLER_AUDIT_LIST_PANEL_ID = 'seller-audit-list-panel'
+WORK_MY_AUDIT_PANEL_ID = 'work-my-audit-panel'
+
+
+def render_seller_audit_list_panel_html(request, seller_id: str) -> str:
+    """店主操作留痕列表碎片（供静默翻页）。"""
+    from django.template.loader import render_to_string
+    from django.urls import reverse
+
+    params = parse_audit_view_params(request.GET)
+    only_me = params['scope'] == 'mine'
+    keyword = params['q']
+    base_url = reverse('seller_panel_section', kwargs={'section': 'audit'})
+    ctx = build_paginated_audit_context(
+        seller_id=seller_id,
+        request=request,
+        base_url=base_url,
+        only_username=request.user.username if only_me else None,
+        keyword=keyword,
+    )
+    ctx['audit_q'] = keyword
+    return render_to_string('waimai/_seller_audit_list_panel.html', ctx, request=request)
+
+
+def render_work_my_audit_panel_html(request, seller_id: str, *, username: str, base_url: str) -> str:
+    """员工「我的操作记录」列表碎片（供静默翻页）。"""
+    from django.template.loader import render_to_string
+
+    ctx = build_paginated_audit_context(
+        seller_id=seller_id,
+        request=request,
+        base_url=base_url,
+        only_username=username,
+    )
+    ctx['my_audit_logs'] = ctx['audit_logs']
+    return render_to_string('waimai/_shop_work_my_audit_panel.html', ctx, request=request)
 
 
 def parse_audit_view_params(get_params) -> dict:

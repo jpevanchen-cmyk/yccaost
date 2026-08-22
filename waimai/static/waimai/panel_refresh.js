@@ -366,10 +366,38 @@
         return document.getElementById(panelId);
     }
 
+    function panelPreservesFoldState(panelId) {
+        return isWorkbenchPanel(panelId) || isCashManagePanel(panelId);
+    }
+
+    /** 工作台/现金管理 Panel：刷新前记下各折叠卡片是否展开 */
+    function capturePanelFoldStates(panelEl) {
+        var states = {};
+        if (!panelEl) return states;
+        panelEl.querySelectorAll('details.seller-panel-fold, details#waiter-table-board').forEach(function (el) {
+            if (el.id) {
+                states[el.id] = !!el.open;
+            }
+        });
+        return states;
+    }
+
+    /** 刷新后按 id 恢复折叠开/关（只恢复新 HTML 里仍存在的块） */
+    function restorePanelFoldStates(panelEl, states) {
+        if (!panelEl || !states) return;
+        Object.keys(states).forEach(function (id) {
+            var el = panelEl.querySelector('#' + id);
+            if (el && el.tagName === 'DETAILS') {
+                el.open = states[id];
+            }
+        });
+    }
+
     function afterPanelReplace(panelEl) {
         bindPanelForms(panelEl);
         bindProfilePickers(panelEl);
         bindCashMonthPickers(panelEl);
+        bindPanelPageLinks(panelEl);
         if (window.ycRebindSellerPanelFold) {
             window.ycRebindSellerPanelFold(panelEl);
         }
@@ -385,8 +413,15 @@
 
     function applyPanelHtml(panelEl, html) {
         if (!panelEl || html === undefined || html === null) return;
+        var panelId = panelEl.id || panelEl.getAttribute('data-yc-panel-id') || '';
+        var foldStates = panelPreservesFoldState(panelId)
+            ? capturePanelFoldStates(panelEl)
+            : null;
         panelEl.innerHTML = html;
         afterPanelReplace(panelEl);
+        if (foldStates) {
+            restorePanelFoldStates(panelEl, foldStates);
+        }
     }
 
     function parsePanelResponse(response) {
@@ -628,13 +663,18 @@
         });
     }
 
-    /** GET 换 Panel（清单下拉、现金月份等：只换 HTML + replaceState） */
+    /** GET 换 Panel（清单下拉、现金月份、列表分页等：只换 HTML + replaceState） */
     function switchPanelGet(panelId, targetUrl, options) {
         options = options || {};
         var panelEl = resolvePanelEl(panelId);
         if (!panelEl) return false;
         var urlObj = new URL(targetUrl, window.location.href);
+        if (options.injectPanelQuery) {
+            urlObj.searchParams.set('yc_panel', panelId);
+        }
         var fetchUrl = urlObj.pathname + (urlObj.search ? urlObj.search : '');
+        var scrollY = window.scrollY || window.pageYOffset || 0;
+        var preserveScroll = !!options.preserveScroll;
         panelFetch(fetchUrl, {
             method: 'GET',
             headers: { 'X-Requested-With': HEADER },
@@ -642,7 +682,9 @@
             .then(parsePanelResponse)
             .then(function (data) {
                 applyPanelHtml(panelEl, data.html);
-                var historyUrl = urlObj.pathname + urlObj.search + urlObj.hash;
+                var historyObj = new URL(targetUrl, window.location.href);
+                historyObj.searchParams.delete('yc_panel');
+                var historyUrl = historyObj.pathname + historyObj.search + historyObj.hash;
                 window.history.replaceState(null, '', historyUrl);
                 if (options.openFoldId) {
                     var fold = document.getElementById(options.openFoldId);
@@ -651,11 +693,36 @@
                 if (window.ycRebindSellerPanelFold) {
                     window.ycRebindSellerPanelFold(panelEl);
                 }
+                if (preserveScroll) {
+                    window.scrollTo(0, scrollY);
+                }
+                if (typeof options.afterApply === 'function') {
+                    options.afterApply();
+                }
             })
             .catch(function (err) {
                 showMessage('error', err.message || '切换未成功，请稍后再试');
             });
         return true;
+    }
+
+    /** 分页链接：只换列表块，不整页跳顶 */
+    function bindPanelPageLinks(root) {
+        var scope = root || document;
+        scope.querySelectorAll('a[data-yc-panel-page]').forEach(function (link) {
+            if (link.dataset.ycPanelPageBound === '1') return;
+            link.dataset.ycPanelPageBound = '1';
+            link.addEventListener('click', function (ev) {
+                var panelId = link.getAttribute('data-yc-panel-page');
+                if (!panelId || !link.href) return;
+                ev.preventDefault();
+                switchPanelGet(panelId, link.href, {
+                    injectPanelQuery: true,
+                    preserveScroll: true,
+                    openFoldId: link.getAttribute('data-yc-panel-fold') || '',
+                });
+            });
+        });
     }
 
     /** 清单下拉换 Panel（方案甲：只换 HTML + replaceState） */
@@ -704,6 +771,7 @@
         bindPanelForms(document);
         bindProfilePickers(document);
         bindCashMonthPickers(document);
+        bindPanelPageLinks(document);
     }
 
     window.YcaoPanel = {

@@ -1,0 +1,22 @@
+{# 今日动作记录列表（静默翻页只换这一块） #}
+{% load yc_time %}
+<p class="card-meta" style="margin-top:0;">{{ work_act_fold_hint }}</p>
+{% if today_activity_page.object_list %}
+    {% for row in today_activity_page %}
+    <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
+        <div style="min-width:74px;">
+            <span class="badge badge-default">{{ row.kind }}</span>
+        </div>
+        <div style="flex:1;min-width:180px;">
+            <strong>{{ row.at|local:"H:i" }}</strong>
+            · 订单 {{ row.order.get_display_order_no }}
+            <div class="card-meta" style="margin-top:4px;">{{ row.text }}</div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+<p class="card-meta">{{ work_act_empty_hint }}</p>
+{% endif %}
+{% if act_pagination %}
+{% include 'waimai/_workbench_list_pagination.html' with list_page=act_pagination.list_page list_per_page=act_pagination.list_per_page list_per_page_links=act_pagination.list_per_page_links list_prev_url=act_pagination.list_prev_url list_next_url=act_pagination.list_next_url panel_page_id='work-hist-actions-panel' panel_fold_id='work-hist-actions' %}
+{% endif %}

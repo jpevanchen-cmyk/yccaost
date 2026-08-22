@@ -1,0 +1,20 @@
+{# 员工「我的操作记录」列表区（静默翻页只换这一块） #}
+{% load yc_time %}
+<p class="card-meta" style="margin:0 0 10px;">只显示您本人在本店的操作留痕（约保留半年）。</p>
+{% if my_audit_logs %}
+    {% for log in my_audit_logs %}
+    <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
+        <div style="flex:1;min-width:220px;">
+            <strong>{{ log.action_label|default:log.get_action_code_display }}</strong>
+            {% if log.result == 'fail' %}<span class="badge badge-default">失败</span>{% endif %}
+            <div class="card-meta" style="margin-top:4px;">{{ log.created_at|local:"Y-m-d H:i:s" }}</div>
+            {% if log.summary %}<div style="margin-top:4px;">{{ log.summary }}</div>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <p class="card-meta">暂无本人操作记录。</p>
+{% endif %}
+{% if audit_pagination %}
+{% include 'waimai/_workbench_list_pagination.html' with list_page=audit_pagination.list_page list_per_page=audit_pagination.list_per_page list_per_page_links=audit_pagination.list_per_page_links list_prev_url=audit_pagination.list_prev_url list_next_url=audit_pagination.list_next_url panel_page_id='work-my-audit-panel' panel_fold_id='work-my-audit' %}
+{% endif %}

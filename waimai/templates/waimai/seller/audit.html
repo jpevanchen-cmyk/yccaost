@@ -15,42 +15,26 @@
     </div>
     <form method="get" action="{% url 'seller_panel_section' 'audit' %}" class="auth-form" style="margin:0;">
         {% if audit_scope == 'mine' %}<input type="hidden" name="scope" value="mine">{% endif %}
+        {% if audit_per_page and audit_per_page != 10 %}
+        <input type="hidden" name="audit_per_page" value="{{ audit_per_page }}">
+        {% endif %}
         <p style="margin:0 0 8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
             <label for="audit-q" style="margin:0;">搜索</label>
             <input type="search" name="q" id="audit-q" value="{{ audit_q }}" placeholder="账号、动作、摘要…" style="flex:1;min-width:180px;">
             <button type="submit" class="btn btn-sm btn-orange">查找</button>
             {% if audit_q %}
             <a class="btn btn-sm btn-outline"
-               href="{% url 'seller_panel_section' 'audit' %}{% if audit_scope == 'mine' %}?scope=mine{% endif %}">清除</a>
+               href="{% url 'seller_panel_section' 'audit' %}{% if audit_scope == 'mine' %}?scope=mine{% endif %}{% if audit_per_page and audit_per_page != 10 %}{% if audit_scope == 'mine' %}&{% else %}?{% endif %}audit_per_page={{ audit_per_page }}{% endif %}">清除</a>
             {% endif %}
         </p>
     </form>
 </div>
 
-<div class="card" style="padding:16px;margin-bottom:14px;">
-    <h3 style="margin:0 0 10px;font-size:16px;">操作记录{% if audit_q %} · 含「{{ audit_q }}」{% endif %}（最近 100 条）</h3>
-    {% if audit_logs %}
-        {% for log in audit_logs %}
-        <div class="line-item" style="align-items:flex-start;gap:10px;flex-wrap:wrap;border-bottom:1px solid #eee;padding:10px 0;">
-            <div style="flex:1;min-width:220px;">
-                <strong>{{ log.action_label|default:log.get_action_code_display }}</strong>
-                {% if log.result == 'fail' %}<span class="badge badge-default">失败</span>{% endif %}
-                <div class="card-meta" style="margin-top:4px;">
-                    {{ log.created_at|local:"Y-m-d H:i:s" }}
-                    · {{ log.actor_username|default:"（系统/未知）" }}
-                    {% if log.actor_role %}（{{ log.actor_role }}）{% endif %}
-                </div>
-                {% if log.summary %}
-                <div style="margin-top:4px;">{{ log.summary }}</div>
-                {% endif %}
-                {% if log.ip_address %}
-                <div class="card-meta" style="margin-top:4px;">来源：{{ log.ip_address }}</div>
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
-    {% else %}
-        <p class="card-meta">{% if audit_q %}没有匹配的操作记录。{% else %}暂无操作记录。{% endif %}</p>
-    {% endif %}
+<div class="card" style="padding:16px;margin-bottom:14px;" data-yc-fold-multi="1">
+{% include 'waimai/_yc_panel_fold.html' with fold_id='seller-audit-list' fold_title='📋 操作记录' fold_open=True %}
+    <div id="seller-audit-list-panel" data-yc-panel-id="seller-audit-list-panel">
+    {% include 'waimai/_seller_audit_list_panel.html' %}
+    </div>
+{% include 'waimai/seller/_panel_fold_end.html' %}
 </div>
 {% endblock %}

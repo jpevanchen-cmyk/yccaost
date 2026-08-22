@@ -404,6 +404,35 @@ def build_shop_work_daily_history(
     return ctx
 
 
+WORK_HIST_ORDERS_PANEL_ID = 'work-hist-orders-panel'
+WORK_HIST_ACTIONS_PANEL_ID = 'work-hist-actions-panel'
+
+
+def render_work_hist_orders_panel_html(
+    request, seller_id: str, work_user, *, list_base_url: str, shop_work_code: str,
+) -> str:
+    """今日工作历史·订单列表碎片。"""
+    from django.template.loader import render_to_string
+
+    ctx = build_shop_work_daily_history(
+        seller_id, work_user, request=request, list_base_url=list_base_url,
+    )
+    ctx['shop_work_code'] = shop_work_code
+    return render_to_string('waimai/_shop_work_hist_orders_panel.html', ctx, request=request)
+
+
+def render_work_hist_actions_panel_html(
+    request, seller_id: str, work_user, *, list_base_url: str, shop_work_code: str = '',
+) -> str:
+    """今日动作记录列表碎片。"""
+    from django.template.loader import render_to_string
+
+    ctx = build_shop_work_daily_history(
+        seller_id, work_user, request=request, list_base_url=list_base_url,
+    )
+    return render_to_string('waimai/_shop_work_hist_actions_panel.html', ctx, request=request)
+
+
 def build_waiter_board_context(
     seller_id: str, *, allow_dispatch: bool = False, sort_mode: str = 'newest',
     request=None, shop_code: str = '',
